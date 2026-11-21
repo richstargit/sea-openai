@@ -14,11 +14,13 @@ FilmCraft is dual licensed MIT / Apache-2.0. The adaptation uses its MIT option;
 
 ## Scope
 
-The browser editor supports local video/photo/audio import, sequential assembly, frame-level split and ripple trim/delete, reorder/duplicate, snapshot undo/redo, text and subtitles, contain/cover framing, speed, brightness/contrast/saturation, fade through black, per-clip audio gain, a looping music bed, project recovery in IndexedDB and MP4 export. Its preview and export share the same canvas painter.
+The browser editor supports local video/photo/audio import, sequential assembly, frame-level split and ripple trim/delete, reorder/duplicate, snapshot undo/redo, text and subtitles, contain/cover framing, speed, brightness/contrast/saturation, fade through black, per-clip audio gain, a looping music bed, per-account project and media storage in MongoDB, and MP4 export. The backend compiles the timeline into a HyperFrames composition for both playback and export.
 
-MP4 is encoded using Mediabunny and browser WebCodecs (H.264 and AAC). Unsupported codecs or dimensions produce an error instead of a falsely labelled download. Exported resolution follows project settings; dimensions must be supported by the browser's encoder. Long exports run locally and may take time. Sources remain in browser storage and are never uploaded by the editor.
+Open **Assistant** to edit the selected shot or the entire timeline with a prompt. On wide screens the conversation sits beside the preview. On phones it opens below the playback controls. It can change captions, framing, camera movement, timing, clip volume, image adjustments and shot order. Each applied prompt is one undo step. The pencil reopens the last prompt for that scope.
 
-This is not a port of FilmCraft's entire professional editor. Multicam, GPU scopes, LUT workflows, proxy media, keyframe curves, advanced audio effects and project interchange are not implemented. Studio currently generates illustrative plans rather than real AI video; its handoff opens the selected product image and copy as editable shots. Real video files can be imported directly into the editor.
+The editor uses the HyperFrames player for playback and seeking. Export checks the saved composition in Docker and renders H.264 and AAC on the host. The video dimensions and frame rate follow the editor project.
+
+Video Studio opens the rendered film in the editor with cuts at the production’s scene boundaries. The original motion design can be revised from the Studio result. The step-by-step demo opens its sample image and copy as editable shots.
 
 ## Design base
 

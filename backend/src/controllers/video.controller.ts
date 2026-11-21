@@ -7,14 +7,18 @@ import { blenderOnline } from '@/services/video/blender.js'
 import {
   connectedOverlayCount,
   overlayOwner,
+  overlayRendering,
   publishOverlay,
+  queueOverlayMotion,
   rotateOverlay,
 } from '@/services/video/overlay.js'
+import { videoToolCatalog } from '@/services/video/production.js'
 import { saveStyle, skillUpload, videoSkills } from '@/services/video/skills.js'
 export const skills: RequestHandler = async (_request, response) => {
   response.json({
     skills: await videoSkills(loggedInUser(response).id),
     blenderOnline: await blenderOnline(),
+    videoTools: await videoToolCatalog(),
   })
 }
 export const addSkill: RequestHandler = async (request, response) => {
@@ -24,13 +28,22 @@ export const addSkill: RequestHandler = async (request, response) => {
     .json(await saveStyle(loggedInUser(response).id, markdown))
 }
 export const overlayStatus: RequestHandler = (_request, response) => {
-  response.json({ connected: connectedOverlayCount(loggedInUser(response).id) })
+  const { id } = loggedInUser(response)
+  response.json({
+    connected: connectedOverlayCount(id),
+    rendering: overlayRendering(id),
+  })
 }
 export const overlayLink: RequestHandler = async (_request, response) => {
   response.json({ path: await rotateOverlay(loggedInUser(response).id) })
 }
 export const overlayPublish: RequestHandler = async (request, response) => {
   response.json(await publishOverlay(loggedInUser(response).id, request.body))
+}
+export const overlayMotion: RequestHandler = (request, response) => {
+  response
+    .status(202)
+    .json(queueOverlayMotion(loggedInUser(response).id, request.body))
 }
 export const overlayMedia: RequestHandler = async (request, response) => {
   const owner = await overlayOwner(

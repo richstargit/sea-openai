@@ -3,6 +3,13 @@ import { z } from 'zod'
 export const chunkHash = z.string().regex(/^[a-f0-9]{64}$/)
 const id = z.uuid()
 const number = z.number()
+export const cameraMove = z.enum([
+  'static',
+  'push-in',
+  'pull-out',
+  'pan-left',
+  'pan-right',
+])
 const clip = z.strictObject({
   id,
   assetId: id,
@@ -20,6 +27,7 @@ const clip = z.strictObject({
   contrast: number,
   saturation: number,
   transition: z.enum(['cut', 'fade']),
+  camera: cameraMove.optional(),
 })
 const project = z.strictObject({
   version: z.literal(1),
@@ -49,4 +57,30 @@ export const editorSave = z.strictObject({
       chunks: z.array(chunkHash),
     }),
   ),
+})
+
+export const editorComposition = editorSave.pick({ project: true }).extend({
+  assets: z.array(
+    z.object({
+      id,
+      kind: z.enum(['video', 'image', 'audio']),
+      frames: z.int().positive(),
+    }),
+  ),
+})
+
+export const editorExportRevision = z.object({ revision: z.int().positive() })
+
+export const editorEditRequest = z.strictObject({
+  revision: z.int().positive(),
+  prompt: z.string().trim().min(1).max(2000),
+  clipId: z.uuid().nullable(),
+  playhead: z.int().nonnegative(),
+  language: z.enum(['en', 'th']),
+  previousExchange: z
+    .strictObject({
+      prompt: z.string().max(2000),
+      summary: z.string().max(500),
+    })
+    .optional(),
 })

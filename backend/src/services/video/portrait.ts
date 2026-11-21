@@ -31,6 +31,24 @@ const defaultShots: [PortraitShot, PortraitShot, PortraitShot] = [
     placement: 'bottom',
   },
 ]
+export const filmFps = 24
+
+export function portraitTimeline(brief: VideoBrief, minimumFrames = 0) {
+  const shots = brief.beats ?? brief.shots ?? defaultShots
+  const legacyFrames = [39, 45, 60]
+  const lengths = shots.map((shot, i) =>
+    shot.seconds ? Math.round(shot.seconds * filmFps) : (legacyFrames[i] ?? 48),
+  )
+  const frames = lengths.reduce((sum, length) => sum + length, 0)
+  const scale = Math.max(1, minimumFrames / frames)
+  let position = 0
+  return lengths.map((length) => {
+    const start = Math.round(position * scale)
+    position += length
+    return { start, end: Math.round(position * scale) }
+  })
+}
+
 const shotStarts = [0, 1.6, 3.5] as const
 const shotEnds = [1.6, 3.5, 6] as const
 const words = new Intl.Segmenter(undefined, { granularity: 'word' })
@@ -93,7 +111,7 @@ function drawShot(
   ctx.drawImage(image, x, y, w, h)
 }
 
-function wrap(ctx: SKRSContext2D, text: string, limit: number) {
+export function wrap(ctx: SKRSContext2D, text: string, limit: number) {
   const lines: string[] = []
   let line = ''
   for (const { segment } of words.segment(text.trim())) {

@@ -1,7 +1,7 @@
 import OpenAI from 'openai'
 import type { ResponseCreateParamsNonStreaming } from 'openai/resources/responses/responses'
 
-const DEFAULT_MODEL = 'gpt-6.2-sol'
+const DEFAULT_MODEL = 'gpt-6.2-astra'
 
 type GenerateTextOptions = {
   model?: string
@@ -11,7 +11,7 @@ type GenerateTextOptions = {
 
 let client: OpenAI | undefined
 
-function openAIClient(): OpenAI {
+export function openAIClient(): OpenAI {
   if (client) return client
 
   const apiKey = process.env.OPENAI_API_KEY?.trim()
@@ -38,7 +38,13 @@ export async function createOpenAIResponse(
       model: model?.trim() || process.env.OPENAI_MODEL?.trim() || DEFAULT_MODEL,
       store: false,
     },
-    { signal },
+    {
+      signal,
+      timeout:
+        params.max_output_tokens && params.max_output_tokens > 2000
+          ? 105_000
+          : 45_000,
+    },
   )
 
   if (response.status !== 'completed') {

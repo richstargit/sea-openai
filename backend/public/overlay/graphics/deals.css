@@ -1,0 +1,149 @@
+/* deals graphics — sizes in vh of the 1920×1080 frame; colours from theme variables only */
+.dl-defs {position:absolute;width:0;height:0}
+
+/* price-countdown */
+.g-price-countdown .pc-card {display:flex;flex-direction:column;gap:.6vh;padding:1.8vh 2.8vh 2vh}
+.g-price-countdown .pc-head {display:flex;align-items:center;gap:1.4vh}
+.g-price-countdown .pc-label {padding:.2vh 1.2vh;border-radius:.8vh;background:var(--hi);color:var(--on-hi);font-size:2vh;font-weight:600}
+.g-price-countdown .pc-name {white-space:nowrap}
+.g-price-countdown .pc-row {display:flex;align-items:center;gap:2.4vh}
+.g-price-countdown .pc-price {--k:0;display:inline-block;min-width:4.2ch;font-size:8.4vh;font-weight:700;line-height:1.15;letter-spacing:-.02em;transform-origin:0 60%;color:color-mix(in srgb,var(--hi) calc(var(--k) * 100%),var(--text))}
+.g-price-countdown .pc-was {display:flex;flex-direction:column;align-items:flex-start;gap:.6vh}
+.g-price-countdown .pc-old {position:relative;font-size:2.4vh;color:var(--sub);white-space:nowrap}
+.g-price-countdown .pc-strike {position:absolute;left:-.3vh;right:-.3vh;top:52%;height:.3vh;background:var(--sub);transform-origin:0 50%}
+.g-price-countdown .pc-off {padding:.1vh 1vh;border:.25vh solid var(--hi);border-radius:.8vh;color:var(--hi);font-size:2.6vh;font-weight:700}
+
+/* slot-price */
+.g-slot-price .sp-card {display:flex;flex-direction:column;gap:1vh;padding:1.8vh 2.6vh 2.2vh}
+.g-slot-price .sp-head {display:flex;align-items:baseline;gap:1.4vh;white-space:nowrap}
+.g-slot-price .sp-name {font-size:2.4vh;font-weight:600}
+.g-slot-price .sp-row {--k:0;display:flex;align-items:center;gap:.5vh;width:max-content;padding:.8vh 1.2vh;border-radius:1.2vh;transform-origin:0 50%;font-size:7.6vh;font-weight:700;
+  background:color-mix(in srgb,var(--hi) calc(var(--k) * 100%),color-mix(in srgb,var(--text) 7%,transparent));color:color-mix(in srgb,var(--on-hi) calc(var(--k) * 100%),var(--text))}
+.g-slot-price .sp-win {display:block;height:1.3em;overflow:hidden;width:.68em;border-radius:.6vh;box-shadow:inset 0 .5vh .6vh -.4vh #00000040,inset 0 -.5vh .6vh -.4vh #00000040}
+.g-slot-price .sp-strip {display:flex;flex-direction:column}
+.g-slot-price .sp-strip > span {display:block;height:1.3em;line-height:1.3em;text-align:center}
+.g-slot-price .sp-static {line-height:1.3em}
+
+/* price-ladder */
+.g-price-ladder .pl-card {padding:1.8vh 2.4vh 2.2vh}
+.g-price-ladder .pl-label {margin-bottom:1.2vh;white-space:nowrap}
+.g-price-ladder .pl-steps {display:flex;align-items:flex-end;gap:1vh}
+.g-price-ladder .pl-col {display:flex;flex-direction:column;align-items:center;gap:.8vh;width:16vh}
+.g-price-ladder .pl-tag {padding:.2vh 1.2vh;border-radius:.8vh;background:var(--text);color:var(--surface);font-size:2vh;font-weight:600;white-space:nowrap}
+.g-price-ladder .pl-bar {width:100%;display:flex;flex-direction:column;justify-content:flex-start;border-radius:1.2vh 1.2vh .4vh .4vh;transform-origin:50% 100%;
+  background:color-mix(in srgb,var(--text) 8%,transparent);border:.2vh solid var(--line)}
+.g-price-ladder .is-best .pl-bar {background:var(--hi);color:var(--on-hi);border-color:transparent}
+.g-price-ladder .pl-body {display:flex;flex-direction:column;align-items:center;padding:1.2vh .8vh}
+.g-price-ladder .pl-qty {font-size:2.2vh;font-weight:500;opacity:.8;white-space:nowrap}
+.g-price-ladder .pl-price {font-size:4.4vh;font-weight:700;line-height:1.2;letter-spacing:-.01em}
+.g-price-ladder .pl-each {font-size:1.8vh;opacity:.8;white-space:nowrap}
+
+/* bundle-math */
+.g-bundle-math .bm-card {display:flex;flex-direction:column;gap:1.2vh;padding:1.8vh 2.6vh 2.2vh}
+.g-bundle-math .bm-row {display:flex;align-items:center;gap:1.6vh}
+.g-bundle-math .bm-term {position:relative;display:flex;align-items:center;max-width:28vh;min-height:9vh;padding:1.2vh 1.8vh;border-radius:1vh;border:.2vh solid var(--line);
+  background:color-mix(in srgb,var(--text) 5%,var(--surface))}
+.g-bundle-math .bm-name {font-size:2.6vh;font-weight:600;line-height:1.3}
+.g-bundle-math .bm-free {position:absolute;top:-1.4vh;right:-1.2vh;padding:.1vh 1vh;border:.25vh solid var(--hi);border-radius:.6vh;background:var(--surface);color:var(--hi);font-size:2vh;font-weight:700;transform:rotate(8deg)}
+.g-bundle-math .bm-op {font-size:4.6vh;font-weight:600;color:var(--sub);line-height:1}
+.g-bundle-math .bm-eq {display:flex;flex-direction:column;gap:.9vh;width:3.6vh}
+.g-bundle-math .bm-eq i {display:block;height:.6vh;border-radius:.3vh;background:var(--sub);transform-origin:0 50%}
+.g-bundle-math .bm-total {display:flex;flex-direction:column;align-items:center;padding:.8vh 2vh 1vh;border-radius:1.2vh;background:var(--hi);color:var(--on-hi);transform-origin:30% 50%}
+.g-bundle-math .bm-was {font-size:2vh;text-decoration:line-through;opacity:.75}
+.g-bundle-math .bm-sum {font-size:6vh;font-weight:700;line-height:1.15;letter-spacing:-.02em}
+
+/* coupon-tear */
+.g-coupon-tear .ct-wrap {display:flex;align-items:stretch;filter:drop-shadow(0 1vh 2vh #00000059)}
+.g-coupon-tear .ct-body {display:flex;flex-direction:column;align-items:flex-start;gap:.4vh;padding:1.8vh 4vh 2vh 2.8vh;border-radius:1.6vh 0 0 1.6vh;background:var(--surface);color:var(--text);
+  background-image:radial-gradient(circle,var(--line) .25vh,transparent .3vh);background-size:1.4vh 1.4vh;background-position:right 1.4vh center;background-repeat:repeat-y}
+.g-coupon-tear .ct-label {white-space:nowrap}
+.g-coupon-tear .ct-off {font-size:6.4vh;font-weight:700;line-height:1.2;color:var(--hi);white-space:nowrap}
+.g-coupon-tear .ct-meta {font-size:2vh;color:var(--sub);white-space:nowrap}
+.g-coupon-tear .ct-code {--k:0;display:flex;align-items:baseline;gap:1vh;margin-top:.8vh;padding:.5vh 1.4vh;border:.25vh dashed color-mix(in srgb,var(--text) 45%,transparent);border-radius:.8vh;transform-origin:0 50%;
+  background:color-mix(in srgb,var(--hi) calc(var(--k) * 100%),transparent);color:color-mix(in srgb,var(--on-hi) calc(var(--k) * 100%),var(--text))}
+.g-coupon-tear .ct-code-k {font-size:1.8vh;opacity:.75}
+.g-coupon-tear .ct-code-v {font-size:3.4vh;font-weight:700;letter-spacing:.12em;font-family:ui-monospace,"SF Mono",Menlo,monospace}
+.g-coupon-tear .ct-stub {display:grid;place-items:center;width:9vh;margin-left:-.9vh;padding-left:.9vh;border-radius:0 1.6vh 1.6vh 0;background:var(--hi);color:var(--on-hi)}
+.g-coupon-tear .ct-stub-t {writing-mode:vertical-rl;font-size:2.6vh;font-weight:700;letter-spacing:.1em}
+
+/* scratch-reveal */
+.g-scratch-reveal .sr-card {display:flex;flex-direction:column;align-items:flex-start;gap:1vh;padding:1.8vh 2.6vh 2.2vh}
+.g-scratch-reveal .sr-field {position:relative;display:grid;place-items:center;width:34vh;height:10vh;border-radius:1vh;border:.2vh dashed var(--line);background:color-mix(in srgb,var(--text) 5%,var(--surface));overflow:hidden}
+.g-scratch-reveal .sr-value {font-size:6vh;font-weight:700;line-height:1.3;color:var(--hi)}
+.g-scratch-reveal .sr-value.is-code {font-size:5vh;letter-spacing:.14em;font-family:ui-monospace,"SF Mono",Menlo,monospace}
+.g-scratch-reveal .sr-foil {position:absolute;inset:0;width:100%;height:100%}
+.g-scratch-reveal .sr-hint {position:absolute;inset:0;display:grid;place-items:center;font-size:2.4vh;font-weight:600;color:#5f5a52;letter-spacing:.06em}
+.g-scratch-reveal .sr-note {font-size:2.2vh;font-weight:500;color:var(--sub)}
+
+/* sticker-peel */
+.g-sticker-peel .sk-card {display:flex;flex-direction:column;align-items:flex-start;gap:.4vh;padding:1.8vh 2.8vh 2.2vh}
+.g-sticker-peel .sk-name {font-size:2.6vh;font-weight:600;white-space:nowrap}
+.g-sticker-peel .sk-spot {position:relative;margin-top:.6vh}
+.g-sticker-peel .sk-price {display:inline-block;padding:0 1.6vh;font-size:8vh;font-weight:700;line-height:1.2;letter-spacing:-.02em;color:var(--hi);transform-origin:50% 60%}
+.g-sticker-peel .sk-sticker {position:absolute;inset:-.4vh;display:grid;place-items:center;border-radius:1.2vh;background:var(--hi);color:var(--on-hi);
+  box-shadow:inset 0 0 0 .6vh var(--hi),inset 0 0 0 .8vh color-mix(in srgb,var(--on-hi) 55%,transparent)}
+.g-sticker-peel .sk-q {font-size:7vh;font-weight:800;line-height:1.2}
+.g-sticker-peel .sk-flapwrap {position:absolute;inset:-.4vh;filter:drop-shadow(-.4vh .6vh .6vh #00000052)}
+.g-sticker-peel .sk-flap {position:absolute;left:0;top:0;transform-origin:0 0;border-radius:1.2vh;background:color-mix(in srgb,var(--hi) 22%,#f4f1ea)}
+
+/* stamp + the sold-out stamp share the ink look */
+.g-stamp .st-stamp, .g-sold-out .so-stamp {border-radius:1.4vh;background:color-mix(in srgb,var(--surface) 92%,transparent);box-shadow:0 .4vh 1.2vh #0000004d}
+.g-stamp .st-stamp {position:absolute}
+.g-stamp .st-ink, .g-sold-out .st-ink {display:flex;flex-direction:column;align-items:center;padding:1vh 3vh 1.2vh;border:.7vh solid var(--hi);border-radius:1.4vh;color:var(--hi);white-space:nowrap;position:relative}
+.g-stamp .st-ink::after, .g-sold-out .st-ink::after {content:'';position:absolute;inset:.45vh;border:.3vh solid var(--hi);border-radius:.9vh}
+.g-stamp .st-text, .g-sold-out .st-text {font-size:7vh;font-weight:800;line-height:1.3;letter-spacing:.02em}
+.g-stamp .st-sub {margin-top:-.4vh;padding-top:.4vh;border-top:.3vh solid var(--hi);font-size:2.6vh;font-weight:700;letter-spacing:.06em}
+
+/* gift-unwrap */
+.g-gift-unwrap .gu-card {display:flex;align-items:center;gap:2.6vh;padding:1.6vh 3.2vh 1.6vh 2vh}
+.g-gift-unwrap .gu-stage {position:relative;width:20vh;height:24vh}
+.g-gift-unwrap .gu-rise {position:absolute;left:0;right:0;top:0;bottom:9vh;overflow:hidden}
+.g-gift-unwrap .gu-gift {position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:center;align-items:flex-end;height:100%}
+.g-gift-unwrap .gu-img {width:auto;height:14.5vh;max-width:16vh;object-fit:contain;border-radius:0;flex:none}
+.g-gift-unwrap .gu-jar {height:12vh;width:auto}
+.g-gift-unwrap .gu-jar-cap {fill:var(--text)}
+.g-gift-unwrap .gu-jar-body {fill:color-mix(in srgb,var(--text) 82%,var(--surface))}
+.g-gift-unwrap .gu-jar-band {fill:var(--surface);opacity:.85}
+.g-gift-unwrap .gu-box {position:absolute;left:2.5vh;right:2.5vh;bottom:0;height:9vh;border-radius:.4vh .4vh 1vh 1vh;background:var(--hi)}
+.g-gift-unwrap .gu-lid {position:absolute;left:1.5vh;right:1.5vh;bottom:9vh;height:3vh;border-radius:.6vh;background:color-mix(in srgb,var(--hi) 86%,#000);transform-origin:50% 100%}
+.g-gift-unwrap .gu-strap {position:absolute;left:50%;top:0;bottom:0;width:2.2vh;margin-left:-1.1vh;background:var(--on-hi);transform-origin:50% 0}
+.g-gift-unwrap .gu-bow {position:absolute;left:50%;bottom:100%;width:0;height:0}
+.g-gift-unwrap .gu-loop {position:absolute;bottom:-.4vh;width:4.4vh;height:3vh;border:.9vh solid var(--on-hi);border-radius:50% 50% 50% 50%}
+.g-gift-unwrap .gu-loop.is-l {right:0;transform-origin:100% 100%;transform:rotate(-14deg)}
+.g-gift-unwrap .gu-loop.is-r {left:0;transform-origin:0 100%;transform:rotate(14deg)}
+.g-gift-unwrap .gu-knot {position:absolute;left:-1.2vh;bottom:-.6vh;width:2.4vh;height:2.2vh;border-radius:.6vh;background:var(--on-hi)}
+.g-gift-unwrap .gu-copy {display:flex;flex-direction:column;align-items:flex-start;gap:.6vh}
+.g-gift-unwrap .gu-name {font-size:3.6vh;font-weight:700;line-height:1.3;max-width:48vh;text-wrap:balance}
+.g-gift-unwrap .gu-cond {margin-top:.4vh;padding:.3vh 1.2vh;border:.25vh dashed currentColor;border-radius:.8vh;color:var(--hi);font-size:2.2vh;font-weight:600;white-space:nowrap}
+
+/* free-ship-truck */
+.g-free-ship-truck .ft-rig {display:flex;align-items:flex-end}
+.g-free-ship-truck .ft-rig.is-flip {flex-direction:row-reverse}
+.g-free-ship-truck .ft-banner {display:flex;flex-direction:column;align-items:center;margin-bottom:3.4vh;padding:1.2vh 3vh 1.4vh;border-radius:.6vh;background:var(--surface);color:var(--text);
+  box-shadow:inset 0 0 0 .6vh var(--surface),inset 0 0 0 .8vh var(--line);filter:drop-shadow(0 .8vh 1.6vh #00000052)}
+.g-free-ship-truck .ft-text {font-size:5vh;font-weight:700;line-height:1.3;color:var(--hi);white-space:nowrap}
+.g-free-ship-truck .ft-sub {font-size:2.2vh;font-weight:500;color:var(--sub);white-space:nowrap}
+.g-free-ship-truck .ft-rope {flex:none;width:4vh;height:.35vh;margin-bottom:6.2vh;background:var(--text);opacity:.8}
+.g-free-ship-truck .ft-truck {flex:none;width:24vh;height:auto;overflow:visible;filter:drop-shadow(0 .6vh 1vh #00000052)}
+.g-free-ship-truck .is-flip .ft-truck {transform:scaleX(-1)}
+.g-free-ship-truck .ft-cargo {fill:var(--hi)}
+.g-free-ship-truck .ft-panel {fill:none;stroke:var(--on-hi);stroke-opacity:.35;stroke-width:.8}
+.g-free-ship-truck .ft-cab {fill:var(--surface)}
+.g-free-ship-truck .ft-glass {fill:color-mix(in srgb,var(--text) 30%,var(--surface))}
+.g-free-ship-truck .ft-chassis {fill:#2a2723}
+.g-free-ship-truck .ft-tyre {fill:#1a1712}
+.g-free-ship-truck .ft-hub {fill:#d9d4ca}
+.g-free-ship-truck .ft-spoke {fill:#1a1712;opacity:.55}
+
+/* sold-out */
+.g-sold-out .so-wrap {position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:1vh}
+.g-sold-out .so-card {position:relative;padding:1.6vh 3vh 1.6vh 1.8vh;overflow:hidden}
+.g-sold-out .so-veil {position:absolute;inset:0;background:#8b877f9e}
+.g-sold-out .so-inner {position:relative;display:flex;align-items:center;gap:2vh}
+.g-sold-out .so-img {width:11vh;height:11vh;object-fit:contain;border-radius:1vh;flex:none;background:color-mix(in srgb,var(--text) 6%,transparent)}
+.g-sold-out .so-copy {display:flex;flex-direction:column;align-items:flex-start;padding-right:16vh}
+.g-sold-out .so-name {font-size:3.6vh;font-weight:700;line-height:1.3;white-space:nowrap}
+.g-sold-out .so-price {font-size:3vh;font-weight:600;color:var(--hi)}
+.g-sold-out .so-stamp {position:absolute;right:-5vh;top:1.4vh}
+.g-sold-out .so-stamp .st-ink {padding:.4vh 2.6vh .6vh}
+.g-sold-out .so-next {padding:.5vh 1.8vh;border-radius:1vh;background:var(--surface);color:var(--text);font-size:3vh;font-weight:700;filter:drop-shadow(0 .6vh 1.2vh #00000052)}

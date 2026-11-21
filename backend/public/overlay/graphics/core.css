@@ -1,0 +1,24 @@
+/* Graphics layers: everything sized in vh/vw of the 1920×1080 frame */
+:root {--shop-accent:#d23b2a;--shop-accent2:#1f6f5c;--shop-font:"Sukhumvit Set"}
+#fx, .fx-layer {position:absolute;inset:0;pointer-events:none}
+#fx-lower {inset:auto auto 9vh 5vw;display:flex;flex-direction:column;align-items:flex-start;gap:1.2vh;max-width:62vw}
+#fx-lower[data-side=right] {left:auto;right:5vw;align-items:flex-end}
+#fx-corner {inset:6vh 4vw auto auto;display:flex;flex-direction:column;align-items:flex-end;gap:1.2vh}
+#fx-corner[data-side=left] {right:auto;left:4vw;align-items:flex-start}
+#fx-toast {inset:24vh auto auto 5vw;display:flex;flex-direction:column;align-items:flex-start;gap:1vh}
+#fx-toast[data-side=right] {left:auto;right:5vw;align-items:flex-end}
+#fx-crawl {inset:auto 0 0 0;height:7vh}
+#fx-center {display:grid;place-items:center}
+#fx-caption {inset:auto 8vw 12vh 8vw;display:flex;justify-content:center}
+#fx-card > .g, #fx-zoom > .g, #fx-compose > .g {position:absolute;inset:0}
+.g {--accent:var(--shop-accent);--accent2:var(--shop-accent2);--paper:#f5f1e8;--ink:#1a1712;--surface:var(--paper);--text:var(--ink);--sub:#6e665a;--hi:var(--accent);--on-hi:#fff;--line:#1a17121f;
+  font-family:var(--shop-font),"Sukhumvit Set","IBM Plex Sans Thai","Noto Sans Thai","Leelawadee UI",system-ui,sans-serif;color:var(--text);font-variant-numeric:tabular-nums;line-height:1.3}
+.g[data-theme=ink] {--surface:#151413;--text:#f3efe6;--sub:#a8a29a;--line:#ffffff24}
+.g[data-theme=pop] {--surface:var(--accent);--text:#fff;--sub:#ffffffd9;--hi:#fff;--on-hi:var(--accent);--line:#ffffff40}
+#fx-spot > .g, #fx-full > .g, #fx-edge > .g {position:absolute;inset:0}
+/* shared panel: the quiet surface most graphics sit on */
+.g-panel {background:var(--surface);color:var(--text);border-radius:1.6vh;padding:1.6vh 2.4vh;filter:drop-shadow(0 1vh 2vh #00000059)}
+.g-sub {font-size:2.2vh;font-weight:500;color:var(--sub)}
+.g-big {font-size:5.6vh;font-weight:600;letter-spacing:-.01em;line-height:1.2}
+.g-mask {display:block;overflow:hidden}
+.g-mask > * {display:inline-block}

@@ -1,38 +1,81 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import type { HyperframesPlayer } from "@hyperframes/player";
+import { createElement, useEffect, useRef } from "react";
 import { useLanguage } from "@/components/language-provider";
-import { MediaPool, paintFrame } from "@/lib/editor/media";
-import { FPS, locate, type Asset, type Project } from "@/lib/editor/model";
+import { FPS, type Asset, type Project } from "@/lib/editor/model";
 
-export function EditorPreview({ project, assets, frame, playing, onError }: { project: Project; assets: Asset[]; frame: number; playing: boolean; onError: (message: string) => void }) {
+type Props = {
+  project: Project;
+  assets: Asset[];
+  frame: number;
+  playing: boolean;
+  compile: (project: Project, assets: Asset[], signal: AbortSignal) => Promise<string>;
+  onTime: (seconds: number) => void;
+  onEnded: () => void;
+  onError: (message: string) => void;
+};
+
+export function EditorPreview({ project, assets, frame, playing, compile, onTime, onEnded, onError }: Props) {
   const { t } = useLanguage();
-  const canvas = useRef<HTMLCanvasElement>(null);
-  const pool = useRef<MediaPool | null>(null);
-  useEffect(() => { const instance = new MediaPool(); pool.current = instance; return () => { instance.dispose(); }; }, []);
+  const player = useRef<HyperframesPlayer | null>(null);
+  const playback = useRef({ frame, playing, onTime, onEnded });
+  const sources = useRef(new Map<string, string>());
+
   useEffect(() => {
-    let active = true;
-    const current = locate(project, frame), media = pool.current;
-    if (!media || !canvas.current) return;
-    const target = canvas.current;
-    const scale = Math.min(1, 1280 / Math.max(project.size.width, project.size.height));
-    const w = Math.round(project.size.width * scale), h = Math.round(project.size.height * scale);
-    if (target.width !== w || target.height !== h) { target.width = w; target.height = h; }
-    const context = target.getContext("2d"); if (!context) return;
-    const activeIds = [...(current ? [current.clip.assetId] : []), ...(project.music ? [project.music.assetId] : [])];
-    media.pauseExcept(playing ? activeIds : []);
-    async function draw() {
-      const asset = assets.find((item) => item.id === current?.clip.assetId);
-      const source = current && asset ? await media!.frame(asset, (current.clip.sourceIn + current.offset * current.clip.speed) / FPS, playing, current.clip.speed, current.clip.volume) : null;
-      if (!active) return;
-      paintFrame(context!, project, current?.clip || null, asset, source, current?.offset || 0);
-      if (project.music) {
-        const music = assets.find((item) => item.id === project.music?.assetId);
-        if (music) await media!.frame(music, (frame % music.frames) / FPS, playing, 1, project.music.volume);
+    playback.current = { frame, playing, onTime, onEnded };
+    const element = player.current;
+    if (!element?.ready) return;
+    if (playing) {
+      if (element.paused) {
+        element.seek(frame / FPS);
+        element.play();
       }
+    } else {
+      if (!element.paused) element.pause();
+      if (Math.abs(element.currentTime * FPS - frame) >= 0.5) element.seek(frame / FPS);
     }
-    draw().catch((error: unknown) => { if (active) onError(error instanceof Error ? error.message : "Preview could not be loaded."); });
-    return () => { active = false; };
-  }, [project, assets, frame, playing, onError]);
-  return <canvas ref={canvas} data-testid="editor-preview" aria-label={t("พรีวิววิดีโอ")} role="img" className="block max-h-full max-w-full rounded-lg shadow-2xl" style={{ aspectRatio: `${project.size.width} / ${project.size.height}`, width: project.size.width > project.size.height ? "100%" : "auto", height: project.size.width > project.size.height ? "auto" : "100%", objectFit: "contain" }} />;
+  }, [frame, playing, onTime, onEnded]);
+
+  useEffect(() => {
+    const element = player.current;
+    if (!element) return;
+    const events = new AbortController();
+    const options = { signal: events.signal };
+    element.addEventListener("ready", () => {
+      element.seek(playback.current.frame / FPS);
+      if (playback.current.playing) element.play();
+    }, options);
+    element.addEventListener("timeupdate", () => {
+      if (playback.current.playing) playback.current.onTime(element.currentTime);
+    }, options);
+    element.addEventListener("ended", () => playback.current.onEnded(), options);
+    element.addEventListener("playbackerror", () => onError("Could not play this composition."), options);
+    return () => events.abort();
+  }, [onError]);
+
+  useEffect(() => {
+    const urls = new Map(assets.map((asset) => [asset.id, URL.createObjectURL(asset.file)]));
+    sources.current = urls;
+    return () => { for (const url of urls.values()) URL.revokeObjectURL(url); };
+  }, [assets]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    async function load() {
+      const [, html] = await Promise.all([import("@hyperframes/player"), compile(project, assets, controller.signal)]);
+      if (controller.signal.aborted) return;
+      player.current?.setAttribute("srcdoc", html.replace(/src="media:([a-f0-9-]+)"/gi, (_, id: string) => `src="${sources.current.get(id)}"`));
+    }
+    load().catch((error: unknown) => {
+      if (!controller.signal.aborted) onError(error instanceof Error ? error.message : "Could not load preview.");
+    });
+    return () => controller.abort();
+  }, [assets, project, compile, onError]);
+
+  const { width, height } = project.size;
+  const ratio = width / height;
+  return <div aria-label={t("พรีวิววิดีโอ")} className="editor-player" style={{ width: `min(100cqw, ${ratio * 100}cqh)`, aspectRatio: ratio }}>
+    {createElement("hyperframes-player", { ref: player, width: String(width), height: String(height), "data-testid": "editor-preview" })}
+  </div>;
 }

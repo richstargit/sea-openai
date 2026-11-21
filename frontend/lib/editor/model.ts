@@ -13,6 +13,7 @@ export type Clip = {
   title: string; subtitle: string; textPosition: "top" | "center" | "bottom"; textColor: string;
   textSize: number; fit: "contain" | "cover"; brightness: number; contrast: number; saturation: number;
   transition: "cut" | "fade";
+  camera?: "static" | "push-in" | "pull-out" | "pan-left" | "pan-right";
 };
 export type Project = {
   version: 1; id: string; name: string; size: VideoSize; clips: Clip[]; assetIds: string[];

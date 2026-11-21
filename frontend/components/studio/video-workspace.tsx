@@ -1,15 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, ArrowUp, Box, Clapperboard, Download, Film, ImagePlus, Link2, LoaderCircle, Paperclip, Plus, Radio, WandSparkles, X } from "lucide-react";
 import { useLanguage } from "@/components/language-provider";
 import { playOverlay, studioPost, studioRequest } from "./studio-api";
 
-type Clip = { id: string; url: string; name: string };
+type Clip = { id: string; url: string; name: string; aiVoice?: boolean; projectId?:string; title?: string; sceneStarts?: number[] };
 const maxBytes = 8 * 1024 * 1024;
 const examples = [
-  { image: "cosmetic", label: "เปิดตัวสกินแคร์", brief: "สร้างวิดีโอเปิดตัวเซรั่ม ให้ขวดค่อย ๆ ปรากฏในแสงนุ่ม พร้อมข้อความ Glow Serum" },
+  { image: "cosmetic", label: "เปิดตัวสกินแคร์", brief: "สร้างหนังเปิดตัว Daily Glow 6 ช็อต ใช้ภาพขวดจริง เจนภาพมาโครหยดเซรั่มกับภาพทาเซรั่มบนผิวในแสงเช้า ปิดด้วยภาพขวดและชื่อสินค้า พากย์สั้น ๆ ว่า เดลี่โกลว์ เริ่มเช้าวันใหม่ของคุณ" },
   { image: "chili", label: "โปรโมตสินค้า", brief: "สร้างวิดีโอโปรโมตน้ำพริก ใช้สีแดงเข้มและจังหวะสนุก พร้อมข้อความ เผ็ดเต็มคำ" },
 ];
 const liveExamples = [
@@ -37,19 +38,28 @@ async function upload(file: File) {
   return result.file.id;
 }
 
-export function VideoWorkspace({ live }: { live: boolean }) {
+const saleFormatOptions = [
+  ["showcase", "แนะนำสินค้า"], ["promotion", "โปรลดราคา"], ["flash_sale", "แฟลชเซลล์"], ["new_launch", "สินค้าใหม่"],
+  ["bundle", "เซ็ตคุ้ม / 1 แถม 1"], ["before_after", "ก่อน–หลัง"], ["how_to", "วิธีใช้ / สาธิต"], ["comparison", "เปรียบเทียบ"],
+  ["review", "รีวิวลูกค้า"], ["unboxing", "แกะกล่อง"], ["ingredients", "ส่วนผสม / สเปก"], ["seasonal", "เทศกาล / ของขวัญ"],
+  ["live_teaser", "โปรโมตไลฟ์"], ["restock", "ของกลับมาแล้ว"], ["voucher", "โค้ดส่วนลด / ส่งฟรี"], ["ugc", "คลิปแนวป้ายยา (UGC)"],
+] as const;
+export function VideoWorkspace({ live, userId }: { live: boolean; userId: string }) {
   const { t } = useLanguage();
+  const router = useRouter();
   const picker = useRef<HTMLInputElement>(null);
   const skillPicker = useRef<HTMLInputElement>(null);
   const prompt = useRef<HTMLTextAreaElement>(null);
   const [blender, setBlender] = useState(false);
   const [brief, setBrief] = useState("");
-  const [photo, setPhoto] = useState<File>();
+  const [saleFormat, setSaleFormat] = useState("");
+  const [photos, setPhotos] = useState<File[]>([]);
   const [referenceVideo, setReferenceVideo] = useState<File>();
   const [referenceUrl, setReferenceUrl] = useState("");
   const [showLink, setShowLink] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [clip, setClip] = useState<Clip>();
+  const [editing, setEditing] = useState(false);
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState("");
 
@@ -65,9 +75,9 @@ export function VideoWorkspace({ live }: { live: boolean }) {
     if (files.some((file) => file.size > maxBytes)) return setStatus(t("แต่ละไฟล์มีขนาดได้สูงสุด 8 MiB"));
     const images = files.filter((file) => file.type === "image/png");
     const videos = files.filter((file) => ["video/mp4", "video/webm"].includes(file.type));
-    if (images.length + videos.length !== files.length || images.length > 1 || videos.length > 1)
-      return setStatus(t("แนบรูป PNG ได้ 1 รูป และคลิป MP4 หรือ WebM ได้ 1 คลิป"));
-    if (images[0]) setPhoto(images[0]);
+    if (images.length + videos.length !== files.length || (live ? images.length > 1 : photos.length + images.length > 4) || videos.length > 1)
+      return setStatus(t(live ? "แนบรูป PNG ได้ 1 รูป และคลิป MP4 หรือ WebM ได้ 1 คลิป" : "แนบรูป PNG ได้สูงสุด 4 รูป และคลิปอ้างอิงได้ 1 คลิป"));
+    if (images.length) setPhotos(live ? images : [...photos, ...images]);
     if (videos[0]) setReferenceVideo(videos[0]);
     setStatus("");
   }
@@ -79,13 +89,16 @@ export function VideoWorkspace({ live }: { live: boolean }) {
     finally { setBusy(""); }
   }
   async function generate() {
-    const [imageId, referenceFile] = await Promise.all([photo && upload(photo), referenceVideo && upload(referenceVideo)]);
-    const result = await studioPost<{ files?: Clip[]; message: string }>("/agent/chat", {
+    const [files, referenceFile] = await Promise.all([Promise.all(photos.map(upload)), referenceVideo && upload(referenceVideo)]);
+    const result = await studioPost<{ files?: Clip[]; message: string; toolsUsed?: string[]; projectId?:string }>("/agent/chat", {
       message: brief.trim() || t(live ? "สร้างกราฟิกไลฟ์จากไฟล์อ้างอิงนี้" : "สร้างวิดีโอจากไฟล์อ้างอิงนี้"),
-      outputFormat: live ? "overlay" : "portrait", files: imageId ? [imageId] : [], referenceFile,
+      projectId: editing ? clip?.projectId : undefined,
+      outputFormat: live ? "overlay" : "portrait", files, referenceFile,
+      ...(!live && saleFormat ? { saleFormat } : {}),
       referenceUrl: referenceUrl.trim() || undefined,
     });
-    if (result.files?.[0]) setClip(result.files[0]);
+    if (result.files?.[0]) setClip({ ...result.files[0], projectId:result.projectId, aiVoice: result.toolsUsed?.some(tool=>tool==="generate_speech" || tool==="video_voice") });
+    setEditing(false);
     setStatus(result.files?.length ? t("คลิปพร้อมแล้ว") : result.message);
   }
 
@@ -103,17 +116,24 @@ export function VideoWorkspace({ live }: { live: boolean }) {
       <fieldset disabled={!!busy}>
         <button className="studio-drop" type="button" onClick={() => picker.current?.click()}>
           <span className="drop-icon"><ImagePlus size={30} strokeWidth={1.6} /></span>
-          <span><strong>{t("ลากไฟล์มาวาง หรือเลือกไฟล์")}</strong><small>PNG, MP4, WebM · {t("สูงสุด 8 MiB ต่อไฟล์")}</small></span>
+          <span><strong>{t("ลากไฟล์มาวาง หรือเลือกไฟล์")}</strong><small>{live ? "PNG" : t("PNG สูงสุด 4 รูป")} · MP4, WebM · {t("สูงสุด 8 MiB ต่อไฟล์")}</small></span>
         </button>
         <input type="file" ref={picker} hidden multiple accept="image/png,video/mp4,video/webm" aria-label={t("เลือกไฟล์สื่อ")}
           onChange={(event) => { attach(Array.from(event.target.files || [])); event.target.value = ""; }} />
-        {(photo || referenceVideo) && <div className="studio-attachments">{[photo, referenceVideo].map((file, index) => file && <button key={index} type="button" aria-label={t("เอาไฟล์ออก") + " " + file.name} onClick={() => index === 0 ? setPhoto(undefined) : setReferenceVideo(undefined)}><Paperclip size={15} />{file.name}<X size={14} /></button>)}</div>}
+        {(photos.length > 0 || referenceVideo) && <div className="studio-attachments">
+          {photos.map((file, i) => <button key={i} type="button" aria-label={t("เอาไฟล์ออก") + " " + file.name} onClick={() => setPhotos(photos.filter((_, index) => index !== i))}><Paperclip size={15} />{file.name}<X size={14} /></button>)}
+          {referenceVideo && <button type="button" aria-label={t("เอาไฟล์ออก") + " " + referenceVideo.name} onClick={() => setReferenceVideo(undefined)}><Paperclip size={15} />{referenceVideo.name}<X size={14} /></button>}
+        </div>}
         <textarea aria-label={t("บรีฟวิดีโอ")} ref={prompt} value={brief} onChange={(e) => setBrief(e.target.value)} maxLength={12000}
           placeholder={t(live ? "อยากให้ป้ายไลฟ์แสดงอะไร?" : "เล่าคลิปที่อยากเห็น…")} />
         {showLink && <label className="studio-url"><Link2 size={17} /><input type="url" autoFocus pattern="https://.+" placeholder="https://" aria-label={t("ลิงก์อ้างอิงสาธารณะ (ถ้ามี)")} value={referenceUrl} onChange={(e) => setReferenceUrl(e.target.value)} /><button type="button" aria-label={t("เอาลิงก์ออก")} onClick={() => { setShowLink(false); setReferenceUrl(""); }}><X size={16} /></button></label>}
         <div className="studio-toolbar">
           <button type="button" className="studio-tool" aria-expanded={showLink} onClick={() => setShowLink(true)}><Link2 size={17} />{t("แนบลิงก์")}</button>
-          <button type="submit" className="studio-generate" disabled={!brief.trim() && !photo && !referenceVideo && !referenceUrl.trim()}>
+          {!live && <select className="studio-tool" aria-label={t("รูปแบบการขาย")} value={saleFormat} onChange={(e) => setSaleFormat(e.target.value)}>
+            <option value="">{t("รูปแบบการขาย: อัตโนมัติ")}</option>
+            {saleFormatOptions.map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}
+          </select>}
+          <button type="submit" className="studio-generate" disabled={!brief.trim() && !photos.length && !referenceVideo && !referenceUrl.trim()}>
             {busy === "generate" ? <LoaderCircle className="animate-spin" size={17} /> : <ArrowUp size={17} />}
             {t(busy === "generate" ? "กำลังสร้างวิดีโอ…" : live ? "สร้างกราฟิก" : "สร้างวิดีโอ")}
           </button>
@@ -133,10 +153,17 @@ export function VideoWorkspace({ live }: { live: boolean }) {
       </details>
       <span>{live ? <Radio size={15} /> : <Film size={15} />}{live ? t("พื้นหลังโปร่งใส") : "9 : 16"}</span>
     </div>
+    {editing && <button type="button" className="studio-small-button" disabled={!!busy} onClick={()=>setEditing(false)}>{t("ยกเลิกการแก้คลิป")}</button>}
     <p className="studio-status" role="status">{busy === "generate" ? t("กำลังสร้างวิดีโอ…") : status}</p>
     {clip && <section className="studio-result">
       <video controls playsInline src={clip.url} aria-label={t("พรีวิววิดีโอ")} />
-      <div><h2>{t("คลิปพร้อมแล้ว")}</h2><a className="studio-small-button" href={clip.url} download={clip.name}><Download size={16} />{t("ดาวน์โหลด WebM")}</a>
+      <div><h2>{t("คลิปพร้อมแล้ว")}</h2>{clip.aiVoice && <p>{t("เสียงบรรยายสร้างด้วย AI")}</p>}<a className="studio-small-button" href={clip.url} download={clip.name}><Download size={16} />{t("ดาวน์โหลด WebM")}</a>
+      {!live && <button type="button" className="studio-small-button" disabled={!!busy} onClick={() => void act("edit", async () => {
+        const { openStudioFilm } = await import("@/lib/editor/studio-film");
+        const id = await openStudioFilm(userId, clip);
+        router.push(`/editor?project=${id}`);
+      })}><Clapperboard size={16} />{t("เปิดในห้องตัดต่อ")}</button>}
+      {!live && clip.projectId && !editing && <button type="button" className="studio-small-button" disabled={!!busy} onClick={()=>{setEditing(true);setBrief("");prompt.current?.focus();}}>{t("แก้คลิปนี้")}</button>}
       {live && <button type="button" className="studio-small-button" disabled={!!busy} onClick={() => void act("publish", async () => {
         const result = await playOverlay({ type: "clip", fileId: clip.id }); setStatus(t(result.delivered ? "ส่งไปยังหน้าจอที่เชื่อมต่อแล้ว" : "ยังไม่มีหน้าจอเชื่อมต่อ เปิดลิงก์ใน OBS ก่อน"));
       })}><Radio size={16} />{t("เล่นคลิปบน overlay")}</button>}</div>
@@ -145,7 +172,7 @@ export function VideoWorkspace({ live }: { live: boolean }) {
       <div className="studio-section-head"><h2>{t("ลองเริ่มจากตัวอย่าง")}</h2>{!live && <Link href="/studio/demo">{t("เดโมทีละขั้น")}<ArrowUpRight size={15} /></Link>}</div>
       <div className="example-grid">{(live ? liveExamples : examples).map((item) =>
         <button type="button" key={item.image} className={`example-tile example-${item.image}`} disabled={!!busy} onClick={() => void act("example", async () => {
-          setPhoto(await sampleFile(item.image, !live && item.image === "cosmetic" ? "/studio/daily-glow.jpg" : `/editor/${item.image}.svg`)); setBrief(t(item.brief)); requestAnimationFrame(() => prompt.current?.focus());
+          setPhotos([await sampleFile(item.image, !live && item.image === "cosmetic" ? "/studio/daily-glow.jpg" : `/editor/${item.image}.svg`)]); setBrief(t(item.brief)); requestAnimationFrame(() => prompt.current?.focus());
         })}><span className="example-image" aria-hidden /><span><small>{live ? <Radio size={14} /> : <Clapperboard size={14} />}{t("บรีฟตัวอย่าง")}</small><strong>{t(item.label)}</strong></span><ArrowUpRight size={18} /></button>)}</div>
     </section>
   </>;

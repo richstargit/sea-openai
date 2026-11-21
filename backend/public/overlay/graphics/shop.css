@@ -1,0 +1,133 @@
+/* Shop graphics: every rule scoped to its .g-<id>; colours come from the theme variables in core.css.
+   Stock levels need amber/red, defined once here (pop swaps them for tones that read on the accent). */
+.g-flash-countdown, .g-stock-bar {--ok:var(--accent2);--warn:#e8a317;--alert:#e5372a}
+.g-flash-countdown[data-theme=pop], .g-stock-bar[data-theme=pop] {--ok:#fff;--warn:#ffe08a;--alert:#ffe08a}
+.g-stock-bar[data-theme=pop] {--alert:#1a1712}
+
+/* 1 flash-countdown */
+.g-flash-countdown {width:25vh;display:flex;flex-direction:column;align-items:center;gap:1vh;padding:1.6vh 2.2vh 2vh}
+.g-flash-countdown .fc-label {font-size:2.6vh;font-weight:700;color:var(--hi)}
+.g-flash-countdown .fc-dial {position:relative;width:17vh;height:17vh;display:grid;place-items:center}
+.g-flash-countdown svg {position:absolute;inset:0;width:100%;height:100%;fill:none;stroke-width:6}
+.g-flash-countdown .fc-track {stroke:var(--line)}
+.g-flash-countdown .fc-sweep {stroke:var(--text);stroke-linecap:round;stroke-dasharray:100}
+.g-flash-countdown .fc-time {font-size:4.8vh;font-weight:700;letter-spacing:-.02em}
+.g-flash-countdown[data-urgent="1"] .fc-sweep {stroke:var(--alert)}
+.g-flash-countdown[data-urgent="1"] .fc-time {color:var(--alert)}
+.g-flash-countdown .fc-stock {width:100%;display:flex;flex-direction:column;gap:.6vh}
+.g-flash-countdown .fc-stock[hidden] {display:none}
+.g-flash-countdown .fc-bar {height:1vh;border-radius:1vh;background:var(--line);overflow:hidden}
+.g-flash-countdown .fc-bar i {display:block;height:100%;background:var(--ok);transform-origin:left center}
+.g-flash-countdown .fc-left {font-size:2vh;color:var(--sub);text-align:center}
+
+/* 2 stock-bar */
+.g-stock-bar {--level:var(--ok);width:30vh;display:flex;flex-direction:column;gap:.4vh}
+.g-stock-bar[data-level=low] {--level:var(--warn)}
+.g-stock-bar[data-level=out] {--level:var(--alert)}
+.g-stock-bar .sb-name {white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4}
+.g-stock-bar .sb-count {font-size:2.8vh;font-weight:600}
+.g-stock-bar .sb-count b {font-size:4.4vh;font-weight:700;color:var(--level)}
+.g-stock-bar .sb-bar {height:1.4vh;margin-top:.4vh;border-radius:1vh;background:var(--line);overflow:hidden}
+.g-stock-bar .sb-bar i {display:block;height:100%;background:var(--level);transform-origin:left center}
+
+/* 3 buyer-toast */
+.g-buyer-toast {position:relative;display:flex;align-items:center;gap:1.4vh;padding:1.1vh 2.4vh 1.1vh 1.1vh;border-radius:5vh;max-width:48vh}
+.g-buyer-toast .bt-badge {flex:none;width:5vh;height:5vh;border-radius:50%;display:grid;place-items:center;background:var(--hi);color:var(--on-hi)}
+.g-buyer-toast .bt-badge svg {width:2.8vh;height:2.8vh}
+.g-buyer-toast .bt-float {position:absolute;left:2.2vh;top:.2vh;width:2.6vh;height:2.6vh;color:var(--hi)}
+.g-buyer-toast .bt-float svg {display:block;width:100%;height:100%}
+.g-buyer-toast .bt-body {min-width:0}
+.g-buyer-toast .bt-line {font-size:2.6vh;white-space:nowrap}
+.g-buyer-toast .bt-line b {font-weight:700}
+.g-buyer-toast .bt-product {font-size:2vh;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4}
+
+/* 4 cf-keycaps */
+.g-cf-keycaps {display:flex;flex-direction:column;align-items:flex-start;gap:1.8vh}
+.g-cf-keycaps .kc-row {display:flex;gap:1vh}
+.g-cf-keycaps .kc-key {position:relative;display:block;width:8vh;height:8.8vh;border-radius:1.4vh;background:var(--text);filter:drop-shadow(0 .8vh 1.4vh #00000059)}
+.g-cf-keycaps .kc-split {margin-left:2.4vh}
+.g-cf-keycaps .kc-top {position:absolute;inset:0 0 auto;height:8vh;box-sizing:border-box;border:.25vh solid var(--text);border-radius:1.4vh;display:grid;place-items:center;background:var(--surface);color:var(--text);font-size:4.2vh;font-weight:700}
+.g-cf-keycaps .kc-key[data-on="1"] .kc-top {background:var(--hi);color:var(--on-hi)}
+.g-cf-keycaps .kc-caption {font-size:3.4vh}
+.g-cf-keycaps .kc-caption b {color:var(--hi);font-weight:700;letter-spacing:.04em}
+
+/* 5 cart-press */
+.g-cart-press .cp-svg {position:absolute;inset:0;width:100%;height:100%;overflow:visible;fill:none;stroke:var(--hi);stroke-width:.55vh;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 .3vh .6vh #00000066)}
+.g-cart-press .cp-arrow {stroke-dasharray:100}
+.g-cart-press .cp-label {position:absolute;display:flex;align-items:center;gap:1.2vh;font-size:3.8vh;font-weight:700;white-space:nowrap}
+.g-cart-press .cp-label svg {width:3.6vh;height:3.6vh;color:var(--hi)}
+.g-cart-press .cp-ring, .g-cart-press .cp-ripple {position:absolute;width:12vh;height:12vh;margin:-6vh 0 0 -6vh;box-sizing:border-box;border-radius:50%;border:.5vh solid var(--hi)}
+.g-cart-press .cp-ripple {visibility:hidden}
+.g-cart-press .cp-hand {position:absolute;filter:drop-shadow(0 .6vh 1.2vh #00000066)}
+.g-cart-press .cp-hand svg {display:block;width:100%;height:100%;fill:var(--surface);stroke:var(--text);stroke-width:.5}
+
+/* 6 voucher-rain: ticket notches cut with a mask (shape only, no colour) */
+.g-voucher-rain .vr-ticket, .g-voucher-rain .vr-face {
+  -webkit-mask:radial-gradient(circle at 0 50%,#0000 1.1vh,#000 calc(1.1vh + 1px)) left/51% 100% no-repeat,radial-gradient(circle at 100% 50%,#0000 1.1vh,#000 calc(1.1vh + 1px)) right/51% 100% no-repeat;
+  mask:radial-gradient(circle at 0 50%,#0000 1.1vh,#000 calc(1.1vh + 1px)) left/51% 100% no-repeat,radial-gradient(circle at 100% 50%,#0000 1.1vh,#000 calc(1.1vh + 1px)) right/51% 100% no-repeat}
+.g-voucher-rain .vr-ticket {position:absolute;left:0;top:0;width:15vh;height:7vh;border-radius:.8vh;display:grid;place-items:center;background:var(--surface);color:var(--hi);font-size:2.2vh;font-weight:700;white-space:nowrap}
+.g-voucher-rain .vr-hero {position:absolute;left:50%;top:50%;width:66vh;height:24vh;filter:drop-shadow(0 1.4vh 2.6vh #00000073)}
+.g-voucher-rain .vr-face {position:absolute;inset:0;border-radius:1.6vh;display:flex;align-items:center;background:var(--surface);color:var(--text)}
+.g-voucher-rain .vr-front {justify-content:center;font-size:7vh;font-weight:700;color:var(--hi)}
+.g-voucher-rain .vr-back {visibility:hidden;opacity:0}
+.g-voucher-rain .vr-value {flex:0 0 40%;align-self:stretch;display:grid;place-items:center;box-sizing:border-box;padding:0 2vh;border-right:.35vh dashed var(--line);text-align:center;font-size:6.4vh;font-weight:700;line-height:1.3;color:var(--hi)}
+.g-voucher-rain .vr-info {flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:.6vh;padding:0 2.4vh}
+.g-voucher-rain .vr-code {font-size:4.6vh;font-weight:700;letter-spacing:.08em;border:.3vh dashed var(--text);border-radius:1vh;padding:0 2.2vh;white-space:nowrap}
+.g-voucher-rain .vr-note {font-size:1.9vh;text-align:center}
+
+/* 7 auction-bid */
+.g-auction-bid {position:relative;display:flex;align-items:center;gap:3vh;padding:1.8vh 3vh}
+.g-auction-bid .ab-info {display:flex;flex-direction:column}
+.g-auction-bid .ab-flip {display:grid;overflow:hidden}
+.g-auction-bid .ab-flip > * {grid-area:1/1}
+.g-auction-bid .ab-bid {font-size:7.2vh;font-weight:700;line-height:1.3;letter-spacing:-.01em}
+.g-auction-bid .ab-by {display:flex;align-items:center;gap:.8vh;font-size:2.4vh;color:var(--sub);white-space:pre}
+.g-auction-bid .ab-by b {color:var(--text);font-weight:700}
+.g-auction-bid .ab-up {font-weight:700;color:var(--on-hi);background:var(--hi);border-radius:1vh;padding:.1vh 1vh}
+.g-auction-bid .ab-gavel {width:12vh;height:12vh;color:var(--text)}
+.g-auction-bid .ab-gavel svg {display:block;width:100%;height:100%;overflow:visible}
+.g-auction-bid .ab-stamp {position:absolute;right:2vh;top:-2.4vh;padding:.2vh 2vh;border:.45vh solid var(--hi);border-radius:1vh;background:var(--surface);color:var(--hi);font-size:3.6vh;font-weight:700;visibility:hidden}
+
+/* 8 milestone-burst */
+.g-milestone-burst {position:relative;display:grid;place-items:center}
+.g-milestone-burst .mb-card {position:relative;text-align:center;padding:2.2vh 6vh 2.6vh}
+.g-milestone-burst .mb-label {font-size:3vh}
+.g-milestone-burst .mb-num {font-size:13vh;font-weight:700;line-height:1.15;letter-spacing:-.02em;color:var(--hi)}
+.g-milestone-burst .mb-bit {position:absolute;left:50%;top:50%;width:1.2vh;height:2vh;margin:-1vh 0 0 -.6vh;border-radius:.2vh;visibility:hidden}
+.g-milestone-burst .mb-0 {background:var(--accent)}
+.g-milestone-burst .mb-1 {background:var(--paper)}
+.g-milestone-burst .mb-2 {background:var(--accent2)}
+
+/* 9 up-next-rail */
+.g-up-next-rail {width:36vh;padding:1.4vh 1.4vh 1.6vh}
+.g-up-next-rail .un-head {padding:0 1vh .6vh}
+.g-up-next-rail .un-list {position:relative;display:flex;flex-direction:column}
+.g-up-next-rail .un-hi {position:absolute;left:0;right:0;top:0;border-radius:1vh;background:var(--hi)}
+.g-up-next-rail .un-row {position:relative;display:grid;grid-template-columns:1fr auto;gap:1.6vh;padding:.8vh 1.2vh;font-size:2.4vh;line-height:1.4}
+.g-up-next-rail .un-row[data-on="1"] {color:var(--on-hi)}
+.g-up-next-rail .un-name {white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.g-up-next-rail .un-price {font-weight:700}
+
+/* 10 recap-cycle */
+.g-recap-cycle {display:flex;align-items:stretch;padding:0;overflow:hidden}
+.g-recap-cycle .rc-tag {display:flex;align-items:center;padding:0 2.4vh;background:var(--hi);color:var(--on-hi);font-size:2.6vh;font-weight:700;white-space:nowrap}
+.g-recap-cycle .rc-win {display:grid;overflow:hidden;padding:1.2vh 3vh 1.2vh 2.4vh}
+.g-recap-cycle .rc-face {grid-area:1/1;display:flex;align-items:baseline;gap:1.4vh;white-space:nowrap;line-height:1.35}
+.g-recap-cycle .rc-face + .rc-face {visibility:hidden;opacity:0}
+.g-recap-cycle .rc-face span {font-size:2.4vh;color:var(--sub)}
+.g-recap-cycle .rc-face b {font-size:4.4vh;font-weight:700}
+
+/* 11 viewer-join */
+.g-viewer-join {display:flex;align-items:center;gap:1.2vh;padding:.9vh 2.2vh .9vh .9vh;border-radius:4vh;font-size:2.3vh;white-space:nowrap}
+.g-viewer-join .vj-icon {flex:none;width:3.8vh;height:3.8vh;border-radius:50%;display:grid;place-items:center;background:var(--line);color:var(--text)}
+.g-viewer-join .vj-icon svg {width:2.2vh;height:2.2vh;fill:currentColor}
+.g-viewer-join .vj-line b {font-weight:700}
+
+/* 12 heart-burst */
+.g-heart-burst .hb-heart {position:absolute;width:5vh;height:5vh;margin:-2.5vh 0 0 -2.5vh;visibility:hidden;filter:drop-shadow(0 .3vh .6vh #00000040)}
+.g-heart-burst svg {display:block;width:100%;height:100%}
+.g-heart-burst .hb-0 {color:var(--accent)}
+.g-heart-burst .hb-1 {color:var(--paper)}
+.g-heart-burst .hb-2 {color:var(--accent)}
+.g-heart-burst .hb-count {position:absolute;display:flex;align-items:center;gap:.8vh;padding:.8vh 2.2vh .8vh 1.6vh;border-radius:4vh;font-size:3vh;font-weight:700;white-space:nowrap}
+.g-heart-burst .hb-count svg {width:3vh;height:3vh;color:var(--hi)}

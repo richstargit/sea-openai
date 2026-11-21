@@ -32,7 +32,7 @@ Open http://localhost:3000/editor, or choose **Open in editor** from a Studio re
 
 Select a clip, then use the icon tabs for text, audio, image adjustments, framing and dimensions. Drag clip edges to trim and drag clips to reorder them. Space plays/pauses, S splits at the playhead, Delete closes the gap, and Cmd/Ctrl+Z undoes. Edits and media are saved to MongoDB under the signed-in account. Under **My projects → Import from this browser**, choose an older device project to copy to your account.
 
-**Export MP4** renders the edited timeline locally using H.264 video and AAC audio when present. Codec availability and maximum size depend on the browser. Unsupported configurations show an error. Keep the tab open until export completes.
+The preview uses the HyperFrames player. **Export MP4** validates the saved composition in Docker and renders H.264 on the backend host, with AAC for source audio or music. Keep the tab open until the download is ready. See the root README for the host and sandbox setup.
 
 The FilmCraft source adaptation, licensing and supported scope are documented in [docs/filmcraft.md](docs/filmcraft.md). The supplied design skill is preserved in [docs/design/apple-design.md](docs/design/apple-design.md).
 

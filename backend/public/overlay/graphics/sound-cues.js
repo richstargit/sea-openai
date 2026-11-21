@@ -1,0 +1,43 @@
+// Sound cues for graphics whose files don't declare their own (deals, broadcast, shop).
+// Loaded after every graphics file; a spec's own `sound` list always wins.
+;(() => {
+  const cues = {
+    'price-countdown': [['riser', 0], ['cash', 1.3]],
+    'slot-price': [['flap', 0.1], ['flap', 0.6], ['cash', 1.2]],
+    'price-ladder': [['pop', 0.2], ['pop', 0.4], ['pop', 0.6], ['ding', 0.9]],
+    'bundle-math': [['pop', 0.1], ['pop', 0.4], ['swipe', 0.7], ['cash', 0.9]],
+    'coupon-tear': [['swoosh', 0], ['paper', 0.5]],
+    'scratch-reveal': [['paper', 0.3], ['paper', 0.7], ['success', 1.2]],
+    'sticker-peel': [['paper', 0.3], ['pop-hi', 0.9]],
+    stamp: [['stamp', 0.05]],
+    'gift-unwrap': [['paper', 0.1], ['pop', 0.7], ['chime', 0.9]],
+    'free-ship-truck': [['whoosh-low', 0], ['beep', 0.9]],
+    'sold-out': [['buzz', 0.3], ['stamp', 0.5]],
+    'name-strap': [['swoosh', 0]],
+    'telop-pop': [['pop-hi', 0.1], ['impact', 0.3]],
+    'kinetic-claim': [['swipe', 0], ['pop', 0.3], ['pop', 0.5], ['pop', 0.7]],
+    'stat-callout': [['riser', 0], ['ding', 0.9]],
+    'review-stars': [['sparkle', 0.3], ['chime', 1.0]],
+    'before-after': [['whoosh', 0], ['swipe', 0.6]],
+    'versus-spec': [['swoosh', 0], ['click', 0.5], ['click', 0.7], ['click', 0.9]],
+    'comment-follow': [['notify', 0]],
+    'iris-swap': [['whoosh-big', 0]],
+    'blinds-sting': [['whoosh', 0], ['impact', 0.45]],
+    'countdown-321': [['beep', 0], ['beep', 1], ['beep', 2], ['go', 3]],
+    'chapter-card': [['whoosh', 0], ['ding', 0.5]],
+    'quote-card': [['paper', 0]],
+    'flash-countdown': [['riser', 0], ['beep', 0.4]],
+    'stock-bar': [['swoosh', 0], ['notify', 0.4]],
+    'buyer-toast': [['cash', 0], ['heart', 0.2]],
+    'cf-keycaps': [['type', 0.2], ['type', 0.35], ['type', 0.5], ['type', 0.65], ['type', 0.8], ['ding', 1.1]],
+    'cart-press': [['click', 0.6], ['click', 0.9]],
+    'voucher-rain': [['whoosh-big', 0], ['sparkle', 0.6], ['success', 1.6]],
+    'auction-bid': [['flap', 0.2]],
+    'milestone-burst': [['riser', 0], ['firework', 0.8], ['applause', 1.0]],
+    'up-next-rail': [['swoosh', 0]],
+    'recap-cycle': [['swipe', 0]],
+    'viewer-join': [['ping', 0]],
+    'heart-burst': [['heart', 0], ['heart', 0.4], ['heart', 0.8]],
+  }
+  for (const [id, list] of Object.entries(cues)) if (window.graphicSpecs[id]) window.graphicSpecs[id].sound ??= list
+})()

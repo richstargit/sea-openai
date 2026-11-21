@@ -24,6 +24,7 @@ import {
 import {
   editorSession,
   listEditorProjects,
+  proposeEditorEdit,
   readChunk,
   readEditorProject,
   writeChunk,
@@ -33,6 +34,7 @@ import {
   addSkill,
   overlayLink,
   overlayMedia,
+  overlayMotion,
   overlayPublish,
   overlayStatus,
   skills,
@@ -43,6 +45,7 @@ import {
 } from '@/middlewares/rate-limit.middleware.js'
 import healthRoutes from '@/routes/health.route.js'
 import { FILE_LIMIT } from '@/services/agent-tools/files.js'
+import { editorExport, editorPreview } from '@/services/video/editor-export.js'
 
 const router = Router()
 
@@ -63,7 +66,18 @@ router.post('/auth/login', authLimiter, signin)
 router.get('/auth/me', requireUser, me)
 router.post('/auth/logout', requireUser, logout)
 router.use('/agent', checkBrowserOrigin, requireUser)
+router.get('/agent/hyperframes/runtime.js', (_req, res) =>
+  res.sendFile(
+    resolve('node_modules/hyperframes/dist/hyperframe.runtime.iife.js'),
+  ),
+)
+router.get('/agent/hyperframes/gsap.js', (_req, res) =>
+  res.sendFile(resolve('node_modules/gsap/dist/gsap.min.js')),
+)
 router.use('/agent/editor', editorSession)
+router.post('/agent/editor/projects/:id/edits', proposeEditorEdit)
+router.post('/agent/editor/preview', editorPreview)
+router.post('/agent/editor/projects/:id/export', editorExport)
 router.get('/agent/editor/projects', listEditorProjects)
 router.get('/agent/editor/projects/:id', readEditorProject)
 router.put('/agent/editor/projects/:id', writeEditorProject)
@@ -85,16 +99,23 @@ router.post('/agent/skills', apiRateLimiter, addSkill)
 router.get('/agent/overlay/status', overlayStatus)
 router.post('/agent/overlay/link', apiRateLimiter, overlayLink)
 router.post('/agent/overlay/events', apiRateLimiter, overlayPublish)
+router.post('/agent/overlay/motion', apiRateLimiter, overlayMotion)
 router.get('/overlay/media/:id', overlayMedia)
 router.use('/overlay', (_request, response, next) => {
   response.set(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; media-src 'self' blob:; object-src 'none'; frame-ancestors 'none'",
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:* ws://localhost:*; img-src 'self' data:; media-src 'self' blob:; object-src 'none'; frame-ancestors 'none'",
   )
   next()
 })
 router.get('/overlay/gsap.js', (_request, response) =>
   response.sendFile(resolve('node_modules/gsap/dist/gsap.min.js')),
+)
+router.use(
+  '/overlay/sfx',
+  express.static(
+    resolve('node_modules/hyperframes/dist/skills/media-use/audio/assets/sfx'),
+  ),
 )
 router.use('/overlay', express.static(resolve('public/overlay')))
 router.post(AGENT_CHAT_PATH, apiRateLimiter, chat)
