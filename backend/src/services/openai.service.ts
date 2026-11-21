@@ -1,6 +1,6 @@
 import OpenAI from 'openai'
 
-const DEFAULT_MODEL = 'gpt-5.4-mini'
+const DEFAULT_MODEL = 'gpt-5.6-mini'
 
 type GenerateTextOptions = {
   model?: string
