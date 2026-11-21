@@ -41,7 +41,9 @@ export type FitSpeechArgs = {
   /** Turns the joined text into a wav. */
   synthesize: (input: string) => Promise<Buffer>
   tighten?: TightenFn
-  fit?: (args: {
+  /** Demo mode has no real voice: the take is written as it is, with no fitting. */
+  mock?: boolean
+  applyFit?: (args: {
     inPath: string
     outPath: string
     targetSec: number
@@ -67,9 +69,24 @@ export const LENGTH_WARNING = {
 
 export async function fitSpeech(args: FitSpeechArgs): Promise<FitSpeechResult> {
   const tighten = args.tighten ?? tightenLines
-  const fit = args.fit ?? applyFit
+  const fitTake = args.applyFit ?? applyFit
   const warnings: string[] = []
   await mkdir(args.dir, { recursive: true })
+
+  if (args.mock) {
+    const finalPath = path.join(args.dir, 'voice.wav')
+    await writeFile(finalPath, await args.synthesize(joinForSpeech(args.lines)))
+    return {
+      lines: args.lines,
+      audioPath: finalPath,
+      durationSec: 0,
+      rounds: 1,
+      tempo: null,
+      shortenedGaps: 0,
+      inRange: true,
+      warnings: [],
+    }
+  }
 
   let budget = lengthBudget({
     targetSec: args.targetSec,
@@ -116,7 +133,7 @@ export async function fitSpeech(args: FitSpeechArgs): Promise<FitSpeechResult> {
     const raw = path.join(args.dir, `voice-raw-${round}.wav`)
     const fitted = path.join(args.dir, `voice-fit-${round}.wav`)
     await writeFile(raw, await args.synthesize(input))
-    const result = await fit({
+    const result = await fitTake({
       inPath: raw,
       outPath: fitted,
       targetSec: args.targetSec,

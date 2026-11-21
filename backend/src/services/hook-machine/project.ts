@@ -188,12 +188,13 @@ async function fitScriptToBudget(
     const found = script.beats.findIndex(
       (beat, i) => i >= cursor && beat.voiceover === text,
     )
-    if (found >= 0) {
-      kept.push({ ...script.beats[found]!, voiceover: text })
+    const exact = found >= 0 ? script.beats[found] : undefined
+    if (exact) {
+      kept.push({ ...exact, voiceover: text })
       cursor = found + 1
     } else {
-      const beat = script.beats[Math.min(cursor, script.beats.length - 1)]!
-      kept.push({ ...beat, voiceover: text })
+      const beat = script.beats[Math.min(cursor, script.beats.length - 1)]
+      if (beat) kept.push({ ...beat, voiceover: text })
       cursor = Math.min(cursor + 1, script.beats.length)
     }
   }

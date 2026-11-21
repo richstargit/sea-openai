@@ -136,7 +136,7 @@ function tokens(text: string): string[] {
   return text
     .toLowerCase()
     .split(/[\s,;/]+/)
-    .map((t) => t.replace(/[^\p{L}\p{N}]/gu, ''))
+    .map((t) => t.replace(/[^\p{L}\p{M}\p{N}]/gu, ''))
     .filter((t) => t.length >= 3)
 }
 
