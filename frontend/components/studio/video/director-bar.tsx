@@ -10,9 +10,9 @@ export type DirectorClip = { id: string; url: string; name: string; aiVoice?: bo
  * The end of the page when our AI director makes the video: the one button, the wait, a failure with retry,
  * then the clip with download and the editor. Same surfaces as CreateBar so both engines look alike.
  */
-export function DirectorBar({ running, clip, problem, reason, onStart, onReset, onEdit, dockRef }: {
-  running: boolean; clip: DirectorClip | null; problem: string; reason: string;
-  onStart: () => void; onReset: () => void; onEdit: () => void; dockRef: Ref<HTMLDivElement>;
+export function DirectorBar({ running, clip, problem, reason, revising, onStart, onReset, onEdit, onRevise, onCancelRevise, dockRef }: {
+  running: boolean; clip: DirectorClip | null; problem: string; reason: string; revising: boolean;
+  onStart: () => void; onReset: () => void; onEdit: () => void; onRevise: () => void; onCancelRevise: () => void; dockRef: Ref<HTMLDivElement>;
 }) {
   const { t } = useLanguage();
   if (clip) {
@@ -24,6 +24,7 @@ export function DirectorBar({ running, clip, problem, reason, onStart, onReset, 
           {clip.aiVoice && <p>{t("เสียงบรรยายสร้างด้วย AI")}</p>}
           <a className="vs-go" href={clip.url} download={clip.name}><Download size={18} aria-hidden />{t("ดาวน์โหลด")}</a>
           <button type="button" className="vs-go" onClick={onEdit}><Clapperboard size={18} aria-hidden />{t("เปิดในห้องตัดต่อ")}</button>
+          {clip.projectId && <button type="button" className="vs-link" onClick={onRevise}>{t("แก้คลิปนี้")}</button>}
           <button type="button" className="vs-link" onClick={onReset}>{t("สร้างใหม่")}</button>
         </div>
       </section>
@@ -50,8 +51,9 @@ export function DirectorBar({ running, clip, problem, reason, onStart, onReset, 
   }
   return <div className="vs-dock" data-state="idle" ref={dockRef}>
     <div className="vs-bar">
-      <p className="vs-bar-text" role="status">{reason && t(reason)}</p>
-      <button type="button" className="vs-go" disabled={Boolean(reason)} onClick={onStart}>{t("สร้างวิดีโอ")}</button>
+      <p className="vs-bar-text" role="status">{revising ? t("บอกสิ่งที่อยากแก้ในช่องไอเดีย") : reason && t(reason)}</p>
+      {revising && <button type="button" className="vs-link" onClick={onCancelRevise}>{t("ยกเลิกการแก้คลิป")}</button>}
+      <button type="button" className="vs-go" disabled={Boolean(reason)} onClick={onStart}>{t(revising ? "แก้คลิป" : "สร้างวิดีโอ")}</button>
     </div>
   </div>;
 }

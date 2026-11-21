@@ -55,6 +55,8 @@ export function VideoStudio({ userId }: { userId: string }) {
   const [directing, setDirecting] = useState(false);
   const [clip, setClip] = useState<DirectorClip | null>(null);
   const [directorProblem, setDirectorProblem] = useState("");
+  // set while the next brief should revise this film instead of starting a new one
+  const [revising, setRevising] = useState<DirectorClip | null>(null);
   const { t } = useLanguage();
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [brief, setBrief] = useState("");
@@ -74,7 +76,7 @@ export function VideoStudio({ userId }: { userId: string }) {
 
   const working = starting || job?.status === "running" || directing;
   const hasInput = photos.length > 0 || brief.trim().length > 0;
-  const reason = engine === "director" ? (hasInput ? "" : "ใส่รูปหรือไอเดียก่อน") : blocker(hasInput, style);
+  const reason = engine === "director" ? (revising ? (brief.trim() ? "" : "บอกสิ่งที่อยากแก้ในช่องไอเดีย") : hasInput ? "" : "ใส่รูปหรือไอเดียก่อน") : blocker(hasInput, style);
 
   // Our director: one request that plans, renders and returns the film. Length, shape and voice ride in the brief.
   const direct = useCallback(async () => {
@@ -82,7 +84,7 @@ export function VideoStudio({ userId }: { userId: string }) {
     setDirectorProblem("");
     try {
       const files = await Promise.all(photos.map(uploadPng));
-      const message = [
+      const message = revising ? brief.trim() : [
         brief.trim() || "สร้างวิดีโอโปรโมตจากรูปสินค้านี้",
         `ความยาวประมาณ ${length} วินาที`,
         `สัดส่วนภาพ ${aspect}`,
@@ -90,16 +92,18 @@ export function VideoStudio({ userId }: { userId: string }) {
       ].join("\n");
       const result = await studioPost<{ files?: DirectorClip[]; message: string; toolsUsed?: string[]; projectId?: string }>("/agent/chat", {
         message, outputFormat: "portrait", files, ...(saleFormat ? { saleFormat } : {}),
+        ...(revising?.projectId ? { projectId: revising.projectId } : {}),
       });
       const film = result.files?.[0];
       if (!film) throw new Error(result.message);
       setClip({ ...film, projectId: result.projectId, aiVoice: result.toolsUsed?.some((tool) => tool === "generate_speech" || tool === "video_voice") });
+      setRevising(null);
     } catch (error) {
       setDirectorProblem(error instanceof Error ? error.message : "สร้างวิดีโอไม่สำเร็จ");
     } finally {
       setDirecting(false);
     }
-  }, [photos, brief, length, aspect, voice.language, saleFormat]);
+  }, [photos, brief, length, aspect, voice.language, saleFormat, revising]);
 
   const openEditor = useCallback(async () => {
     if (!clip) return;
@@ -180,7 +184,8 @@ export function VideoStudio({ userId }: { userId: string }) {
     </section>
 
     {engine === "director"
-      ? <DirectorBar running={directing} clip={clip} problem={directorProblem} reason={reason} onStart={go} onReset={() => { setClip(null); setDirectorProblem(""); }} onEdit={() => void openEditor().catch((e) => setDirectorProblem(e instanceof Error ? e.message : "เปิดห้องตัดต่อไม่ได้"))} dockRef={dock} />
+      ? <DirectorBar running={directing} clip={clip} problem={directorProblem} reason={reason} revising={!!revising} onStart={go}
+          onRevise={() => { setRevising(clip); setClip(null); setBrief(""); }} onCancelRevise={() => { setClip(revising); setRevising(null); }} onReset={() => { setClip(null); setDirectorProblem(""); }} onEdit={() => void openEditor().catch((e) => setDirectorProblem(e instanceof Error ? e.message : "เปิดห้องตัดต่อไม่ได้"))} dockRef={dock} />
       : <CreateBar job={job} starting={starting} problem={problem} reason={reason} onStart={go} onReset={reset} dockRef={dock} aspect={aspect} />}
   </div>;
 }

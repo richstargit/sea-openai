@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Clapperboard, Radio } from "lucide-react";
+import { Clapperboard, Radio, Scissors } from "lucide-react";
 import { AccountButton } from "@/components/account-button";
 import { LanguageSwitcher, useLanguage } from "@/components/language-provider";
 import { Wordmark } from "@/components/site-nav";
@@ -20,6 +20,7 @@ export function StudioShell({ live, children }: { live: boolean; children: React
       <nav className="studio-nav" aria-label={t("พื้นที่ทำงาน")}>
         <Link href="/studio" aria-current={live ? undefined : "page"}><Clapperboard />{t("สตูดิโอวิดีโอ")}</Link>
         <Link href="/studio/live" aria-current={live ? "page" : undefined}><Radio />{t("สตูดิโอไลฟ์")}</Link>
+        <Link href="/editor" className="studio-editor-link"><Scissors />{t("ตัดต่อคลิป")}</Link>
       </nav>
       {children}
     </main>
