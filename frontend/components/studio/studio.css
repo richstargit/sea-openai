@@ -78,3 +78,6 @@
   .example-tile { min-height: 68px; }
   .studio-result { flex-wrap: wrap; }
 }
+/* live studio: a full-width app, not the narrow studio column */
+.studio-live .studio-header, .studio-live .studio-main { max-width: min(100%, 1680px); }
+.studio-live .studio-main { padding: 28px clamp(16px, 3vw, 48px) 96px; }

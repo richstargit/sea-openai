@@ -114,7 +114,7 @@ router.get('/overlay/media/:id', overlayMedia)
 router.use('/overlay', (_request, response, next) => {
   response.set(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:* ws://localhost:*; img-src 'self' data:; media-src 'self' blob:; object-src 'none'; frame-ancestors 'none'",
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:* ws://localhost:*; img-src 'self' data:; media-src 'self' blob:; object-src 'none'; frame-ancestors 'self'",
   )
   next()
 })
