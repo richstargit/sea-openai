@@ -9,6 +9,7 @@ import {
 import { useLanguage } from "@/components/language-provider";
 import { playOverlay, studioPost, studioRequest } from "@/components/studio/studio-api";
 import { useLiveDetection } from "@/lib/live-detect";
+import { useFaceBox } from "@/lib/live-face";
 import { type LiveSentence, useLiveSpeech } from "@/lib/live-speech";
 import { type CustomMotion, type Decision, type LiveProduct, type Segment, productImage, fillMotion, motionOn } from "@/lib/live-plan";
 import { cuesFromSpeech, namesProduct } from "@/lib/live-cues";
@@ -52,6 +53,7 @@ const PREVIEW_SRC = "/overlay/index.html?preview=1#" + "a".repeat(43); // index.
 const MODE_KEY = "snappromo-live-mode";
 const NEEDS_PRODUCT = /\{(name|price|code)\}/;
 const BIG_GAP = 3500; // spec: at most one big motion per 3.5 s, the rest queue
+const WINDOW_MS: [number, number] = [8000, 12000]; // the director decides once per window; nothing static for longer than this
 const READ_MS = 2000; // spec: in 0.2–0.3 s, hold 1.5–2 s
 const MOMENT_EVERY = 45000; // the camera gives the same product its card at most this often
 const FRESH_SPEECH = 5000; // AI motion picks only fire right after the host said something
@@ -164,6 +166,12 @@ export function ControlRoom({ plan, setPlan, products, overlayOrigin }: StepProp
   // when each product last got its on-camera moment (follow-the-camera rule)
   const momentFor = useRef<Record<string, number>>({});
   const noneSince = useRef(0);
+  const liveStart = useRef(0);
+  const lastChange = useRef(0); // last play() or jump zoom: the frame is "static" since then
+  const zoomClose = useRef(false);
+  const faceSent = useRef<{ box: Box | null; at: number }>({ box: null, at: 0 });
+  const win = useRef({ start: 0, length: 10000, heldMax: 0, heldId: null as string | null, low: 0, n: 0 });
+  const [punch, setPunch] = useState<{ scale: number; x: number; y: number } | null>(null); // local preview "Close" shot
   const scriptSession = useRef<{ id: string; t0: number } | null>(null);
   const latest = useRef<{ tick: () => void; sentence: (s: LiveSentence) => void; decision: (d: Decision) => void; log: (role: Role, text: string, tone?: Tone) => void } | null>(null);
 
@@ -204,6 +212,7 @@ export function ControlRoom({ plan, setPlan, products, overlayOrigin }: StepProp
   const speech = ({ listening: "on", off: "off", unsupported: "unsupported", error: "error" } as const)[hearing.status];
   const interim = hearing.interim;
   const box: Box | null = detection.box;
+  const face = useFaceBox({ video: videoRef, enabled: live });
   const detectedName = products.find((p) => p.id === detection.product)?.name ?? detection.product ?? "";
 
   /** The one product the camera has really verified: confirmed by the detector AND boxed by the grounding model. */
@@ -334,7 +343,7 @@ export function ControlRoom({ plan, setPlan, products, overlayOrigin }: StepProp
     play(queue.current.shift()!);
   }
   function play(item: Queued) {
-    lastBig.current = Date.now();
+    lastBig.current = lastChange.current = Date.now();
     lastByKey.current.set(item.key, Date.now());
     const { aiName, ...event } = item.event;
     send(event);
@@ -515,6 +524,10 @@ export function ControlRoom({ plan, setPlan, products, overlayOrigin }: StepProp
       setWarning({ text: lines.at(-1) ?? "", at: Date.now() });
       log("โปรดิวเซอร์", t("เตือน: คำพูดเกินจริง") + ` (${pct(d.riskyClaim)})`, "warn");
     }
+    const w = win.current;
+    w.n++;
+    if (d.energy === "low") w.low++;
+    if ((d.heldUp ?? 0) > w.heldMax && dp) { w.heldMax = d.heldUp ?? 0; w.heldId = dp.id; }
     lowEnergy.current = d.energy === "low" ? lowEnergy.current + 1 : 0;
     if (lowEnergy.current === 2) { setSuggestPoll(true); log("ผู้กำกับ", t("คนดูเริ่มเงียบ แนะนำเปิดโหวต"), "warn"); }
 
@@ -562,12 +575,50 @@ export function ControlRoom({ plan, setPlan, products, overlayOrigin }: StepProp
     enqueue({ event: buildEvent(kind, p), key: kind, role: roleFor(kind), text: describe(kind, p) }, 15000);
   }
 
+  // ---------- AI director: one decision per 8–12 s window, built from the Decisions gathered in it ----------
+  /** Hard cut between Wide and Close, like an edited video. Local preview punches the video in; OBS gets zoom / zoom_out. */
+  function jumpZoom() {
+    lastChange.current = Date.now();
+    zoomClose.current = !zoomClose.current;
+    const f = face.box;
+    if (!zoomClose.current) { setPunch(null); if (mode === "obs") send({ type: "zoom_out" }); return; }
+    if (mode === "local") { const c = f ? toView(f) : { x: 0.4, y: 0.4, w: 0.2, h: 0.2 }; setPunch({ scale: 1.3, x: c.x + c.w / 2, y: c.y + c.h / 2 }); return; }
+    const big = f && { x: Math.max(0, f.x - f.w), y: Math.max(0, f.y - f.h * 0.5), w: Math.min(1, f.w * 3), h: Math.min(1, f.h * 2.5) };
+    send({ type: "zoom", payload: big ? { box: big } : { x: 0.5, y: 0.5 }, ttl: 9000 });
+  }
+  function directWindow() {
+    const w = win.current;
+    const now = Date.now();
+    const secs = Math.round((now - w.start) / 1000);
+    const vp = verifiedProduct();
+    const quiet = now - (finals.current.at(-1)?.at ?? liveStart.current) >= 10000;
+    const idle = now - lastChange.current;
+    if (lastChange.current >= w.start) { /* something already changed on screen this window: leave it alone */ }
+    else if (vp && w.heldId === vp.id && w.heldMax >= 0.6) {
+      lastMoment.current = now;
+      const { event, label } = productEvent(vp);
+      if (enqueue({ event, key: "product_card", role: "ผู้กำกับ", text: `${t("ช่วง")} ${secs} ${t("วิ")}: ${t("ยกสินค้า")} ${vp.name} → ${label.replace("_", "-")}` })) log("ผู้กำกับ", `${t("ช่วง")} ${secs} ${t("วิ")}: ${t("ยกสินค้า")} ${vp.name} → ${t("การ์ดสินค้า")}`);
+    } else if ((w.low >= 2 || quiet) && !suggestPoll) { setSuggestPoll(true); log("ผู้กำกับ", `${t("ช่วง")} ${secs} ${t("วิ")}: ${t("คนดูเงียบ → แนะนำโหวต")}`, "warn"); }
+    else if (!queue.current.length && now - lastBig.current >= BIG_GAP) { log("ผู้กำกับ", `${t("จอนิ่ง")} ${Math.round(idle / 1000)} ${t("วิ")} → jump zoom (${zoomClose.current ? "Wide" : "Close"})`, "action"); jumpZoom(); }
+    win.current = { start: now, length: WINDOW_MS[0] + Math.random() * (WINDOW_MS[1] - WINDOW_MS[0]), heldMax: 0, heldId: null, low: 0, n: 0 };
+  }
+  /** face box to the overlay (keeps graphics off the host's face), ~4×/s and only when it moved */
+  function sendFace() {
+    const f = face.box ? (mode === "local" ? toView(face.box) : face.box) : null;
+    const last = faceSent.current;
+    if (Date.now() - last.at < 220 || (!f && !last.box) || (f && last.box && Math.abs(f.x - last.box.x) + Math.abs(f.y - last.box.y) + Math.abs(f.w - last.box.w) < 0.04)) return;
+    faceSent.current = { box: f, at: Date.now() };
+    send({ type: "face_box", payload: f });
+  }
+
   // ---------- clock ----------
   function tick() {
     pump();
     setClock(Math.floor(Date.now() / 1000));
     if (warning && Date.now() - warning.at > 8000) setWarning(null);
     if (!liveRef.current) { setAi((a) => (a.status === "idle" ? a : { status: "idle", id: null })); return; }
+    sendFace();
+    if (Date.now() - win.current.start >= win.current.length) directWindow();
     const vp = verifiedProduct();
     if (detection.product) noneSince.current = Date.now();
     const status: AiStatus = !detection.running ? "watching" : vp ? "verified" : detection.product ? "confirming" : Date.now() - noneSince.current >= 3000 ? "none" : "watching";
@@ -638,6 +689,11 @@ export function ControlRoom({ plan, setPlan, products, overlayOrigin }: StepProp
     lastMoment.current = 0;
     momentFor.current = {};
     noneSince.current = Date.now();
+    liveStart.current = Date.now();
+    win.current = { start: Date.now(), length: 10000, heldMax: 0, heldId: null, low: 0, n: 0 };
+    zoomClose.current = false;
+    faceSent.current = { box: null, at: 0 };
+    setPunch(null);
     setSuggestPoll(false);
     if (cameraError) setCameraTry((n) => n + 1);
     // the sting and the theme go out now; nothing waits for detection, AI or the mic
@@ -657,6 +713,9 @@ export function ControlRoom({ plan, setPlan, products, overlayOrigin }: StepProp
     const outro = customForMoment("outro", null);
     if (outro) play({ event: outro, key: "outro", role: "Motion", text: "" });
     send({ type: "zoom_out" });
+    send({ type: "face_box", payload: null });
+    setPunch(null);
+    zoomClose.current = false;
     log("ผู้กำกับ", t("จบไลฟ์") + " · " + timecode(elapsed), "action");
   }
   function chooseMode(next: Mode) {
@@ -695,6 +754,11 @@ export function ControlRoom({ plan, setPlan, products, overlayOrigin }: StepProp
       status: speech === "on" ? "ok" : speech === "off" ? "off" : "err",
       detail: t(speech === "on" ? "กำลังฟัง" : speech === "unsupported" ? "ใช้ได้เฉพาะ Google Chrome" : speech === "error" ? "เปิดไมค์ไม่ได้" : "พร้อม รอเริ่มไลฟ์"),
     },
+    {
+      icon: Crosshair, label: t("กล้องจับหน้า"), short: t("จับหน้า"),
+      status: (!live ? "off" : face.error ? "err" : !face.ready ? "warn" : "ok") as Status,
+      detail: !live ? t("พร้อม รอเริ่มไลฟ์") : face.error ? t("โหลดไม่ได้") : !face.ready ? t("กำลังเริ่ม…") : face.box ? t("พร้อม") : t("ไม่พบหน้า"),
+    },
     ...(mode === "obs" ? [{
       icon: MonitorPlay, label: "OBS Browser Source", short: "OBS",
       status: (obsConnected == null ? "err" : obsConnected > 0 ? "ok" : "warn") as Status,
@@ -725,7 +789,7 @@ export function ControlRoom({ plan, setPlan, products, overlayOrigin }: StepProp
     <div className="cr-layout">
       <div className="cr-stage">
         <div className="cr-screen">
-          <video ref={videoRef} autoPlay muted playsInline onLoadedMetadata={(e) => setVideoAspect(e.currentTarget.videoWidth / e.currentTarget.videoHeight || 16 / 9)} />
+          <video ref={videoRef} autoPlay muted playsInline style={punch && mode === "local" ? { transform: `scale(${punch.scale}) scaleX(-1)`, transformOrigin: `${punch.x * 100}% ${punch.y * 100}%` } : undefined} onLoadedMetadata={(e) => setVideoAspect(e.currentTarget.videoWidth / e.currentTarget.videoHeight || 16 / 9)} />
           {mode === "obs" && <>
             <span className="cr-chip cr-chip-pgm">PGM</span>
             {live && <span className="cr-chip cr-chip-live">LIVE {timecode(elapsed)}</span>}

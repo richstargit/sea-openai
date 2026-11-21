@@ -1310,4 +1310,11 @@ export const english: Record<string, string> = {
   "AI กำลังเตรียมบทของสินค้านี้…": "The AI is preparing this product's script…",
   "บทพูดของแต่ละสินค้า (AI)": "What to say for each product (AI)",
   "ประโยคเปิด จุดที่ควรพูด และคำชวนซื้อของสินค้าแต่ละตัว ไม่มีลำดับ ไม่จับเวลา ตอนไลฟ์ AI ดึงบทของสินค้าที่คุณกำลังพูดถึงขึ้นมาเอง": "An opener, points to make and a call to buy for each product. No order, no timer: during the live the AI brings up the lines for the product you are talking about",
+  "กล้องจับหน้า": "Face tracking",
+  "จับหน้า": "Face",
+  "ไม่พบหน้า": "No face",
+  "โหลดไม่ได้": "Could not load",
+  "ยกสินค้า": "Held up",
+  "คนดูเงียบ → แนะนำโหวต": "viewers quiet → suggest a poll",
+  "จอนิ่ง": "Frame static",
 };
