@@ -1,0 +1,59 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "sea-openai-frontend",
+      "type": "shell",
+      "command": "export NVM_DIR=\"$HOME/.nvm\" && . \"$NVM_DIR/nvm.sh\" && nvm use 22 && npm run dev",
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "echo": false,
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false,
+        "clear": true
+      },
+      "icon": {
+        "id": "browser",
+        "color": "terminal.ansiMagenta"
+      }
+    },
+    {
+      "label": "sea-openai-backend",
+      "type": "shell",
+      "command": "export NVM_DIR=\"$HOME/.nvm\" && . \"$NVM_DIR/nvm.sh\" && nvm use 22 && npm run dev",
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "echo": false,
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false,
+        "clear": true
+      },
+      "icon": {
+        "id": "server-process",
+        "color": "terminal.ansiBlue"
+      }
+    },
+    {
+      "label": "Start All Services",
+      "dependsOrder": "parallel",
+      "dependsOn": [
+        "sea-openai-frontend",
+        "sea-openai-backend"
+      ],
+      "problemMatcher": [],
+      "runOptions": {
+        "runOn": "folderOpen"
+      }
+    }
+  ]
+}

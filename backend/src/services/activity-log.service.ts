@@ -8,7 +8,7 @@ import {
 import { logger, redact } from '@/services/logger.service.js'
 
 export type ActivityInput = {
-  userId: number | null
+  userId: string | null
   requestId: string
   method: string
   path: string

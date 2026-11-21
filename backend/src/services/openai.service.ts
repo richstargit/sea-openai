@@ -1,6 +1,7 @@
 import OpenAI from 'openai'
+import type { ResponseCreateParamsNonStreaming } from 'openai/resources/responses/responses'
 
-const DEFAULT_MODEL = 'gpt-5.6-mini'
+const DEFAULT_MODEL = 'gpt-5.6-luna'
 
 type GenerateTextOptions = {
   model?: string
@@ -20,27 +21,46 @@ function openAIClient(): OpenAI {
   return client
 }
 
+type ResponseOptions = Omit<
+  ResponseCreateParamsNonStreaming,
+  'model' | 'store'
+> & {
+  model?: string
+}
+
+export async function createOpenAIResponse(
+  { model, ...params }: ResponseOptions,
+  signal?: AbortSignal,
+) {
+  const response = await openAIClient().responses.create(
+    {
+      ...params,
+      model: model?.trim() || process.env.OPENAI_MODEL?.trim() || DEFAULT_MODEL,
+      store: false,
+    },
+    { signal },
+  )
+
+  if (response.status !== 'completed') {
+    const reason = response.incomplete_details?.reason ?? response.status
+    throw new Error(`OpenAI response did not complete (${reason})`)
+  }
+
+  return response
+}
+
 export async function generateText(
   input: string,
   options: GenerateTextOptions = {},
 ): Promise<string> {
   if (!input.trim()) throw new Error('OpenAI input must contain text')
 
-  const response = await openAIClient().responses.create({
-    model:
-      options.model?.trim() ||
-      process.env.OPENAI_MODEL?.trim() ||
-      DEFAULT_MODEL,
+  const response = await createOpenAIResponse({
+    model: options.model,
     input,
     instructions: options.instructions,
     max_output_tokens: options.maxOutputTokens,
-    store: false,
   })
-
-  if (response.status !== 'completed') {
-    const reason = response.incomplete_details?.reason ?? response.status
-    throw new Error(`OpenAI response did not complete (${reason})`)
-  }
 
   if (!response.output_text.trim()) {
     throw new Error('OpenAI returned no text')

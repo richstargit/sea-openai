@@ -1,39 +1,50 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useSyncExternalStore, type ReactNode } from "react";
 import { english } from "@/lib/translations";
 
 type Language = "en" | "th";
 const STORAGE_KEY = "snappromo-language";
+const LANGUAGE_CHANGE = "snappromo-language-change";
+let sessionLanguage: Language | undefined;
 const LanguageContext = createContext<{
   language: Language;
   setLanguage: (language: Language) => void;
 }>({ language: "en", setLanguage: () => {} });
 
+function readLanguage(): Language {
+  if (sessionLanguage) return sessionLanguage;
+  try {
+    return localStorage.getItem(STORAGE_KEY) === "th" ? "th" : "en";
+  } catch {
+    return "en";
+  }
+}
+
+function subscribeLanguage(notify: () => void) {
+  window.addEventListener(LANGUAGE_CHANGE, notify);
+  window.addEventListener("storage", notify);
+  return () => {
+    window.removeEventListener(LANGUAGE_CHANGE, notify);
+    window.removeEventListener("storage", notify);
+  };
+}
+
+function setLanguage(next: Language) {
+  try {
+    localStorage.setItem(STORAGE_KEY, next);
+    sessionLanguage = undefined;
+  } catch {
+    sessionLanguage = next;
+  }
+  window.dispatchEvent(new Event(LANGUAGE_CHANGE));
+}
+
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, updateLanguage] = useState<Language>("en");
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved === "en" || saved === "th") updateLanguage(saved);
-    } catch {
-      // Language switching still works when browser storage is unavailable.
-    }
-  }, []);
-
+  const language = useSyncExternalStore<Language>(subscribeLanguage, readLanguage, () => "en");
   useEffect(() => {
     document.documentElement.lang = language;
   }, [language]);
-
-  function setLanguage(next: Language) {
-    updateLanguage(next);
-    try {
-      localStorage.setItem(STORAGE_KEY, next);
-    } catch {
-      // Keep the preference for this visit even in restricted browsers.
-    }
-  }
 
   return <LanguageContext.Provider value={{ language, setLanguage }}>{children}</LanguageContext.Provider>;
 }

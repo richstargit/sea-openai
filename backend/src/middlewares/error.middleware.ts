@@ -1,5 +1,6 @@
 import type { ErrorRequestHandler } from 'express'
 
+import { isPrivateAgentPath } from '@/constants/agent.js'
 import { createErrorKey, ERROR_CODES } from '@/constants/error-code.js'
 import { normalizeError } from '@/services/error.service.js'
 import { logger } from '@/services/logger.service.js'
@@ -31,16 +32,17 @@ export const errorHandler: ErrorRequestHandler = (
   const appError = normalizeError(error, fallbackKey)
   const definition = ERROR_CODES[appError.codeName]
   const requestId = String(response.locals.requestId ?? '')
+  const path = pathWithoutQuery(request.originalUrl)
 
   const context = {
     requestId,
     method: request.method,
-    path: pathWithoutQuery(request.originalUrl),
+    path,
     code: definition.code,
     key: appError.key,
     params: request.params,
     query: request.query,
-    body: loggableBody(request.body),
+    ...(isPrivateAgentPath(path) ? {} : { body: loggableBody(request.body) }),
   }
 
   if (appError.status >= 500) {

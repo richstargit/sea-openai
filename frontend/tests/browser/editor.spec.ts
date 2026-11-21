@@ -1,11 +1,18 @@
 import { test, expect } from "@playwright/test";
 
+test.beforeEach(async ({ page }) => {
+  const response = await page.request.post("/auth/register", {
+    data: { email: `editor-${crypto.randomUUID()}@example.test`, password: crypto.randomUUID() },
+  });
+  expect(response.status()).toBe(201);
+});
+
 test("edit, split, undo, save, switch size and export a playable MP4", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/editor");
   await expect(page.getByTestId("timeline-clip")).toHaveCount(3);
-  await expect(page.getByText("Saved on this device")).toBeVisible();
+  await expect(page.getByText("Saved to your account")).toBeVisible();
   await page.screenshot({ path: "/tmp/sea-editor-desktop.png", fullPage: true });
   await page.getByRole("button", { name: "Text", exact: true }).click();
   await page.getByRole("textbox", { name: "Headline", exact: true }).fill("Fresh from our kitchen");
@@ -24,7 +31,7 @@ test("edit, split, undo, save, switch size and export a playable MP4", async ({ 
   await page.getByRole("button", { name: /1:1 Square/ }).click();
   await expect(page.getByTestId("editor-preview")).toHaveAttribute("width", "1080");
   await expect(page.getByTestId("editor-preview")).toHaveAttribute("height", "1080");
-  await expect(page.getByText("Saved on this device")).toBeVisible();
+  await expect(page.getByText("Saved to your account")).toBeVisible();
   await page.reload();
   await expect(page.getByTestId("timeline-clip")).toHaveCount(3);
   await page.getByRole("button", { name: "Text", exact: true }).click();
@@ -121,7 +128,7 @@ test("imports real video with audio and exports an edited MP4 with an AAC audio 
 });
 
 test("Studio hands the selected version into the editor", async ({ page }) => {
-  await page.goto("/studio");
+  await page.goto("/studio/demo");
   await page.getByRole("button", { name: "Use sample photos", exact: true }).click();
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await page.getByRole("button", { name: "Create clip", exact: true }).click();
@@ -132,4 +139,30 @@ test("Studio hands the selected version into the editor", async ({ page }) => {
   await expect(page.getByTestId("timeline-clip")).toHaveCount(3);
   await page.getByRole("button", { name: "Text", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Headline", exact: true })).toHaveValue("Hot rice needs this jar");
+});
+
+test("the video and live studios accept references and request distinct output formats", async ({ page }) => {
+  await page.goto("/studio");
+  await expect(page.getByRole("heading", { name: "What will you film today?" })).toBeVisible();
+  await expect(page.getByText("OBS Browser Source")).toHaveCount(0);
+  await page.getByRole("button", { name: /Skincare launch/ }).click();
+  await expect(page.getByRole("button", { name: "Remove file cosmetic.png" })).toBeVisible();
+  await page.getByRole("textbox", { name: "Video brief", exact: true }).fill("");
+  const formats: string[] = [];
+  await page.route("**/agent/chat", async (route) => {
+    const body = route.request().postDataJSON();
+    expect(body.message).toBeTruthy();
+    formats.push(body.outputFormat);
+    await route.fulfill({ json: { message: "Brief received" } });
+  });
+  await page.getByRole("button", { name: "Generate video", exact: true }).click();
+  await expect(page.getByRole("main").getByText("Brief received")).toBeVisible();
+  await page.getByRole("link", { name: "Live studio", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "OBS Browser Source" })).toBeVisible();
+  await page.getByRole("textbox", { name: "Video brief" }).fill("Create a price badge");
+  await page.getByRole("button", { name: "Generate graphic" }).click();
+  await expect(page.getByRole("main").getByText("Brief received")).toBeVisible();
+  expect(formats).toEqual(["portrait", "overlay"]);
+  await page.setViewportSize({ width: 375, height: 812 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

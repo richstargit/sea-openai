@@ -35,6 +35,12 @@ export const ERROR_CODES = {
     message: 'The request conflicts with existing data.',
     messageTH: 'คำขอขัดแย้งกับข้อมูลที่มีอยู่',
   },
+  PAYLOAD_TOO_LARGE: {
+    code: 'so-e413',
+    status: 413,
+    message: 'The request body exceeds the size limit.',
+    messageTH: 'ข้อมูลที่ส่งมามีขนาดเกินกำหนด',
+  },
   VALIDATION_ERROR: {
     code: 'so-e422',
     status: 422,

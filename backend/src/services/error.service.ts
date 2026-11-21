@@ -33,6 +33,24 @@ export class AppError extends Error {
 export function normalizeError(error: unknown, fallbackKey: string): AppError {
   if (error instanceof AppError) return error
 
+  if (
+    error &&
+    typeof error === 'object' &&
+    'type' in error &&
+    error.type === 'entity.too.large'
+  ) {
+    return new AppError('PAYLOAD_TOO_LARGE', { key: fallbackKey })
+  }
+
+  if (
+    error &&
+    typeof error === 'object' &&
+    'type' in error &&
+    error.type === 'entity.parse.failed'
+  ) {
+    return new AppError('BAD_REQUEST', { key: fallbackKey })
+  }
+
   if (error instanceof ZodError) {
     return new AppError('VALIDATION_ERROR', {
       key: fallbackKey,

@@ -4,7 +4,9 @@ import type { Server } from 'node:http'
 
 import { serverPort } from '@/config/server.config.js'
 import { serviceConfig } from '@/config/service.config.js'
+import { closeMongo } from '@/models/mongo.js'
 import { logger } from '@/services/logger.service.js'
+import { attachOverlay } from '@/services/video/overlay.js'
 
 const SHUTDOWN_TIMEOUT_MS = 10_000
 
@@ -25,6 +27,7 @@ async function startServer(): Promise<void> {
       })
     })
 
+    const closeOverlay = attachOverlay(server)
     const shutdown = (signal: NodeJS.Signals) => {
       if (shuttingDown) return
       shuttingDown = true
@@ -41,16 +44,20 @@ async function startServer(): Promise<void> {
       }, SHUTDOWN_TIMEOUT_MS)
       forceExit.unref()
 
-      server?.close((error) => {
-        clearTimeout(forceExit)
-
-        if (error) {
-          logger.error('SERVER_SHUTDOWN_FAILED', error)
-          process.exit(1)
+      closeOverlay()
+      server?.close(async (error) => {
+        let exitCode = 0
+        try {
+          if (error) throw error
+          await closeMongo()
+          logger.info('SERVER_STOPPED', { signal })
+        } catch (failure) {
+          logger.error('SERVER_SHUTDOWN_FAILED', failure)
+          exitCode = 1
+        } finally {
+          clearTimeout(forceExit)
         }
-
-        logger.info('SERVER_STOPPED', { signal })
-        process.exit(0)
+        process.exit(exitCode)
       })
     }
 

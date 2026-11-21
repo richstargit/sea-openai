@@ -8,6 +8,7 @@ export type Operation = {
   description?: string
   secured?: boolean
   /** Zod schema of the request body. Turned into JSON Schema, never restated. */
+  contentType?: string
   bodySchema?: ZodType
   /** Zod schema of the query string. */
   querySchema?: ZodType
@@ -230,7 +231,7 @@ export function buildDocument(input: {
             requestBody: {
               required: true,
               content: {
-                'application/json': {
+                [annotation.contentType ?? 'application/json']: {
                   schema: jsonSchema(annotation.bodySchema),
                   ...(annotation.examples
                     ? { examples: annotation.examples }
