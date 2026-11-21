@@ -72,6 +72,9 @@
 .cr-screen > iframe { z-index: 6; pointer-events: none; background: transparent; }
 .cr-screen-msg { position: absolute; inset: 0; z-index: 7; display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0; padding: 24px; text-align: center; color: var(--cr-quiet); background: rgb(0 0 0 / .55); }
 .cr-box { position: absolute; z-index: 2; border: 2px solid #ffd23f; border-radius: 6px; transition: left .12s linear, top .12s linear, width .12s linear, height .12s linear; }
+.cr-box[data-verified] { border-color: var(--cr-green); box-shadow: 0 0 0 1px rgb(0 0 0 / .5); }
+.cr-box:not([data-verified]) { border-style: dashed; }
+.cr-box[data-verified] span { background: var(--cr-green); }
 .cr-box span { position: absolute; left: -2px; bottom: 100%; padding: 1px 6px; border-radius: 4px 4px 0 0; background: #ffd23f; color: #111; font-size: .72rem; font-weight: 700; white-space: nowrap; }
 .cr-chip { position: absolute; top: 10px; z-index: 3; padding: 3px 8px; border-radius: 5px; font-family: var(--font-mono); font-size: .75rem; font-weight: 700; }
 .cr-chip-pgm { left: 10px; background: rgb(0 0 0 / .6); color: var(--cr-green); }
@@ -232,3 +235,25 @@
   .cr-box, .cr-go, .cr-tile, .cr-progress::-webkit-progress-value { transition: none; }
   .cr-tile:active:not(:disabled) { transform: none; }
 }
+
+/* "AI กำลังเห็น": what the detector matched, how sure it is, and the director's last reason */
+.cr-ai { display: grid; gap: 12px; padding: 14px 16px; }
+.cr-ai-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.cr-ai-head h2 { display: flex; align-items: center; gap: 6px; font-size: .86rem; font-weight: 650; color: var(--cr-quiet); }
+.cr-ai-chip { padding: 3px 10px; border-radius: 999px; font-size: .78rem; font-weight: 650; background: var(--cr-raised); color: var(--cr-quiet); box-shadow: inset 0 0 0 1px var(--cr-line); }
+.cr-ai[data-state="verified"] .cr-ai-chip { background: rgb(53 196 111 / .16); color: var(--cr-green); box-shadow: inset 0 0 0 1px var(--cr-green); }
+.cr-ai[data-state="confirming"] .cr-ai-chip { color: var(--cr-amber); box-shadow: inset 0 0 0 1px var(--cr-amber); }
+.cr-ai-body { display: flex; align-items: center; gap: 12px; }
+.cr-ai-body img, .cr-ai-ph { width: 64px; height: 64px; flex: none; border-radius: 10px; object-fit: cover; background: var(--cr-raised); }
+.cr-ai-ph { display: grid; place-items: center; color: var(--cr-quiet); }
+.cr-ai-body > div { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.cr-ai-body strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cr-ai-body > div > span, .cr-ai-body small { color: var(--cr-quiet); font-size: .8rem; }
+.cr-ai-bar { appearance: none; width: 100%; height: 6px; border: 0; border-radius: 3px; overflow: hidden; background: var(--cr-raised); }
+.cr-ai-bar::-webkit-progress-bar { background: var(--cr-raised); }
+.cr-ai-bar::-webkit-progress-value { background: var(--cr-amber); transition: width .3s linear; }
+.cr-ai-bar::-moz-progress-bar { background: var(--cr-amber); }
+.cr-ai[data-state="verified"] .cr-ai-bar::-webkit-progress-value { background: var(--cr-green); }
+.cr-ai[data-state="verified"] .cr-ai-bar::-moz-progress-bar { background: var(--cr-green); }
+.cr-ai-reason { margin: 0; padding-top: 10px; border-top: 1px solid var(--cr-line); color: var(--cr-quiet); font-size: .82rem; }
+@media (prefers-reduced-motion: reduce) { .cr-ai-bar::-webkit-progress-value { transition: none; } }

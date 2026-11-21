@@ -9,6 +9,7 @@ import { useLanguage } from "@/components/language-provider";
 import { playOverlay, studioPost, studioRequest } from "@/components/studio/studio-api";
 import { useLiveDetection } from "@/lib/live-detect";
 import { type Decision, type LiveProduct, type Segment, productImage } from "@/lib/live-plan";
+import { cuesFromSpeech, namesProduct } from "@/lib/live-cues";
 import type { StepProps } from "./live-studio";
 import "./control-room.css";
 
@@ -43,6 +44,12 @@ const PREVIEW_SRC = "/overlay/index.html?preview=1#" + "a".repeat(43); // index.
 const MODE_KEY = "snappromo-live-mode";
 const BIG_GAP = 3500; // at most one big motion per 3.5 s
 const STOCK = 10;
+const GRACE = 2500; // a verified product stays verified this long after its box drops (tracking jitter)
+const TOPIC = 8000; // a product the host just named is the topic this long (text-only graphics)
+// Presets that show a product's name, price or photo; spotlight/callout/zoom also need its verified box.
+const BOX_PRESETS = new Set(["spotlight", "callout-ring", "magnet-snap", "zoom"]);
+const PRODUCT_PRESET = /^(product-card|magnet-snap|spotlight|callout-ring|price-|cf-keycaps|kinetic-claim|stock-bar)/;
+type AiStatus = "idle" | "watching" | "confirming" | "verified" | "none";
 
 const LABEL: Record<Kind | "spotlight" | "clip", string> = {
   price_pop: "เด้งราคา", price_drop: "ขีดฆ่าราคา", free_badge: "ป้ายของแถม", low_stock: "ป้ายเหลือน้อย", product_card: "การ์ดสินค้า",
@@ -137,6 +144,8 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   const [chat, setChat] = useState<ChatItem[]>([]);
   const [viewers, setViewers] = useState(1240);
   const [stock, setStock] = useState<Record<string, number>>({});
+  const [ai, setAi] = useState<{ status: AiStatus; id: string | null }>({ status: "idle", id: null });
+  const [reason, setReason] = useState("");
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const previewRef = useRef<HTMLIFrameElement>(null);
@@ -165,6 +174,10 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   const lastCf = useRef<{ name: string; qty: number; product: string } | null>(null);
   const sold = useRef(0);
   const discount = useRef<{ id: string; from: number; to: number } | null>(null);
+  const verif = useRef<{ id: string; at: number } | null>(null);
+  const spoken = useRef<{ id: string; at: number } | null>(null);
+  const lastMoment = useRef(0);
+  const noneSince = useRef(0);
   const latest = useRef<{ tick: () => void; speech: (e: SpeechEvent) => void; chat: () => number; decision: (d: Decision) => void; log: (role: Role, text: string, tone?: Tone) => void } | null>(null);
 
   // ---------- derived ----------
@@ -197,6 +210,21 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   const detection = useLiveDetection({ video: videoRef, enabled: live, products: pool, transcript, current: current?.name ?? null, motions, onDecision: handleDecision });
   const box: Box | null = detection.box;
   const detectedName = products.find((p) => p.id === detection.product)?.name ?? detection.product ?? "";
+
+  /** The one product the camera has really verified: confirmed by the detector AND boxed by the grounding model. */
+  function verifiedProduct(): LiveProduct | null {
+    const n = Date.now();
+    if (liveRef.current && detection.product && detection.box) verif.current = { id: detection.product, at: n };
+    const v = verif.current;
+    return v && n - v.at < GRACE ? pool.find((p) => p.id === v.id) ?? null : null;
+  }
+  function spokenProduct(): LiveProduct | null {
+    const s = spoken.current;
+    return s && Date.now() - s.at < TOPIC ? pool.find((p) => p.id === s.id) ?? null : null;
+  }
+  function needsProduct(preset: string) {
+    return PRODUCT_PRESET.test(preset) || (!!kit && [kit.moments.productIn, kit.moments.price, kit.moments.deal, kit.moments.callToAction].includes(preset));
+  }
 
   // ---------- setup ----------
   useEffect(() => {
@@ -285,6 +313,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
 
   // ---------- output ----------
   function log(role: Role, text: string, tone: Tone = "info") {
+    if (tone === "action") setReason(`${role} · ${text}`);
     const id = ++feedId.current;
     const time = new Date().toLocaleTimeString("th-TH", { hour12: false });
     setFeed((items) => items[0]?.text === text && items[0].role === role
@@ -324,8 +353,9 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     const x = b.x * sx + (1 - sx) / 2, w = b.w * sx;
     return { x: mode === "demo" ? 1 - x - w : x, y: b.y * sy + (1 - sy) / 2, w, h: b.h * sy };
   }
-  function placement(): { x?: number; y?: number; box?: Box } {
-    if (!box) return {};
+  // a box only belongs to the product the detector verified; never aim a graphic at another product's box
+  function placement(p?: LiveProduct | null): { x?: number; y?: number; box?: Box } {
+    if (!box || !p || detection.product !== p.id) return {};
     const b = mode === "demo" ? toView(box) : box; // OBS gets camera coordinates, the phone frame its own
     return { x: b.x + b.w / 2, y: b.y + b.h / 2, box: b };
   }
@@ -333,7 +363,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   const productData = (p: LiveProduct | null) => (p ? { name: p.name, price: p.price, productId: p.id, style: tagStyle } : { style: tagStyle });
 
   function buildEvent(kind: Kind, p: LiveProduct | null, extra: Record<string, unknown> = {}): OverlayEvent {
-    const at = placement();
+    const at = placement(p);
     if (kind === "zoom") return { type: "zoom", payload: at.box ? { box: at.box } : { x: 0.5, y: 0.5 }, ttl: 3000 };
     if (kind === "caption") return { type: "caption", payload: extra, ttl: 2500 };
     if (kind === "poll") {
@@ -347,7 +377,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   }
   /** spotlight at the tracked box when there is one, else the product card */
   function productEvent(p: LiveProduct): { event: OverlayEvent; label: string } {
-    const at = placement();
+    const at = placement(p);
     if (at.box) return { event: { type: "spotlight", ...at, image: imageUrl(p), name: p.name, price: p.price, motion: "pop" }, label: "spotlight" };
     return { event: buildEvent("product_card", p), label: "product_card" };
   }
@@ -419,12 +449,27 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
       if (!text) continue;
       finals.current = [...finals.current.filter((f) => Date.now() - f.at < 10000), { text, at: Date.now() }];
       setLines((l) => [...l.slice(-7), text]);
-      onKeywords(text);
+      onSentence(text);
     }
     setInterim(pending);
   }
-  function onKeywords(text: string) {
-    const p = current;
+  /** One finished sentence: cut to the motion that fits it, only showing a product that is really there or just named. */
+  function onSentence(text: string) {
+    const named = pool.find((x) => namesProduct(text, x));
+    if (named) spoken.current = { id: named.id, at: Date.now() };
+    const p = named ?? verifiedProduct() ?? spokenProduct();
+    const all = cuesFromSpeech(text, p);
+    if (!all.length) return onKeywords(text, p);
+    const at = placement(p);
+    const cue = all.filter((c) => (!c.needsProduct || p) && (!BOX_PRESETS.has(c.preset) || (c.needsProduct && at.box))).sort((a, b) => b.priority - a.priority)[0];
+    if (!cue) return;
+    const event: OverlayEvent = cue.kind === "graphic"
+      ? { type: "graphic", preset: cue.preset, data: { ...productData(cue.needsProduct ? p : null), ...cue.data }, ...(cue.needsProduct ? at : {}), image: cue.needsProduct && p ? imageUrl(p) : undefined, theme: kit?.theme.look, ttl: 2200 }
+      : { type: cue.preset, payload: { ...cue.data, ...(cue.preset === "zoom" && at.box ? { box: at.box } : {}) }, ttl: 2200 };
+    enqueue({ event, key: "cue:" + cue.preset, role: "คนตัดต่อ", text: `${t("ตัดต่อ")} · ${cue.reason} → ${cue.preset}` }, 4000);
+  }
+  // fallback when cuesFromSpeech has nothing; p is only a verified or just-named product, never the run-of-show's guess
+  function onKeywords(text: string, p: LiveProduct | null) {
     for (const hit of keywordHits(text)) {
       let event: OverlayEvent;
       let label: string = hit.kind;
@@ -435,7 +480,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
       } else if (hit.kind === "price_pop") event = buildEvent("price_pop", p, { price: hit.nums[0] });
       else if (hit.kind === "free_badge") event = buildEvent("free_badge", p, { text: hit.text, sub: p?.name });
       else if (hit.kind === "low_stock") event = buildEvent("low_stock", p, { left: hit.nums[0] ?? (/ชิ้นสุดท้าย|last one/i.test(text) ? 1 : 3) });
-      else event = buildEvent("zoom", p);
+      else { if (!placement(p).box) continue; event = buildEvent("zoom", p); }
       enqueue({ event, key: label, role: roleFor(label), text: describe(label, p) + ` · "${text.slice(0, 32)}"` }, 4000);
     }
   }
@@ -443,10 +488,12 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   // ---------- Decisions AI (arrives through useLiveDetection) ----------
   function onDecision(d: Decision) {
     if (!liveRef.current) return;
-    const p = pool.find((x) => x.id === d.product || x.name === d.product) ?? current;
+    const dp = pool.find((x) => x.id === d.product || x.name === d.product) ?? null;
+    const vp = verifiedProduct();
+    const fp = vp ?? spokenProduct(); // what graphics may name right now
     if (d.product && d.product !== lastAiProduct.current && (d.productConfidence ?? 0) > 0.6) {
       lastAiProduct.current = d.product;
-      log("ผู้กำกับ", t("AI เห็นสินค้า") + ` · ${p?.name ?? d.product} (${pct(d.productConfidence)})`);
+      log("ผู้กำกับ", t("AI เห็นสินค้า") + ` · ${dp?.name ?? d.product} (${pct(d.productConfidence)})`);
     }
     if ((d.riskyClaim ?? 0) > 0.7) {
       setWarning({ text: lines.at(-1) ?? "", at: Date.now() });
@@ -455,7 +502,8 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     lowEnergy.current = d.energy === "low" ? lowEnergy.current + 1 : 0;
     if (lowEnergy.current === 2) { setSuggestPoll(true); log("ผู้กำกับ", t("คนดูเริ่มเงียบ แนะนำเปิดโหวต"), "warn"); }
 
-    if (d.teamCommand && d.teamCommand !== "none") {
+    if (d.teamCommand && d.teamCommand !== "none") { // an explicit order from the team, so it may use the run-of-show product
+      const p = fp ?? current;
       log("ผู้กำกับ", t("ทีมสั่งด้วยเสียง") + " · " + t(LABEL[d.teamCommand as Kind] ?? (d.teamCommand === "dead_air_clip" ? "เปิดคลิปกันเงียบ" : "ช่วงถัดไป")), "action");
       if (d.teamCommand === "dead_air_clip") playClip();
       else if (d.teamCommand === "next_segment") goSegment(segIndex + 1);
@@ -463,23 +511,31 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
       else now(d.teamCommand, p);
       return;
     }
+    // the product moment: the verified product, held up to the camera
+    if (vp && dp?.id === vp.id && (d.heldUp ?? 0) >= 0.6) {
+      if (Date.now() - lastMoment.current > 8000) {
+        lastMoment.current = Date.now();
+        const { event, label } = productEvent(vp);
+        enqueue({ event, key: "product_card", role: "ผู้กำกับ", text: `${t("เห็น")} ${vp.name} ${t("ถือขึ้นกล้อง")} (${t("มั่นใจ")} ${pct(d.productConfidence ?? detection.confidence)}) → ${label.replace("_", "-")}` });
+        return;
+      }
+    }
     if (d.motion && d.motion !== "none" && (d.motionConfidence ?? 0) >= 0.5) {
-      const text = (lines.at(-1) ?? p?.name ?? "").slice(0, 40);
+      const mp = needsProduct(d.motion) ? (BOX_PRESETS.has(d.motion) ? vp : fp) : null;
+      if (needsProduct(d.motion) && !mp) return;
+      const at = placement(mp);
+      if (BOX_PRESETS.has(d.motion) && !at.box) return;
+      const text = (lines.at(-1) ?? mp?.name ?? "").slice(0, 40);
       enqueue({
-        event: { type: "graphic", preset: d.motion, data: { ...productData(p), text }, ...placement(), image: p ? imageUrl(p) : undefined, theme: kit?.theme.look, ttl: 2200 },
-        key: d.motion, role: "Motion", text: t("เลือก") + ` ${d.motion} (${t("มั่นใจ")} ${pct(d.motionConfidence)})` + (p ? " · " + p.name : ""),
+        event: { type: "graphic", preset: d.motion, data: { ...productData(mp), text }, ...at, image: mp ? imageUrl(mp) : undefined, theme: kit?.theme.look, ttl: 2200 },
+        key: d.motion, role: "Motion", text: t("เลือก") + ` ${d.motion} (${t("มั่นใจ")} ${pct(d.motionConfidence)})` + (mp ? " · " + mp.name : ""),
       }, 8000);
       return;
     }
-    if (d.action === "none" || (d.actionConfidence ?? 1) < 0.5) return;
-    if (d.action === "product_card") {
-      if ((d.heldUp ?? 0) > 0.8 && (d.productConfidence ?? 0) > 0.7 && p) {
-        const { event, label } = productEvent(p);
-        enqueue({ event, key: "product_card", role: "Motion", text: describe(label, p) }, 8000);
-      }
-      return;
-    }
+    if (d.action === "none" || d.action === "product_card" || (d.actionConfidence ?? 1) < 0.5) return; // product_card is the moment above
     const kind = d.action as Kind;
+    if (kind === "zoom" ? !vp || !placement(vp).box : ["price_pop", "price_drop", "low_stock"].includes(kind) && !fp) return;
+    const p = kind === "zoom" ? vp : fp;
     enqueue({ event: kind === "low_stock" ? buildEvent(kind, p, { left: stock[p?.id ?? ""] ?? 3 }) : buildEvent(kind, p), key: kind, role: roleFor(kind), text: describe(kind, p) }, 8000);
   }
 
@@ -530,7 +586,13 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     const sec = Math.floor(Date.now() / 1000);
     setClock(sec);
     if (warning && Date.now() - warning.at > 8000) setWarning(null);
-    if (!liveRef.current) return;
+    if (!liveRef.current) { setAi((a) => (a.status === "idle" ? a : { status: "idle", id: null })); return; }
+    const vp = verifiedProduct();
+    const fp = vp ?? spokenProduct();
+    if (detection.product) noneSince.current = Date.now();
+    const status: AiStatus = !detection.running ? "watching" : vp ? "verified" : detection.product ? "confirming" : Date.now() - noneSince.current >= 3000 ? "none" : "watching";
+    const seen = vp?.id ?? detection.product;
+    setAi((a) => (a.status === status && a.id === seen ? a : { status, id: seen }));
     if (detection.product !== lastConfirmed.current) {
       lastConfirmed.current = detection.product;
       if (detection.product) log("ผู้กำกับ", t("กล้องจับสินค้าได้") + ` · ${detectedName} ${pct(detection.confidence)}`);
@@ -545,9 +607,13 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
         const key = `${segIndex}:${i}`;
         if (cue.at > at || firedCues.current.has(key)) return;
         firedCues.current.add(key);
-        const event = cue.event === "caption" ? buildEvent("caption", current, { text: cue.note })
-          : cue.event === "product_card" && current ? productEvent(current).event : buildEvent(cue.event, current);
-        enqueue({ event, key: "cue:" + key, role: roleFor(cue.event), text: t("คิวสคริปต์") + " · " + describe(cue.event, current) + (cue.note ? ` · ${cue.note}` : "") });
+        // a scripted product graphic waits for the product to be verified or named; the rest are about the show
+        const needs = ["product_card", "price_pop", "price_drop", "low_stock", "zoom"].includes(cue.event);
+        if (needs && (!fp || (cue.event === "zoom" && !placement(fp).box))) { log("ผู้กำกับ", t("ข้ามคิวสคริปต์ ยังไม่เห็นสินค้าในภาพ") + " · " + t(LABEL[cue.event]), "warn"); return; }
+        const cp = needs ? fp : null;
+        const event = cue.event === "caption" ? buildEvent("caption", null, { text: cue.note })
+          : cue.event === "product_card" && cp ? productEvent(cp).event : buildEvent(cue.event, cp);
+        enqueue({ event, key: "cue:" + key, role: roleFor(cue.event), text: t("คิวสคริปต์") + " · " + describe(cue.event, cp) + (cue.note ? ` · ${cue.note}` : "") });
       });
       if (at >= segment.seconds && segIndex < segments.length - 1) goSegment(segIndex + 1);
     }
@@ -560,34 +626,36 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
 
   /** The next beat of the always-on show engine: a varied playlist, never the same preset twice in a row. */
   function engineBeat(): Queued | null {
-    const p = current;
-    const at = placement();
+    // product graphics only for a product that is verified on camera or was just named; otherwise generic beats
+    const vp = verifiedProduct();
+    const p = vp ?? spokenProduct();
+    const at = placement(vp);
     const demo = mode === "demo"; // simulated stock, buyers and reviews exist only in the demo; never fake them on air
     const r = rng.current;
     const g = (preset: string, data: Record<string, unknown>, label: string, extra: OverlayEvent = {}): Queued => ({
       event: { type: "graphic", preset, data, theme: kit?.theme.look, ttl: 2600, ...extra }, key: preset, role: "Motion",
-      text: t("โชว์อัตโนมัติ") + " · " + t(label) + (p ? " · " + p.name : ""),
+      text: t("โชว์อัตโนมัติ") + " · " + t(label),
     });
+    const gp = (preset: string, data: Record<string, unknown>, label: string, extra: OverlayEvent = {}): Queued => { const q = g(preset, data, label, extra); q.text += p ? " · " + p.name : ""; return q; };
     if (Date.now() - lastPoll.current > 45000 && lastPreset.current !== "poll") {
       lastPoll.current = Date.now();
       return { event: buildEvent("poll", p), key: "poll", role: "Motion", text: t("โชว์อัตโนมัติ") + " · " + t("เปิดโหวต") };
     }
-    const claims = shortList(segment?.talkingPoints.length ? segment.talkingPoints : (p?.distinct || p?.description || "").split(/[\n,·•|]/));
-    const said = [p?.description, p?.distinct, ...(segment?.talkingPoints ?? [])].join(" ");
+    const onPlan = p?.id === current?.id;
+    const claims = shortList(onPlan && segment?.talkingPoints.length ? segment.talkingPoints : (p?.distinct || p?.description || "").split(/[\n,·•|]/));
+    const said = [current?.description, current?.distinct, ...(segment?.talkingPoints ?? [])].join(" ");
     const deal = p && discount.current?.id === p.id ? discount.current : null;
     const playlist: (() => Queued | null)[] = [
-      () => p && (at.box ? g("magnet-snap", productData(p), "การ์ดสินค้า", { ...at, image: imageUrl(p) }) : g(kit?.moments.productIn || "product-card", productData(p), "การ์ดสินค้า", { image: imageUrl(p) })),
+      () => p && (at.box ? gp("magnet-snap", productData(p), "การ์ดสินค้า", { ...at, image: imageUrl(p) }) : gp(kit?.moments.productIn || "product-card", productData(p), "การ์ดสินค้า", { image: imageUrl(p) })),
       () => g("heart-burst", { count: 80 + Math.floor(r() * 400) }, "หัวใจลอย"),
-      () => p && (deal ? g("price-countdown", { name: p.name, from: deal.from, to: deal.to }, "นับถอยหลังราคา") : g(kit?.moments.price || "price-pop", productData(p), "เด้งราคา")),
-      () => (claims.length ? g("kinetic-claim", { claims }, "จุดเด่นสินค้า") : null),
+      () => p && (deal ? gp("price-countdown", { name: p.name, from: deal.from, to: deal.to }, "นับถอยหลังราคา") : gp(kit?.moments.price || "price-pop", productData(p), "เด้งราคา")),
+      () => (p && claims.length ? gp("kinetic-claim", { claims }, "จุดเด่นสินค้า") : null),
       () => (demo && lastCf.current ? g("buyer-toast", lastCf.current, "แจ้งคนสั่งซื้อ") : null),
-      () => (p ? g("cf-keycaps", { code: p.id }, "ชวนพิมพ์ CF") : null),
-      () => (at.box ? g("callout-ring", { label: "ตัวนี้เลย!" }, "วงชี้สินค้า", at) : null),
-      () => (demo || /ส่งฟรี|free ship/i.test(said) ? g("stamp-free-ship", {}, "ตราส่งฟรี", at.box ? { box: at.box } : {}) : null),
-      () => (demo && p ? g("stock-bar", { name: p.name, left: stock[p.id] ?? STOCK, total: STOCK }, "แถบสต็อก") : null),
-      () => (kit && segment?.callToAction ? g(kit.moments.callToAction, { ...productData(p), text: segment.callToAction }, "เชิญชวนสั่งซื้อ") : null),
-      () => (demo ? g("stamp-bestseller", {}, "ตราขายดี") : null),
-      () => (demo ? g("review-stars", { rating: 4.9, count: 1200 + Math.floor(r() * 900), quote: REVIEWS[Math.floor(r() * REVIEWS.length)] }, "ดาวรีวิว") : null),
+      () => (p ? gp("cf-keycaps", { code: p.id }, "ชวนพิมพ์ CF") : null),
+      () => (vp && at.box ? gp("callout-ring", { label: "ตัวนี้เลย!" }, "วงชี้สินค้า", at) : null),
+      () => (/ส่งฟรี|free ship/i.test(said) ? g("stamp-free-ship", {}, "ตราส่งฟรี") : null),
+      () => (demo && p ? gp("stock-bar", { name: p.name, left: stock[p.id] ?? STOCK, total: STOCK }, "แถบสต็อก") : null),
+      () => (p && kit && segment?.callToAction && onPlan ? gp(kit.moments.callToAction, { ...productData(p), text: segment.callToAction }, "เชิญชวนสั่งซื้อ") : null),
     ];
     for (let n = 0; n < playlist.length; n++) {
       const beat = playlist[beatIndex.current++ % playlist.length]();
@@ -612,6 +680,10 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     finals.current = [];
     lastConfirmed.current = null;
     lastDetectError.current = null;
+    verif.current = null;
+    spoken.current = null;
+    lastMoment.current = 0;
+    noneSince.current = Date.now();
     setSuggestPoll(false);
     if (cameraError) setCameraTry((n) => n + 1);
     if (mode === "demo") { setChat([]); setStock({}); setViewers(1240); sold.current = 0; lastCf.current = null; }
@@ -658,6 +730,9 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
 
   // ---------- view ----------
   const view = box ? toView(box) : null;
+  const boxVerified = !!detection.product; // a box with a confirmed product: the grounding model matched it to a catalog photo
+  const aiProduct = products.find((p) => p.id === ai.id) ?? null;
+  const chipText = { idle: "รอเริ่มไลฟ์", watching: "กำลังดู…", confirming: "กำลังยืนยัน", verified: "ยืนยันแล้ว ✓", none: "ไม่พบสินค้าในภาพ" }[ai.status];
   const rows: { icon: typeof Radio; label: string; short: string; status: Status; detail: string }[] = [
     { icon: Camera, label: t("กล้อง"), short: t("กล้อง"), status: cameraError ? "err" : activeCamera ? "ok" : "warn", detail: cameraError ? t(cameraError) : activeCamera?.label || t("กำลังเปิดกล้อง…") },
     {
@@ -704,8 +779,8 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
       <div className="cr-stage">
         <div className="cr-screen">
           <video ref={videoRef} autoPlay muted playsInline onLoadedMetadata={(e) => setVideoAspect(e.currentTarget.videoWidth / e.currentTarget.videoHeight || 16 / 9)} />
-          {view && <div className="cr-box" style={{ left: `${view.x * 100}%`, top: `${view.y * 100}%`, width: `${view.w * 100}%`, height: `${view.h * 100}%` }}>
-            <span>{detectedName || t("สินค้า")}</span>
+          {view && <div className="cr-box" data-verified={boxVerified || undefined} style={{ left: `${view.x * 100}%`, top: `${view.y * 100}%`, width: `${view.w * 100}%`, height: `${view.h * 100}%` }}>
+            <span>{boxVerified ? `${detectedName || t("สินค้า")} ✓` : t("กำลังยืนยัน")}</span>
           </div>}
           {mode === "obs" ? <>
             <span className="cr-chip cr-chip-pgm">PGM</span>
@@ -750,6 +825,27 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
       </div>
 
       <div className="cr-host">
+        <section className="cr-panel cr-ai" data-state={ai.status} aria-label={t("AI กำลังเห็น")}>
+          <div className="cr-ai-head">
+            <h2><Eye size={15} aria-hidden />{t("AI กำลังเห็น")}</h2>
+            <span className="cr-ai-chip" role="status">{t(chipText)}</span>
+          </div>
+          <div className="cr-ai-body">
+            {aiProduct?.images[0]
+              // eslint-disable-next-line @next/next/no-img-element -- detection-service image through a rewrite
+              ? <img src={productImage(aiProduct.images[0])} alt={aiProduct.name} />
+              : <span className="cr-ai-ph" aria-hidden><Eye size={20} /></span>}
+            <div>
+              <strong>{aiProduct?.name ?? t("ยังไม่เห็นสินค้า")}</strong>
+              {aiProduct && <span>{baht(aiProduct.price)}</span>}
+              {aiProduct && detection.confidence != null && <>
+                <progress className="cr-ai-bar" max={100} value={Math.round(detection.confidence * 100)} aria-label={t("ความมั่นใจ")} />
+                <small>{t("มั่นใจ")} {pct(detection.confidence)}</small>
+              </>}
+            </div>
+          </div>
+          <p className="cr-ai-reason">{reason || t("เหตุผลของผู้กำกับจะขึ้นที่นี่")}</p>
+        </section>
         {warning && <div className="cr-warning" role="alert"><TriangleAlert size={18} aria-hidden />
           <div><strong>{t("ระวังคำพูดเกินจริง (เห็นเฉพาะจอนี้ ไม่ขึ้นไลฟ์)")}</strong>{warning.text && <span>“{warning.text}”</span>}</div>
           <button type="button" className="cr-btn" onClick={() => setWarning(null)}>{t("รับทราบ")}</button>
