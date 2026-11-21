@@ -15,20 +15,20 @@ export function Hero() {
     <section className="mx-auto grid w-full max-w-[1280px] items-center gap-12 px-5 pt-12 pb-20 sm:px-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:gap-16 lg:pt-16 lg:pb-24">
       <div>
         <h1 className="max-w-[12em] text-[clamp(2.5rem,6vw,4.5rem)] leading-[1.2] font-semibold tracking-[-0.02em] text-balance">
-          {t("รูปสินค้ารูปเดียว กลายเป็นคลิปแนวตั้ง")}
+          {t("ไลฟ์คนเดียว แต่มีทีม AI ทั้งทีม")}
         </h1>
         <p className="mt-6 max-w-[30rem] text-[1.1875rem] leading-relaxed text-muted-foreground sm:text-[1.3125rem]">
-          {t("ใส่รูปกับไอเดียสั้นๆ ระบบวางช็อต กล้อง และข้อความให้ครบ ได้คลิปสามช็อตยาวหกวินาที")}
+          {t("ใส่คลังสินค้า เลือกสไตล์ไลฟ์ แล้วกดไลฟ์ ระบบจับสินค้าที่ยกขึ้นมา ฟังที่พูด คิดบทให้ และเด้งกราฟิกเข้า OBS แบบเรียลไทม์")}
         </p>
         <div className="mt-9 flex flex-wrap items-center gap-x-8 gap-y-4">
           <Button asChild size="lg">
-            <Link href="/studio">{t("เริ่มสร้างวิดีโอ")}</Link>
+            <Link href="/studio/live">{t("เริ่มไลฟ์กับทีม AI")}</Link>
           </Button>
           <Link
-            href="/studio/live"
+            href="/studio"
             className="inline-flex min-h-11 items-center rounded-md text-[1.125rem] font-medium underline decoration-foreground/30 underline-offset-[0.3em] transition-colors outline-none hover:decoration-foreground focus-visible:ring-[3px] focus-visible:ring-ring/60"
           >
-            {t("ดูสตูดิโอไลฟ์")}
+            {t("สร้างวิดีโอสินค้า")}
           </Link>
         </div>
       </div>

@@ -19,6 +19,31 @@ const showBox = $('#show-box')
 const pace = $('#pace')
 const baht = new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', maximumFractionDigits: 0 })
 
+// ---------- bridge to the SnapPromo control room (when embedded) ----------
+// ?embed=1&parent=<origin>: hide the demo chrome, report detections, boxes and a 512 px frame per second to the
+// parent window, and take start/stop commands from it. Only the named parent origin is talked to.
+const query = new URLSearchParams(location.search)
+const parentOrigin = query.get('parent')
+const embedded = query.has('embed') && window.parent !== window && !!parentOrigin
+if (embedded) document.documentElement.dataset.embed = '1'
+const bridge = message => { if (embedded) window.parent.postMessage({ source: 'snappromo-live', ...message }, parentOrigin) }
+let boxSentAt = 0
+let frameTimer = 0
+const frameCanvas = document.createElement('canvas')
+function sendFrame() {
+  if (!running || !video.videoWidth) return
+  const scale = 512 / Math.max(video.videoWidth, video.videoHeight)
+  frameCanvas.width = Math.round(video.videoWidth * scale)
+  frameCanvas.height = Math.round(video.videoHeight * scale)
+  frameCanvas.getContext('2d').drawImage(video, 0, 0, frameCanvas.width, frameCanvas.height)
+  bridge({ type: 'frame', image: frameCanvas.toDataURL('image/jpeg', 0.7) })
+}
+window.addEventListener('message', event => {
+  if (!embedded || event.origin !== parentOrigin || event.data?.source !== 'snappromo-control') return
+  if (event.data.command === 'start' && !running) start()
+  if (event.data.command === 'stop') stop('หยุดจากห้องควบคุม')
+})
+
 let products = new Map()
 let stream = null
 let fileUrl = ''
@@ -308,6 +333,7 @@ function apply(data, cut, frame) {
     if (live.box && live.box.id !== id) hideBox()
     if (!data.zoom) maybeLocate(data, pair, frame)
   }
+  bridge({ type: 'detect', productId: id, name: data.product_name, confidence: data.confidence, heldUp: !!data.held_up, confirmed: live.confirmed?.product_id ?? null, lookAlike: !!pair, latencyMs: data.latency_ms })
   renderBadge(data, pair)
   pushTimeline(data, pair)
   displayMatch(result, data)
@@ -398,6 +424,7 @@ async function zoomCheck(frame, bbox) {
   apply(data, false, frame)
 }
 function hideBox() {
+  if (live.box) bridge({ type: 'box', productId: null, box: null })
   live.box = null
   tracker.values = null
   boxView.hidden = true
@@ -550,6 +577,14 @@ function drawBox() {
   boxView.style.height = b.height * b.rect.h * scale + 'px'
   $('#box-label').textContent = products.get(b.id)?.name ?? b.id
   boxView.hidden = false
+  // the box in fractions of the camera frame (what OBS shows), at most 10 times a second
+  const now = performance.now()
+  if (now - boxSentAt > 100) {
+    boxSentAt = now
+    const W = video.videoWidth
+    const H = video.videoHeight
+    bridge({ type: 'box', productId: b.id, box: { x: (b.rect.x + b.x * b.rect.w) / W, y: (b.rect.y + b.y * b.rect.h) / H, w: (b.width * b.rect.w) / W, h: (b.height * b.rect.h) / H } })
+  }
 }
 new ResizeObserver(drawBox).observe(stage)
 showBox.onchange = () => { if (!showBox.checked) hideBox() }
@@ -580,12 +615,16 @@ async function start() {
   note.textContent = 'กำลังตรวจต่อเนื่อง · เทียบกับคลัง ' + products.size + ' รายการ'
   result.replaceChildren(el('p', 'กำลังส่งเฟรมแรก…', 'muted'))
   timer = setInterval(() => { schedule(); if (pace.value === 'economy') renderStats() }, 60)
+  if (embedded) frameTimer = setInterval(sendFrame, 1000)
+  bridge({ type: 'state', running: true, products: products.size })
   schedule()
 }
 function stop(reason) {
   if (!running) return
   running = false
   clearInterval(timer)
+  clearInterval(frameTimer)
+  bridge({ type: 'state', running: false, reason: reason ?? '' })
   if (stage.dataset.state === 'running') stage.dataset.state = 'ready'
   label.textContent = 'เริ่มตรวจสด'
   if (reason) note.textContent = reason

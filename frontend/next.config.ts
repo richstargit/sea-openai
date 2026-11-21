@@ -1,13 +1,17 @@
 import type { NextConfig } from "next";
 
-import { backendOrigin } from "./lib/backend";
+import { backendOrigin, liveDetectOrigin } from "./lib/backend";
 
 const nextConfig: NextConfig = {
   async rewrites() {
-    return ["auth", "agent"].map((prefix) => ({
-      source: `/${prefix}/:path*`,
-      destination: `${backendOrigin}/${prefix}/:path*`,
-    }));
+    return [
+      ...["auth", "agent", "overlay"].map((prefix) => ({
+        source: `/${prefix}/:path*`,
+        destination: `${backendOrigin}/${prefix}/:path*`,
+      })),
+      { source: "/live-api/:path*", destination: `${liveDetectOrigin}/api/:path*` },
+      { source: "/live-images/:path*", destination: `${liveDetectOrigin}/images/:path*` },
+    ];
   },
   experimental: {
     agentFeedback: true,

@@ -321,6 +321,21 @@ export const ANNOTATIONS: Annotations = {
     secured: true,
     summary: 'Add a personal video style from SKILL.md',
   },
+  'POST /agent/live/plan': {
+    tags: ['Live'],
+    secured: true,
+    summary: 'Plan a live show: one scripted segment per lineup product with overlay cues',
+  },
+  'POST /agent/live/motion-kit': {
+    tags: ['Live'],
+    secured: true,
+    summary: "Pick the shop's motion kit: colours, tag style and a preset for every live moment",
+  },
+  'POST /agent/live/decide': {
+    tags: ['Live'],
+    secured: true,
+    summary: 'Realtime director decision from a frame and recent speech (Decisions API)',
+  },
   'GET /agent/overlay/status': {
     tags: ['Overlay'],
     secured: true,

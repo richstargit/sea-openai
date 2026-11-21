@@ -18,8 +18,8 @@ export function StudioShell({ live, children }: { live: boolean; children: React
     </header>
     <main id="main" className="studio-main">
       <nav className="studio-nav" aria-label={t("พื้นที่ทำงาน")}>
-        <Link href="/studio" aria-current={live ? undefined : "page"}><Clapperboard />{t("สตูดิโอวิดีโอ")}</Link>
         <Link href="/studio/live" aria-current={live ? "page" : undefined}><Radio />{t("สตูดิโอไลฟ์")}</Link>
+        <Link href="/studio" aria-current={live ? undefined : "page"}><Clapperboard />{t("สตูดิโอวิดีโอ")}</Link>
         <Link href="/editor" className="studio-editor-link"><Scissors />{t("ตัดต่อคลิป")}</Link>
       </nav>
       {children}

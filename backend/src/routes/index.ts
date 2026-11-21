@@ -44,6 +44,7 @@ import {
   createRateLimiter,
 } from '@/middlewares/rate-limit.middleware.js'
 import healthRoutes from '@/routes/health.route.js'
+import { liveDecide, liveMotionKit, livePlan } from '@/controllers/live.controller.js'
 import hookMachineRoutes from '@/routes/hook-machine.route.js'
 import videoJobRoutes from '@/routes/video-job.route.js'
 import { FILE_LIMIT } from '@/services/agent-tools/files.js'
@@ -98,6 +99,11 @@ router.post(
   uploadAgentFile,
 )
 router.get('/agent/files/:id', apiRateLimiter, downloadAgentFile)
+// live director: plan and motion kit before going live, one realtime decision per second while live
+const liveLimiter = createRateLimiter(1200)
+router.post('/agent/live/plan', apiRateLimiter, livePlan)
+router.post('/agent/live/motion-kit', apiRateLimiter, liveMotionKit)
+router.post('/agent/live/decide', liveLimiter, liveDecide)
 router.get('/agent/skills', skills)
 router.post('/agent/skills', apiRateLimiter, addSkill)
 router.get('/agent/overlay/status', overlayStatus)

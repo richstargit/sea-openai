@@ -418,32 +418,38 @@ function route(event) {
   return true
 }
 let sequence = 0
+function receive(event) {
+  if (event.type === 'ready') {
+    document.body.dataset.connected = 'true'
+    return
+  }
+  if (event.type === 'spotlight') {
+    spotlight(event)
+    return
+  }
+  if (route(event)) return
+  const slot =
+    slots.find((item) => !item.root.classList.contains('playing')) ??
+    slots.reduce((a, b) => (a.order < b.order ? a : b))
+  slot.order = ++sequence
+  void slot.play(event)
+}
 function connect() {
   if (!/^[\w-]{43}$/.test(token)) return
   const url = new URL('ws', location.href)
   url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
   const socket = new WebSocket(url)
   socket.onopen = () => socket.send(token)
-  socket.onmessage = ({ data }) => {
-    const event = JSON.parse(data)
-    if (event.type === 'ready') {
-      document.body.dataset.connected = 'true'
-      return
-    }
-    if (event.type === 'spotlight') {
-      spotlight(event)
-      return
-    }
-    if (route(event)) return
-    const slot =
-      slots.find((item) => !item.root.classList.contains('playing')) ??
-      slots.reduce((a, b) => (a.order < b.order ? a : b))
-    slot.order = ++sequence
-    void slot.play(event)
-  }
+  socket.onmessage = ({ data }) => receive(JSON.parse(data))
   socket.onclose = ({ code }) => {
     delete document.body.dataset.connected
     if (code !== 1008) setTimeout(connect, 1500)
   }
 }
-connect()
+// ?preview: a monitor in the control room. No socket (so the OBS link stays valid); the page that embeds it
+// (same origin only) posts the same events it sends to OBS.
+if (new URLSearchParams(location.search).has('preview'))
+  window.addEventListener('message', (message) => {
+    if (message.origin === location.origin && message.data?.source === 'snappromo-control' && message.data.event) receive(message.data.event)
+  })
+else connect()

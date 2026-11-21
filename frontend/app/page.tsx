@@ -12,9 +12,9 @@ export default function Home() {
       <SiteNav />
       <main id="main" className="flex-1">
         <Hero />
+        <LiveSection />
         <VideoSteps />
         <VoiceStatement />
-        <LiveSection />
         <FinalCta />
       </main>
       <SiteFooter />

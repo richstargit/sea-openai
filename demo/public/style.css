@@ -89,3 +89,7 @@ button{font:inherit;cursor:pointer}.primary{margin-top:18px;width:100%;border:0;
 .pace{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
 .pace select{font:inherit;font-size:14px;color:var(--ink);border:1px solid #bbbeb3;border-radius:8px;padding:5px 8px;background:#fdfdfa}
 .toggle[hidden]{display:none}
+
+/* embedded in the SnapPromo control room: only the live tools */
+[data-embed] header, [data-embed] .intro { display: none !important; }
+[data-embed] main { padding-top: 12px; }
