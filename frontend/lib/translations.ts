@@ -67,6 +67,8 @@ export const english: Record<string, string> = {
   "ยกเลิกการแก้คลิป": "Cancel revision",
   "แก้คลิปนี้": "Revise this clip",
   "แก้คลิป": "Revise clip",
+  "กล้องยืนยัน": "Camera verified",
+  "แก้คำที่ได้ยิน": "Corrected what was heard",
   "แก้ไขสินค้า": "Edit product",
   "บันทึกการแก้ไข": "Save changes",
   "บันทึกการแก้ไขแล้ว": "Changes saved",

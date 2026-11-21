@@ -164,6 +164,8 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   const verif = useRef<{ id: string; at: number } | null>(null);
   const spoken = useRef<{ id: string; at: number } | null>(null);
   const lastMoment = useRef(0);
+  // when each product last got its on-camera moment (follow-the-camera rule)
+  const momentFor = useRef<Record<string, number>>({});
   const noneSince = useRef(0);
   const latest = useRef<{ tick: () => void; sentence: (s: LiveSentence) => void; chat: () => number; decision: (d: Decision) => void; log: (role: Role, text: string, tone?: Tone) => void } | null>(null);
 
@@ -549,6 +551,14 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     const status: AiStatus = !detection.running ? "watching" : vp ? "verified" : detection.product ? "confirming" : Date.now() - noneSince.current >= 3000 ? "none" : "watching";
     const seen = vp?.id ?? detection.product;
     setAi((a) => (a.status === status && a.id === seen ? a : { status, id: seen }));
+    // follow the camera: a product the moment it is verified gets its card/spotlight, once per product per 15 s
+    const at = Date.now();
+    if (vp && at - (momentFor.current[vp.id] ?? 0) > 15000 && at - lastMoment.current > 4000) {
+      momentFor.current[vp.id] = at;
+      lastMoment.current = at;
+      const { event, label } = productEvent(vp);
+      enqueue({ event, key: "product_card", role: "ผู้กำกับ", text: `${t("กล้องยืนยัน")} ${vp.name} (${t("มั่นใจ")} ${pct(detection.confidence)}) → ${label.replace("_", "-")}` });
+    }
     if (detection.product !== lastConfirmed.current) {
       lastConfirmed.current = detection.product;
       if (detection.product) log("ผู้กำกับ", t("กล้องจับสินค้าได้") + ` · ${detectedName} ${pct(detection.confidence)}`);
@@ -639,6 +649,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     verif.current = null;
     spoken.current = null;
     lastMoment.current = 0;
+    momentFor.current = {};
     noneSince.current = Date.now();
     setSuggestPoll(false);
     if (cameraError) setCameraTry((n) => n + 1);
