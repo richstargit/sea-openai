@@ -101,13 +101,3 @@ export type Decision = {
   teamCommand: "none" | "poll" | "fireworks" | "price_pop" | "zoom" | "product_card" | "dead_air_clip" | "next_segment" | null;
   latencyMs: number;
 };
-
-// ---------- detection bridge (demo/public/live.js embedded with ?embed=1&parent=<origin>) ----------
-export type BridgeMessage =
-  | { source: "snappromo-live"; type: "state"; running: boolean; products?: number; reason?: string }
-  | { source: "snappromo-live"; type: "detect"; productId: string; name: string; confidence: number | null; heldUp: boolean; confirmed: string | null; lookAlike: boolean; latencyMs: number }
-  | { source: "snappromo-live"; type: "box"; productId: string | null; box: { x: number; y: number; w: number; h: number } | null }
-  | { source: "snappromo-live"; type: "frame"; image: string };
-export const detectUrl = (origin: string) => `${origin}/detect?embed=1&parent=${encodeURIComponent(window.location.origin)}`;
-export const commandDetect = (frame: HTMLIFrameElement | null, origin: string, command: "start" | "stop") =>
-  frame?.contentWindow?.postMessage({ source: "snappromo-control", command }, origin);

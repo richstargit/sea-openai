@@ -1,20 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  BrainCircuit, Camera, ChevronLeft, ChevronRight, Copy, Crosshair, Eraser, Eye, Film, Heart, Link2, Mic, MonitorPlay,
-  PartyPopper, Radio, RotateCw, ScanSearch, ShoppingCart, Smartphone, Tag, TriangleAlert, Vote, ZoomIn,
+  BrainCircuit, Camera, Check, ChevronLeft, ChevronRight, CircleAlert, Copy, Crosshair, Eraser, Eye, Film, Heart, Link2, Mic,
+  MonitorPlay, PartyPopper, Radio, ShoppingCart, SlidersHorizontal, Smartphone, Square, Tag, TriangleAlert, Vote, X, ZoomIn,
 } from "lucide-react";
 import { useLanguage } from "@/components/language-provider";
 import { playOverlay, studioPost, studioRequest } from "@/components/studio/studio-api";
-import { publicLiveDetectOrigin } from "@/lib/backend";
-import { type BridgeMessage, type Decision, type LiveProduct, type Segment, commandDetect, detectUrl, director, productImage } from "@/lib/live-plan";
+import { useLiveDetection } from "@/lib/live-detect";
+import { type Decision, type LiveProduct, type Segment, productImage } from "@/lib/live-plan";
 import type { StepProps } from "./live-studio";
 import "./control-room.css";
 
-// The live control room: program monitor (camera + the same overlay OBS shows), connections, the embedded detector,
-// realtime speech, Decisions AI, the director's script, a team feed and host buttons. Two modes: OBS (events go to
-// the Browser Source and the monitor) and Demo (a simulated phone live on this screen, events go to the monitor only).
+// The live control room, built around one button: the live frame (camera + the same overlay OBS shows), the host's
+// prompter and quick actions beside it, and everything else (connections, transcript, AI crew, camera, OBS link) in
+// one "system details" sheet. Detection runs in this page (useLiveDetection) on the frame's own <video>. Two modes:
+// Demo (a simulated phone live on this screen, events go to the frame only) and OBS (events go to the Browser Source too).
 
 type Box = { x: number; y: number; w: number; h: number };
 type Kind = "price_pop" | "price_drop" | "free_badge" | "low_stock" | "product_card" | "poll" | "fireworks" | "zoom" | "caption";
@@ -38,11 +39,9 @@ const speechCtor = () => {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition;
 };
 
-const DETECT_ORIGIN = new URL(publicLiveDetectOrigin).origin;
 const PREVIEW_SRC = "/overlay/index.html?preview=1#" + "a".repeat(43); // index.html: "/overlay/" gets a trailing-slash redirect from Next
 const MODE_KEY = "snappromo-live-mode";
 const BIG_GAP = 3500; // at most one big motion per 3.5 s
-const DECIDE_EVERY = 1200;
 const STOCK = 10;
 
 const LABEL: Record<Kind | "spotlight" | "clip", string> = {
@@ -107,7 +106,7 @@ const message = (error: unknown) => (error instanceof Error ? error.message : St
 
 export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { overlayOrigin: string }) {
   const { t } = useLanguage();
-  const [mode, setMode] = useState<Mode>("obs");
+  const [mode, setMode] = useState<Mode>("demo");
   const [live, setLive] = useState(false);
   const [clock, setClock] = useState(0); // whole seconds, drives every timer on screen
   const [startSec, setStartSec] = useState(0);
@@ -118,18 +117,14 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   const [deviceId, setDeviceId] = useState("");
   const [activeCamera, setActiveCamera] = useState<{ id: string; label: string } | null>(null);
   const [cameraError, setCameraError] = useState("");
+  const [cameraTry, setCameraTry] = useState(0); // bump to reopen the camera after an error
   const [videoAspect, setVideoAspect] = useState(16 / 9);
   // connections
   const [obsConnected, setObsConnected] = useState<number | null>(null);
   const [obsUrl, setObsUrl] = useState("");
   const [obsBusy, setObsBusy] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [detectSrc, setDetectSrc] = useState("");
-  const [detectorUp, setDetectorUp] = useState<boolean | null>(null);
-  const [detectorOpen, setDetectorOpen] = useState(true);
-  const [detect, setDetect] = useState<{ running: boolean; products: number | null; latency: number | null; name: string; confidence: number | null }>({ running: false, products: null, latency: null, name: "", confidence: null });
-  const [box, setBox] = useState<Box | null>(null);
-  const [ai, setAi] = useState<{ latency: number | null; error: string }>({ latency: null, error: "" });
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [speech, setSpeech] = useState<"off" | "on" | "unsupported" | "error">("off");
   const [lines, setLines] = useState<string[]>([]);
   const [interim, setInterim] = useState("");
@@ -145,20 +140,18 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const previewRef = useRef<HTMLIFrameElement>(null);
-  const detectRef = useRef<HTMLIFrameElement>(null);
+  const detailsButton = useRef<HTMLButtonElement>(null);
+  const detailsClose = useRef<HTMLButtonElement>(null);
   const liveRef = useRef(false);
   const recRef = useRef<Recognition | null>(null);
   const finals = useRef<{ text: string; at: number }[]>([]);
-  const frame = useRef<{ image: string; at: number } | null>(null);
-  const lastFrameSent = useRef(0);
-  const lastDecideAt = useRef(0);
-  const inFlight = useRef(false);
   const queue = useRef<Queued[]>([]);
   const lastBig = useRef(0);
   const lastByKey = useRef(new Map<string, number>());
   const firedCues = useRef(new Set<string>());
   const lowEnergy = useRef(0);
   const lastConfirmed = useRef<string | null>(null);
+  const lastDetectError = useRef<string | null>(null);
   const lastAiProduct = useRef<string | null>(null);
   const feedId = useRef(0);
   const chatId = useRef(0);
@@ -172,10 +165,10 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   const lastCf = useRef<{ name: string; qty: number; product: string } | null>(null);
   const sold = useRef(0);
   const discount = useRef<{ id: string; from: number; to: number } | null>(null);
-  const latest = useRef<{ tick: () => void; bridge: (m: BridgeMessage) => void; speech: (e: SpeechEvent) => void; chat: () => number; decision: (d: Decision, rtt: number) => void; log: (role: Role, text: string, tone?: Tone) => void } | null>(null);
+  const latest = useRef<{ tick: () => void; speech: (e: SpeechEvent) => void; chat: () => number; decision: (d: Decision) => void; log: (role: Role, text: string, tone?: Tone) => void } | null>(null);
 
   // ---------- derived ----------
-  const lineup = plan.lineup.flatMap((item) => products.filter((p) => p.id === item.productId));
+  const lineup = useMemo(() => plan.lineup.flatMap((item) => products.filter((p) => p.id === item.productId)), [plan.lineup, products]);
   const pool = lineup.length ? lineup : products;
   // no AI script yet: a plain run-of-show from the lineup so there is always a current product and a timer
   const segments: Segment[] = plan.script?.segments ?? (pool.length ? [
@@ -193,22 +186,27 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   const remaining = segment ? segment.seconds - inSegment : 0;
   const kit = plan.kit;
   const tagStyle = kit?.theme.tagStyle ?? plan.style.tagStyle;
+  const motions = useMemo(() => [
+    ...(kit ? Object.entries(kit.moments).map(([moment, id]) => ({ id, description: MOMENT_NOTES[moment] ?? moment })) : []),
+    ...GENERAL_MOTIONS.map(([id, description]) => ({ id, description })),
+  ].filter((m, i, all) => m.id && all.findIndex((x) => x.id === m.id) === i), [kit]);
+
+  // ---------- built-in detection: frames from videoRef, decisions + tracked box back ----------
+  const transcript = useCallback(() => finals.current.filter((f) => Date.now() - f.at < 10000).map((f) => f.text).join(" "), []);
+  const handleDecision = useCallback((d: Decision) => latest.current?.decision(d), []);
+  const detection = useLiveDetection({ video: videoRef, enabled: live, products: pool, transcript, current: current?.name ?? null, motions, onDecision: handleDecision });
+  const box: Box | null = detection.box;
+  const detectedName = products.find((p) => p.id === detection.product)?.name ?? detection.product ?? "";
 
   // ---------- setup ----------
   useEffect(() => {
     queueMicrotask(() => {
       try { const saved = localStorage.getItem(MODE_KEY); if (saved === "obs" || saved === "demo") setMode(saved); } catch { /* optional */ }
-      setDetectSrc(detectUrl(DETECT_ORIGIN));
       if (!speechCtor()) setSpeech("unsupported");
     });
   }, []);
-  const pingDetector = useCallback(() => {
-    // no-cors: an opaque response still proves the service is listening; a network error means it is down
-    fetch(DETECT_ORIGIN + "/detect", { mode: "no-cors", cache: "no-store" }).then(() => setDetectorUp(true), () => setDetectorUp(false));
-  }, []);
-  useEffect(() => { pingDetector(); }, [pingDetector]);
-
-  // camera preview: prefer OBS Virtual Camera so the monitor shows the same picture OBS has
+  // camera: on as soon as the room opens. OBS mode prefers OBS Virtual Camera (the monitor shows what OBS has);
+  // Demo keeps the default webcam for the selfie view.
   useEffect(() => {
     let stopped = false;
     let stream: MediaStream | null = null;
@@ -226,11 +224,11 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
         if (stopped) return;
         setCameras(devices);
         const obs = devices.find((d) => /obs virtual camera/i.test(d.label));
-        if (!deviceId && obs && obs.deviceId !== track.getSettings().deviceId) setDeviceId(obs.deviceId);
+        if (mode === "obs" && !deviceId && obs && obs.deviceId !== track.getSettings().deviceId) setDeviceId(obs.deviceId);
       })
       .catch((error) => { if (!stopped) setCameraError(message(error)); });
     return () => { stopped = true; stream?.getTracks().forEach((track) => track.stop()); };
-  }, [deviceId]);
+  }, [deviceId, mode, cameraTry]);
 
   // OBS Browser Source status (same endpoint as live-controls)
   useEffect(() => {
@@ -252,16 +250,6 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     return () => { clearTimeout(timer); controller.abort(); };
   }, [mode, obsUrl]);
 
-  // bridge from the embedded detector: only its origin, only its source tag
-  useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      if (event.origin !== DETECT_ORIGIN || event.data?.source !== "snappromo-live") return;
-      latest.current?.bridge(event.data as BridgeMessage);
-    };
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, []);
-
   useEffect(() => {
     const id = setInterval(() => latest.current?.tick(), 250);
     return () => clearInterval(id);
@@ -275,16 +263,25 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     return () => clearTimeout(timer);
   }, [live, mode]);
 
-  useEffect(() => {
-    const detector = detectRef;
-    return () => {
-      liveRef.current = false;
-      const rec = recRef.current;
-      recRef.current = null;
-      rec?.abort();
-      commandDetect(detector.current, DETECT_ORIGIN, "stop");
-    };
+  useEffect(() => () => {
+    liveRef.current = false;
+    const rec = recRef.current;
+    recRef.current = null;
+    rec?.abort();
   }, []);
+
+  // system details sheet: focus moves in on open; Escape closes it
+  useEffect(() => {
+    if (!detailsOpen) return;
+    detailsClose.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setDetailsOpen(false); detailsButton.current?.focus(); } };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [detailsOpen]);
+  function closeDetails() {
+    setDetailsOpen(false);
+    detailsButton.current?.focus();
+  }
 
   // ---------- output ----------
   function log(role: Role, text: string, tone: Tone = "info") {
@@ -443,36 +440,8 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     }
   }
 
-  // ---------- Decisions AI ----------
-  async function decide() {
-    const shot = frame.current;
-    if (!shot || inFlight.current || shot.at <= lastFrameSent.current || Date.now() - shot.at > 3000) return;
-    inFlight.current = true;
-    lastFrameSent.current = shot.at;
-    lastDecideAt.current = Date.now();
-    const motions = [
-      ...(kit ? Object.entries(kit.moments).map(([moment, id]) => ({ id, description: MOMENT_NOTES[moment] ?? moment })) : []),
-      ...GENERAL_MOTIONS.map(([id, description]) => ({ id, description })),
-    ].filter((m, i, all) => m.id && all.findIndex((x) => x.id === m.id) === i);
-    const started = performance.now();
-    try {
-      const decision = await director.decide({
-        image: shot.image,
-        transcript: finals.current.filter((f) => Date.now() - f.at < 10000).map((f) => f.text).join(" "),
-        products: pool.map(({ id, name, description, distinct }) => ({ id, name, description, distinct })),
-        current: current?.name ?? null,
-        motions,
-      });
-      latest.current?.decision(decision, Math.round(performance.now() - started));
-    } catch (error) {
-      setAi((a) => ({ ...a, error: message(error) }));
-      latest.current?.log("ผู้กำกับ", t("Decisions AI ผิดพลาด ไลฟ์ยังเดินต่อ") + ": " + message(error), "error");
-    } finally {
-      inFlight.current = false;
-    }
-  }
-  function onDecision(d: Decision, rtt: number) {
-    setAi({ latency: rtt, error: "" });
+  // ---------- Decisions AI (arrives through useLiveDetection) ----------
+  function onDecision(d: Decision) {
     if (!liveRef.current) return;
     const p = pool.find((x) => x.id === d.product || x.name === d.product) ?? current;
     if (d.product && d.product !== lastAiProduct.current && (d.productConfidence ?? 0) > 0.6) {
@@ -512,23 +481,6 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     }
     const kind = d.action as Kind;
     enqueue({ event: kind === "low_stock" ? buildEvent(kind, p, { left: stock[p?.id ?? ""] ?? 3 }) : buildEvent(kind, p), key: kind, role: roleFor(kind), text: describe(kind, p) }, 8000);
-  }
-
-  // ---------- detector bridge ----------
-  function onBridge(m: BridgeMessage) {
-    setDetectorUp(true);
-    if (m.type === "state") {
-      setDetect((d) => ({ ...d, running: m.running, products: m.products ?? d.products }));
-      if (!m.running) setBox(null);
-      if (!m.running && m.reason && liveRef.current) log("ผู้กำกับ", t("ตัวตรวจจับหยุด") + ": " + m.reason, "warn");
-    } else if (m.type === "detect") {
-      setDetect((d) => ({ ...d, latency: m.latencyMs, name: m.name, confidence: m.confidence }));
-      if (m.confirmed && m.confirmed !== lastConfirmed.current) {
-        lastConfirmed.current = m.confirmed;
-        log("ผู้กำกับ", t("กล้องจับสินค้าได้") + ` · ${m.name} ${pct(m.confidence)}`);
-      }
-    } else if (m.type === "box") setBox(m.box);
-    else if (m.type === "frame") frame.current = { image: m.image, at: Date.now() };
   }
 
   // ---------- demo chat ----------
@@ -579,6 +531,14 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     setClock(sec);
     if (warning && Date.now() - warning.at > 8000) setWarning(null);
     if (!liveRef.current) return;
+    if (detection.product !== lastConfirmed.current) {
+      lastConfirmed.current = detection.product;
+      if (detection.product) log("ผู้กำกับ", t("กล้องจับสินค้าได้") + ` · ${detectedName} ${pct(detection.confidence)}`);
+    }
+    if (detection.error !== lastDetectError.current) {
+      lastDetectError.current = detection.error;
+      if (detection.error) log("ผู้กำกับ", t("Decisions AI ผิดพลาด ไลฟ์ยังเดินต่อ") + ": " + detection.error, "error");
+    }
     if (segment) {
       const at = sec - segStartSec;
       segment.cues.forEach((cue, i) => {
@@ -591,7 +551,6 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
       });
       if (at >= segment.seconds && segIndex < segments.length - 1) goSegment(segIndex + 1);
     }
-    if (!inFlight.current && Date.now() - lastDecideAt.current >= DECIDE_EVERY) void decide();
     // director's rule: something visible changes every 6–10 s, even with no AI, speech or detection
     if (!queue.current.length && Date.now() - lastBig.current >= nextGap.current && Date.now() - lastSignal.current >= 4000) {
       const beat = engineBeat();
@@ -637,7 +596,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     return null;
   }
 
-  useEffect(() => { latest.current = { tick, bridge: onBridge, speech: onSpeech, chat: chatStep, decision: onDecision, log }; });
+  useEffect(() => { latest.current = { tick, speech: onSpeech, chat: chatStep, decision: onDecision, log }; });
 
   // ---------- go live / end ----------
   function goLive() {
@@ -651,9 +610,12 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     queue.current = [];
     lowEnergy.current = 0;
     finals.current = [];
+    lastConfirmed.current = null;
+    lastDetectError.current = null;
     setSuggestPoll(false);
+    if (cameraError) setCameraTry((n) => n + 1);
     if (mode === "demo") { setChat([]); setStock({}); setViewers(1240); sold.current = 0; lastCf.current = null; }
-    commandDetect(detectRef.current, DETECT_ORIGIN, "start");
+    // the sting and the theme go out now; chat and the show engine never wait for detection, AI or the mic
     startSpeech();
     send({ type: "theme", payload: { accent: kit?.theme.accent ?? plan.style.accent, accent2: kit?.theme.accent2 ?? plan.style.accent2, font: plan.style.font || undefined } });
     log("ผู้กำกับ", t(mode === "demo" ? "เริ่มไลฟ์จำลอง ทุกคนประจำที่" : "ออนแอร์ ทุกคนประจำที่"), "action");
@@ -661,7 +623,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     lastBig.current = 0;
     lastSignal.current = 0;
     lastPoll.current = Date.now();
-    nextGap.current = 6000;
+    nextGap.current = 4500; // first auto beat right after the sting, then every 6–10 s
     play({
       event: { type: "graphic", preset: kit?.moments.intro || "blinds-sting", data: { text: kit?.sting.headline || shop, sub: kit?.sting.kicker, kicker: "LIVE", title: kit?.sting.headline || shop, name: shop }, theme: kit?.theme.look, ttl: 2400 },
       key: "intro", role: "Motion", text: t("เปิดไลฟ์") + " · " + (kit?.sting.headline || shop),
@@ -669,12 +631,10 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   }
   function endLive() {
     liveRef.current = false;
-    setLive(false);
-    commandDetect(detectRef.current, DETECT_ORIGIN, "stop");
+    setLive(false); // also stops detection (enabled: live) and the demo chat
     stopSpeech();
     queue.current = [];
     send({ type: "zoom_out" });
-    setBox(null);
     log("ผู้กำกับ", t("จบไลฟ์") + " · " + timecode(elapsed), "action");
   }
   function chooseMode(next: Mode) {
@@ -695,34 +655,32 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     }
   }
 
+
   // ---------- view ----------
   const view = box ? toView(box) : null;
-  const rows: { icon: typeof Radio; label: string; status: Status; detail: string }[] = [
+  const rows: { icon: typeof Radio; label: string; short: string; status: Status; detail: string }[] = [
+    { icon: Camera, label: t("กล้อง"), short: t("กล้อง"), status: cameraError ? "err" : activeCamera ? "ok" : "warn", detail: cameraError ? t(cameraError) : activeCamera?.label || t("กำลังเปิดกล้อง…") },
     {
-      icon: MonitorPlay, label: "OBS Browser Source",
-      status: mode === "demo" ? "off" : obsConnected == null ? "err" : obsConnected > 0 ? "ok" : "warn",
-      detail: mode === "demo" ? t("โหมดจำลอง ไม่ส่งไป OBS") : obsConnected == null ? t("เช็กสถานะไม่ได้") : obsConnected > 0 ? t("เชื่อมต่อแล้ว") + ` ${obsConnected} ${t("จอ")}` : t("รอ Browser Source เชื่อมต่อ"),
-    },
-    { icon: Camera, label: t("กล้อง"), status: cameraError ? "err" : activeCamera ? "ok" : "warn", detail: cameraError ? t(cameraError) : activeCamera?.label || t("กำลังเปิดกล้อง…") },
-    {
-      icon: ScanSearch, label: t("ตรวจจับสินค้า"),
-      status: detectorUp === false ? "err" : detect.running ? "ok" : detectorUp ? "warn" : "off",
-      detail: detectorUp === false ? t("บริการตรวจจับไม่ตอบ") : detect.running
-        ? [t("กำลังตรวจ"), detect.latency != null && `${detect.latency} ms`, detect.name && `${detect.name} ${pct(detect.confidence)}`].filter(Boolean).join(" · ")
-        : t("พร้อม รอ GO LIVE"),
+      icon: BrainCircuit, label: t("AI ตรวจจับสินค้า"), short: "AI",
+      status: !live ? "off" : detection.error ? "err" : detection.running ? "ok" : "warn",
+      detail: !live ? t("พร้อม รอเริ่มไลฟ์") : detection.error ? detection.error : detection.running
+        ? [t("กำลังตรวจ"), detection.latencyMs != null && `${detection.latencyMs} ms`, detectedName && `${detectedName} ${pct(detection.confidence)}`].filter(Boolean).join(" · ")
+        : t("กำลังเริ่ม…"),
     },
     {
-      icon: BrainCircuit, label: "Decisions AI",
-      status: ai.error ? "err" : live && ai.latency != null ? "ok" : live ? "warn" : "off",
-      detail: ai.error ? ai.error : ai.latency != null ? `${ai.latency} ms ${t("ต่อการตัดสินใจ")}` : t(live ? "รอเฟรมจากตัวตรวจจับ" : "รอ GO LIVE"),
-    },
-    {
-      icon: Mic, label: t("ไมค์ถอดเสียง"),
+      icon: Mic, label: t("ไมค์ถอดเสียง"), short: t("ไมค์"),
       status: speech === "on" ? "ok" : speech === "off" ? "off" : "err",
-      detail: t(speech === "on" ? "กำลังฟัง" : speech === "unsupported" ? "ใช้ได้เฉพาะ Google Chrome" : speech === "error" ? "เปิดไมค์ไม่ได้" : "รอ GO LIVE"),
+      detail: t(speech === "on" ? "กำลังฟัง" : speech === "unsupported" ? "ใช้ได้เฉพาะ Google Chrome" : speech === "error" ? "เปิดไมค์ไม่ได้" : "พร้อม รอเริ่มไลฟ์"),
     },
+    ...(mode === "obs" ? [{
+      icon: MonitorPlay, label: "OBS Browser Source", short: "OBS",
+      status: (obsConnected == null ? "err" : obsConnected > 0 ? "ok" : "warn") as Status,
+      detail: obsConnected == null ? t("เช็กสถานะไม่ได้") : obsConnected > 0 ? t("เชื่อมต่อแล้ว") + ` ${obsConnected} ${t("จอ")}` : t("รอ Browser Source เชื่อมต่อ"),
+    }] : []),
   ];
-  const allGood = rows.every((r) => r.status === "ok" || r.status === "off");
+  const statusWord: Record<Status, string> = { ok: t("พร้อม"), warn: t("รอ"), err: t("มีปัญหา"), off: t("ยังไม่เริ่ม") };
+  const nextSegment = segments[segIndex + 1];
+  const spotProduct = pool.find((p) => p.id === (spotId || current?.id)) ?? null;
 
   return <section className="cr" data-mode={mode} data-live={live || undefined} aria-label={t("ห้องควบคุมไลฟ์")}>
     <header className="cr-bar">
@@ -731,179 +689,193 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
         <span className="cr-timecode">{timecode(elapsed)}</span>
       </div>
       <div className="cr-modes" role="group" aria-label={t("โหมดไลฟ์")}>
+        <button type="button" aria-pressed={mode === "demo"} disabled={live} onClick={() => chooseMode("demo")}><Smartphone size={15} aria-hidden />{t("ไลฟ์จำลอง")}</button>
         <button type="button" aria-pressed={mode === "obs"} disabled={live} onClick={() => chooseMode("obs")}><MonitorPlay size={15} aria-hidden />OBS</button>
-        <button type="button" aria-pressed={mode === "demo"} disabled={live} onClick={() => chooseMode("demo")}><Smartphone size={15} aria-hidden />{t("จำลองไลฟ์ (Demo)")}</button>
       </div>
-      <p className="cr-bar-note">{t(allGood ? "ทุกระบบพร้อม" : "มีระบบที่ยังไม่พร้อม ดูแผงเชื่อมต่อ")}</p>
-      {live
-        ? <button type="button" className="cr-go cr-end" onClick={endLive}>{t("จบไลฟ์")}</button>
-        : <button type="button" className="cr-go" onClick={goLive}><Radio size={18} aria-hidden />GO LIVE</button>}
+      <button ref={detailsButton} type="button" className="cr-btn cr-details-btn" aria-expanded={detailsOpen} aria-controls="cr-details" onClick={() => setDetailsOpen((o) => !o)}>
+        <SlidersHorizontal size={15} aria-hidden />{t("รายละเอียดระบบ")}
+      </button>
     </header>
 
     {!products.length && <p className="cr-hint">{t("ยังไม่มีสินค้าในคลัง เพิ่มได้ที่ขั้นตอน 1 คลังสินค้า (แถบขั้นตอนด้านบน)")}</p>}
     {products.length > 0 && !lineup.length && <p className="cr-hint">{t("ยังไม่ได้เลือกสินค้าเข้าไลฟ์ เลือกได้ที่ขั้นตอน 2 สไตล์และลำดับไลฟ์")}</p>}
-    {warning && <div className="cr-warning" role="alert"><TriangleAlert size={18} aria-hidden />
-      <div><strong>{t("ระวังคำพูดเกินจริง (เห็นเฉพาะจอนี้ ไม่ขึ้นไลฟ์)")}</strong>{warning.text && <span>“{warning.text}”</span>}</div>
-      <button type="button" className="cr-btn" onClick={() => setWarning(null)}>{t("รับทราบ")}</button>
-    </div>}
-    {suggestPoll && <div className="cr-suggest" role="status"><span>{t("ผู้กำกับ: คนดูเริ่มเงียบ แนะนำเปิดโหวต")}</span>
-      <button type="button" className="cr-btn cr-btn-accent" onClick={() => { now("poll", current); setSuggestPoll(false); }}><Vote size={15} aria-hidden />{t("เปิดโหวต")}</button>
-      <button type="button" className="cr-btn" onClick={() => setSuggestPoll(false)}>{t("ปิด")}</button>
-    </div>}
 
-    <div className="cr-grid">
-      <div className="cr-main">
-        <div className="cr-stage cr-area-stage" data-mode={mode}>
-          <div className="cr-screen">
-            <video ref={videoRef} autoPlay muted playsInline onLoadedMetadata={(e) => setVideoAspect(e.currentTarget.videoWidth / e.currentTarget.videoHeight || 16 / 9)} />
-            {view && <div className="cr-box" style={{ left: `${view.x * 100}%`, top: `${view.y * 100}%`, width: `${view.w * 100}%`, height: `${view.h * 100}%` }}>
-              <span>{detect.name || t("สินค้า")}</span>
+    <div className="cr-layout">
+      <div className="cr-stage">
+        <div className="cr-screen">
+          <video ref={videoRef} autoPlay muted playsInline onLoadedMetadata={(e) => setVideoAspect(e.currentTarget.videoWidth / e.currentTarget.videoHeight || 16 / 9)} />
+          {view && <div className="cr-box" style={{ left: `${view.x * 100}%`, top: `${view.y * 100}%`, width: `${view.w * 100}%`, height: `${view.h * 100}%` }}>
+            <span>{detectedName || t("สินค้า")}</span>
+          </div>}
+          {mode === "obs" ? <>
+            <span className="cr-chip cr-chip-pgm">PGM</span>
+            {live && <span className="cr-chip cr-chip-live">LIVE {timecode(elapsed)}</span>}
+          </> : <>
+            <div className="cr-ph-top">
+              <span className="cr-ph-avatar" aria-hidden>{(plan.style.shop || "S").slice(0, 1)}</span>
+              <span className="cr-ph-shop">{plan.style.shop || "SnapPromo"}</span>
+              {live && <span className="cr-ph-live">LIVE</span>}
+              <span className="cr-ph-viewers"><Eye size={12} aria-hidden />{viewers.toLocaleString("th-TH")}</span>
+            </div>
+            <ol className="cr-chat" aria-label={t("แชทจำลอง")}>
+              {!live && <li className="cr-chat-idle">{t("แชทจะเริ่มเมื่อกดเริ่มไลฟ์")}</li>}
+              {chat.map((c) => <li key={c.id} data-kind={c.kind}><b>{c.name}</b>{c.kind === "heart" ? <> <Heart size={12} aria-label={t("ส่งหัวใจ")} /></> : " " + c.text}</li>)}
+            </ol>
+            <div className="cr-hearts" aria-hidden>
+              {chat.filter((c) => c.kind === "heart").slice(-10).map((c) => <Heart key={c.id} size={22} fill="currentColor" data-hue={c.id % 3} style={{ right: `${8 + ((c.id * 37) % 28)}px` }} />)}
+            </div>
+            {current && <div className="cr-pin">
+              {/* eslint-disable-next-line @next/next/no-img-element -- detection-service image through a rewrite */}
+              {current.images[0] && <img src={productImage(current.images[0])} alt="" />}
+              <div><strong>{current.name}</strong><span>{baht(current.price)} · {t("เหลือ")} {stock[current.id] ?? STOCK}</span></div>
+              <span className="cr-pin-cart"><ShoppingCart size={13} aria-hidden />{t("กดตะกร้า")}</span>
             </div>}
-            <iframe ref={previewRef} src={PREVIEW_SRC} title={t("ภาพ overlay แบบเดียวกับใน OBS")} tabIndex={-1} aria-hidden />
-            {cameraError && <p className="cr-screen-msg"><Camera size={20} aria-hidden />{t(cameraError)}</p>}
-            {mode === "obs" ? <>
-              <span className="cr-chip cr-chip-pgm">PGM</span>
-              {live && <span className="cr-chip cr-chip-live">LIVE {timecode(elapsed)}</span>}
-            </> : <>
-              <div className="cr-ph-top">
-                <span className="cr-ph-avatar" aria-hidden>{(plan.style.shop || "S").slice(0, 1)}</span>
-                <span className="cr-ph-shop">{plan.style.shop || "SnapPromo"}</span>
-                <span className="cr-ph-live">LIVE</span>
-                <span className="cr-ph-viewers"><Eye size={12} aria-hidden />{viewers.toLocaleString("th-TH")}</span>
-              </div>
-              <ol className="cr-chat" aria-label={t("แชทจำลอง")}>
-                {!live && <li className="cr-chat-idle">{t("แชทจะเริ่มเมื่อกด GO LIVE")}</li>}
-                {chat.map((c) => <li key={c.id} data-kind={c.kind}><b>{c.name}</b>{c.kind === "heart" ? <> <Heart size={12} aria-label={t("ส่งหัวใจ")} /></> : " " + c.text}</li>)}
-              </ol>
-              <div className="cr-hearts" aria-hidden>
-                {chat.filter((c) => c.kind === "heart").slice(-10).map((c) => <Heart key={c.id} size={22} fill="currentColor" data-hue={c.id % 3} style={{ right: `${8 + ((c.id * 37) % 28)}px` }} />)}
-              </div>
-              {current && <div className="cr-pin">
-                {/* eslint-disable-next-line @next/next/no-img-element -- detection-service image through a rewrite */}
-                {current.images[0] && <img src={productImage(current.images[0])} alt="" />}
-                <div><strong>{current.name}</strong><span>{baht(current.price)} · {t("เหลือ")} {stock[current.id] ?? STOCK}</span></div>
-                <span className="cr-pin-cart"><ShoppingCart size={13} aria-hidden />{t("กดตะกร้า")}</span>
-              </div>}
-            </>}
-          </div>
-          <div className="cr-stage-bar">
-            <label><Camera size={14} aria-hidden /><span className="cr-sr">{t("กล้อง")}</span>
-              <select value={deviceId || activeCamera?.id || ""} onChange={(e) => setDeviceId(e.target.value)} aria-label={t("เลือกกล้องของจอมอนิเตอร์")}>
-                {!cameras.length && <option value="">{t("กล้องเริ่มต้น")}</option>}
-                {cameras.map((c, i) => <option key={c.deviceId || i} value={c.deviceId}>{c.label || `${t("กล้อง")} ${i + 1}`}</option>)}
-              </select>
-            </label>
-            <span>{mode === "obs" ? t("จอนี้แสดงภาพเดียวกับที่ OBS ออกอากาศ") : t("ไลฟ์จำลองบนจอนี้ ไม่ส่งไป OBS")}</span>
-          </div>
+          </>}
+          {/* the overlay sits above the live-app chrome so motion is never hidden behind the chat or the pinned card */}
+          <iframe ref={previewRef} src={PREVIEW_SRC} title={t("ภาพ overlay แบบเดียวกับใน OBS")} tabIndex={-1} aria-hidden />
+          {cameraError && <p className="cr-screen-msg"><Camera size={20} aria-hidden />{t(cameraError)}</p>}
         </div>
 
-        <section className="cr-panel cr-area-actions" aria-label={t("ปุ่มลัดของโฮสต์")}>
-          <h3>{t("ปุ่มลัด")}</h3>
-          <div className="cr-actions">
-            <button type="button" className="cr-btn" disabled={!current} onClick={() => now("price_pop", current)}><Tag size={15} aria-hidden />{t("เด้งราคา")}{current && ` ${baht(current.price)}`}</button>
-            <button type="button" className="cr-btn" data-suggested={suggestPoll || undefined} onClick={() => now("poll", current)}><Vote size={15} aria-hidden />{t("โหวต")}</button>
-            <button type="button" className="cr-btn" onClick={() => now("fireworks", current)}><PartyPopper size={15} aria-hidden />{t("พลุ")}</button>
-            <button type="button" className="cr-btn" onClick={() => now("zoom", current)}><ZoomIn size={15} aria-hidden />{t("ซูม")}</button>
-            <button type="button" className="cr-btn" onClick={() => { send({ type: "zoom_out" }); log("คนตัดต่อ", t("ล้างจอ"), "action"); }}><Eraser size={15} aria-hidden />{t("ล้างจอ")}</button>
-            <span className="cr-spot">
-              <select aria-label={t("สินค้าที่จะโชว์")} value={spotId || current?.id || ""} onChange={(e) => setSpotId(e.target.value)}>
-                {pool.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-              <button type="button" className="cr-btn" disabled={!pool.length} onClick={() => showProductNow(pool.find((p) => p.id === (spotId || current?.id)) ?? null)}><Crosshair size={15} aria-hidden />{t("โชว์สินค้า")}</button>
-            </span>
-          </div>
-          <div className="cr-actions">
-            {plan.clips.length ? plan.clips.map((clip) => <button key={clip.fileId} type="button" className="cr-btn" onClick={() => {
-              send({ type: "clip", fileId: clip.fileId });
-              log("คนตัดต่อ", t("เปิดคลิปกันเงียบ") + " · " + clip.name, "action");
-            }}><Film size={15} aria-hidden />{clip.name}</button>) : <p className="cr-quiet">{t("ยังไม่มีคลิปกันเงียบ เตรียมได้ที่ขั้นตอน 3")}</p>}
-          </div>
-        </section>
-
-        <section className="cr-panel cr-script cr-area-prompter" aria-label={t("สคริปต์ผู้กำกับ")}>
-          <h3>{t("สคริปต์ผู้กำกับ")}{plan.script && <span className="cr-quiet"> · {plan.script.title}</span>}</h3>
-          {!plan.script && segment && <p className="cr-quiet">{t("ลำดับอัตโนมัติจากรายการสินค้า ให้ AI เขียนสคริปต์เต็มได้ที่ขั้นตอน 3")}</p>}
-          {!segment ? <p className="cr-quiet">{t("ยังไม่มีสคริปต์ ให้ AI เขียนได้ที่ขั้นตอน 3 เตรียมคลิปและ motion")}</p> : <div className="cr-script-body">
-            <ol className="cr-rundown">
-              {segments.map((s, i) => <li key={i} aria-current={i === segIndex ? "step" : undefined} data-done={i < segIndex || undefined}>
-                <button type="button" onClick={() => goSegment(i)}>
-                  <span className="cr-run-num">{i + 1}</span><span className="cr-run-title">{s.title}</span>
-                  <span className="cr-run-time">{i === segIndex ? mmss(remaining) : mmss(s.seconds)}</span>
-                </button>
-              </li>)}
-            </ol>
-            <div className="cr-prompter">
-              <div className="cr-prompter-head">
-                <span className="cr-countdown" data-late={remaining <= 10 || undefined} aria-label={t("เวลาที่เหลือของช่วงนี้")}>{mmss(remaining)}</span>
-                <button type="button" className="cr-btn" onClick={() => goSegment(segIndex - 1)} disabled={segIndex === 0}><ChevronLeft size={15} aria-hidden />{t("ย้อนกลับ")}</button>
-                <button type="button" className="cr-btn" onClick={() => goSegment(segIndex + 1)} disabled={segIndex >= segments.length - 1}>{t("ถัดไป")}<ChevronRight size={15} aria-hidden /></button>
-              </div>
-              <p className="cr-opening">{segment.opening}</p>
-              {segment.talkingPoints.length > 0 && <ul>{segment.talkingPoints.map((point, i) => <li key={i}>{point}</li>)}</ul>}
-              {segment.callToAction && <p className="cr-cta">{segment.callToAction}</p>}
-              {segment.cues.length > 0 && <p className="cr-cues">{segment.cues.map((c, i) => <span key={i} data-fired={firedCues.current.has(`${segIndex}:${i}`) || undefined}>{mmss(c.at)} {t(LABEL[c.event])}</span>)}</p>}
-            </div>
-          </div>}
-        </section>
+        <div className="cr-go-row">
+          {live
+            ? <button type="button" className="cr-go cr-end" onClick={endLive}><Square size={16} fill="currentColor" aria-hidden />{t("จบไลฟ์")}</button>
+            : <button type="button" className="cr-go" onClick={goLive}><Radio size={20} aria-hidden />{t(mode === "demo" ? "เริ่มไลฟ์จำลอง" : "เริ่มไลฟ์")}</button>}
+          <button type="button" className="cr-health" onClick={() => setDetailsOpen(true)} aria-label={t("สถานะระบบ") + ": " + rows.map((r) => `${r.short} ${statusWord[r.status]}`).join(", ") + ". " + t("เปิดรายละเอียดระบบ")}>
+            {rows.map((r) => <span key={r.short} data-status={r.status}>
+              {r.short}{r.status === "ok" ? <Check size={13} aria-hidden /> : r.status === "off" ? <span className="cr-health-dot" aria-hidden /> : <CircleAlert size={13} aria-hidden />}
+            </span>)}
+          </button>
+        </div>
+        <p className="cr-stage-note">{mode === "obs" ? t("จอนี้แสดงภาพเดียวกับที่ OBS ออกอากาศ") : t("ไลฟ์จำลองบนจอนี้ ไม่ส่งไป OBS")}</p>
       </div>
 
-      <aside className="cr-side">
-        <section className="cr-panel cr-area-status" aria-label={t("เชื่อมต่อ")}>
-          <h3>{t("เชื่อมต่อ")}</h3>
-          <ul className="cr-rows">
-            {rows.map((r) => <li key={r.label} data-status={r.status} title={r.detail}>
-              <span className="cr-dot" aria-hidden /><r.icon size={16} aria-hidden />
-              <span className="cr-row-label">{r.label}</span>
-              <span className="cr-row-detail">{r.detail}</span>
-              <span className="cr-sr">{r.status}</span>
-            </li>)}
-          </ul>
-          {mode === "obs" && <div className="cr-obs-link">
-            <button type="button" className="cr-btn" disabled={obsBusy} onClick={() => void makeObsLink()}><Link2 size={15} aria-hidden />{t("สร้างลิงก์ OBS ใหม่ (แทนลิงก์เดิม)")}</button>
-            {obsUrl && <div className="cr-url">
-              <input aria-label="OBS Browser Source URL" readOnly value={obsUrl} onFocus={(e) => e.target.select()} />
-              <button type="button" className="cr-btn" onClick={() => void navigator.clipboard.writeText(obsUrl).then(() => setCopied(true))}><Copy size={15} aria-hidden />{t(copied ? "คัดลอกแล้ว" : "คัดลอก")}</button>
-            </div>}
-            {obsUrl && <p className="cr-quiet">{t("วางใน OBS → Browser Source ขนาด 1920 × 1080")}</p>}
-          </div>}
+      <div className="cr-host">
+        {warning && <div className="cr-warning" role="alert"><TriangleAlert size={18} aria-hidden />
+          <div><strong>{t("ระวังคำพูดเกินจริง (เห็นเฉพาะจอนี้ ไม่ขึ้นไลฟ์)")}</strong>{warning.text && <span>“{warning.text}”</span>}</div>
+          <button type="button" className="cr-btn" onClick={() => setWarning(null)}>{t("รับทราบ")}</button>
+        </div>}
+        {suggestPoll && <div className="cr-suggest" role="status"><span>{t("ผู้กำกับ: คนดูเริ่มเงียบ แนะนำเปิดโหวต")}</span>
+          <button type="button" className="cr-btn cr-btn-accent" onClick={() => { now("poll", current); setSuggestPoll(false); }}><Vote size={15} aria-hidden />{t("เปิดโหวต")}</button>
+          <button type="button" className="cr-btn" onClick={() => setSuggestPoll(false)}>{t("ปิด")}</button>
+        </div>}
+
+        <section className="cr-panel cr-prompter" aria-label={t("สคริปต์ผู้กำกับ")}>
+          {!segment ? <p className="cr-quiet">{t("ยังไม่มีสคริปต์ ให้ AI เขียนได้ที่ขั้นตอน 3 เตรียมคลิปและ motion")}</p> : <>
+            <div className="cr-prompter-head">
+              <div className="cr-seg">
+                <span className="cr-seg-count">{t("ช่วง")} {segIndex + 1}/{segments.length}</span>
+                <h2 className="cr-seg-title">{segment.title}</h2>
+              </div>
+              <span className="cr-countdown" data-late={(live && remaining <= 10) || undefined} aria-label={t("เวลาที่เหลือของช่วงนี้")}>{mmss(remaining)}</span>
+            </div>
+            <progress className="cr-progress" max={segment.seconds} value={Math.min(segment.seconds, inSegment)} aria-label={t("เวลาของช่วงนี้")} />
+            <p className="cr-opening">{segment.opening}</p>
+            {segment.talkingPoints.length > 0 && <ul className="cr-points">{segment.talkingPoints.map((point, i) => <li key={i}>{point}</li>)}</ul>}
+            {segment.callToAction && <p className="cr-cta">{segment.callToAction}</p>}
+            {segment.cues.length > 0 && <p className="cr-cues">{segment.cues.map((c, i) => <span key={i} data-fired={firedCues.current.has(`${segIndex}:${i}`) || undefined}>{mmss(c.at)} {t(LABEL[c.event])}</span>)}</p>}
+            <div className="cr-prompter-nav">
+              <button type="button" className="cr-btn" onClick={() => goSegment(segIndex - 1)} disabled={segIndex === 0}><ChevronLeft size={16} aria-hidden />{t("ย้อนกลับ")}</button>
+              <button type="button" className="cr-btn cr-next" onClick={() => goSegment(segIndex + 1)} disabled={!nextSegment}>
+                <span>{t("ถัดไป")}{nextSegment && <span className="cr-quiet"> · {nextSegment.title}</span>}</span><ChevronRight size={16} aria-hidden />
+              </button>
+            </div>
+            {!plan.script && <p className="cr-quiet cr-small">{t("ลำดับอัตโนมัติจากรายการสินค้า ให้ AI เขียนสคริปต์เต็มได้ที่ขั้นตอน 3")}</p>}
+          </>}
         </section>
 
-        <section className="cr-panel cr-area-transcript" aria-label={t("ถอดเสียงสด")}>
-          <h3><Mic size={14} aria-hidden />{t("ถอดเสียงสด")}</h3>
-          <p className="cr-transcript" aria-live="off">
-            {lines.length || interim ? <>{lines.slice(-4).join(" ")} <span className="cr-interim">{interim}</span></>
-              : <span className="cr-quiet">{t(speech === "unsupported" ? "การถอดเสียงใช้ได้เฉพาะ Google Chrome" : "ข้อความที่พูดจะขึ้นที่นี่เมื่อกด GO LIVE")}</span>}
-          </p>
+        <section className="cr-panel" aria-label={t("ปุ่มลัดของโฮสต์")}>
+          <div className="cr-tiles">
+            <button type="button" className="cr-tile" disabled={!current} onClick={() => now("price_pop", current)}><Tag aria-hidden /><span>{t("เด้งราคา")}</span>{current && <small>{baht(current.price)}</small>}</button>
+            <button type="button" className="cr-tile" disabled={!spotProduct} onClick={() => showProductNow(spotProduct)}><Crosshair aria-hidden /><span>{t("โชว์สินค้า")}</span></button>
+            <button type="button" className="cr-tile" data-suggested={suggestPoll || undefined} onClick={() => now("poll", current)}><Vote aria-hidden /><span>{t("โหวต")}</span></button>
+            <button type="button" className="cr-tile" onClick={() => now("fireworks", current)}><PartyPopper aria-hidden /><span>{t("พลุ")}</span></button>
+            <button type="button" className="cr-tile" onClick={() => now("zoom", current)}><ZoomIn aria-hidden /><span>{t("ซูม")}</span></button>
+            <button type="button" className="cr-tile" onClick={playClip}><Film aria-hidden /><span>{t("คลิปกันเงียบ")}</span></button>
+            <button type="button" className="cr-tile" onClick={() => { send({ type: "zoom_out" }); log("คนตัดต่อ", t("ล้างจอ"), "action"); }}><Eraser aria-hidden /><span>{t("ล้างจอ")}</span></button>
+          </div>
+          {pool.length > 1 && <label className="cr-spot">
+            <span>{t("สินค้าที่จะโชว์")}</span>
+            <select value={spotId || current?.id || ""} onChange={(e) => setSpotId(e.target.value)}>
+              {pool.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </label>}
         </section>
-
-        <section className="cr-panel cr-area-crew" aria-label={t("ทีมงาน")}>
-          <h3>{t("ทีมงาน")}</h3>
-          <ol className="cr-feed" aria-live="polite">
-            {!feed.length && <li className="cr-quiet">{t("การตัดสินใจของทีม AI จะขึ้นที่นี่")}</li>}
-            {feed.map((f) => <li key={f.id} data-tone={f.tone}>
-              <time>{f.time}</time><span className="cr-role" data-role={f.role}>{t(f.role)}</span>
-              <span>{f.text}{f.count > 1 && <span className="cr-quiet"> ×{f.count}</span>}</span>
-            </li>)}
-          </ol>
-        </section>
-
-        <section className="cr-panel cr-area-detector" aria-label={t("ตัวตรวจจับ")}>
-          <h3>
-            <button type="button" className="cr-collapse" aria-expanded={detectorOpen} aria-controls="cr-detector" onClick={() => setDetectorOpen((o) => !o)}>
-              <ScanSearch size={14} aria-hidden />{t("ตัวตรวจจับ")}<ChevronRight size={14} aria-hidden />
-            </button>
-          </h3>
-          <p className="cr-quiet">{t(mode === "demo" ? "เลือกแหล่งภาพ \"กล้อง\" ในตัวตรวจจับ ใช้เว็บแคมเดียวกับไลฟ์จำลองได้" : "เลือกแหล่งภาพในตัวตรวจจับ เช่น OBS Virtual Camera แล้วกด GO LIVE")}</p>
-          {detectorUp === false ? <div className="cr-down">
-            <p>{t("เปิดบริการตรวจจับสินค้าไม่ได้ที่")} <code>{DETECT_ORIGIN}</code></p>
-            <p>{t("รันในเทอร์มินัล:")} <code>cd demo &amp;&amp; npm run dev</code></p>
-            <button type="button" className="cr-btn" onClick={pingDetector}><RotateCw size={15} aria-hidden />{t("ลองเชื่อมต่ออีกครั้ง")}</button>
-          </div> : detectSrc && <iframe
-            id="cr-detector" ref={detectRef} className="cr-detector" data-open={detectorOpen || undefined} src={detectSrc}
-            title={t("ตัวตรวจจับสินค้า")} allow="camera; microphone; display-capture"
-          />}
-        </section>
-      </aside>
+      </div>
     </div>
+
+    <aside id="cr-details" className="cr-sheet" hidden={!detailsOpen} aria-labelledby="cr-details-title">
+      <header className="cr-sheet-head">
+        <h2 id="cr-details-title">{t("รายละเอียดระบบ")}</h2>
+        <button ref={detailsClose} type="button" className="cr-icon-btn" onClick={closeDetails} aria-label={t("ปิด")}><X size={18} aria-hidden /></button>
+      </header>
+
+      <section className="cr-sheet-sec" aria-labelledby="cr-sec-status">
+        <h3 id="cr-sec-status">{t("เชื่อมต่อ")}</h3>
+        <ul className="cr-rows">
+          {rows.map((r) => <li key={r.label} data-status={r.status}>
+            <span className="cr-dot" aria-hidden /><r.icon size={16} aria-hidden />
+            <span className="cr-row-label">{r.label}</span>
+            <span className="cr-row-detail">{r.detail}</span>
+            <span className="cr-sr">{statusWord[r.status]}</span>
+          </li>)}
+        </ul>
+        <label className="cr-field"><span>{t("เลือกกล้องของจอมอนิเตอร์")}</span>
+          <select value={deviceId || activeCamera?.id || ""} onChange={(e) => setDeviceId(e.target.value)}>
+            {!cameras.length && <option value="">{t("กล้องเริ่มต้น")}</option>}
+            {cameras.map((c, i) => <option key={c.deviceId || i} value={c.deviceId}>{c.label || `${t("กล้อง")} ${i + 1}`}</option>)}
+          </select>
+        </label>
+        {mode === "obs" && <div className="cr-obs-link">
+          <button type="button" className="cr-btn" disabled={obsBusy} onClick={() => void makeObsLink()}><Link2 size={15} aria-hidden />{t("สร้างลิงก์ OBS ใหม่ (แทนลิงก์เดิม)")}</button>
+          {obsUrl && <div className="cr-url">
+            <input aria-label="OBS Browser Source URL" readOnly value={obsUrl} onFocus={(e) => e.target.select()} />
+            <button type="button" className="cr-btn" onClick={() => void navigator.clipboard.writeText(obsUrl).then(() => setCopied(true))}><Copy size={15} aria-hidden />{t(copied ? "คัดลอกแล้ว" : "คัดลอก")}</button>
+          </div>}
+          {obsUrl && <p className="cr-quiet">{t("วางใน OBS → Browser Source ขนาด 1920 × 1080")}</p>}
+        </div>}
+      </section>
+
+      {segments.length > 0 && <section className="cr-sheet-sec" aria-labelledby="cr-sec-rundown">
+        <h3 id="cr-sec-rundown">{t("ลำดับไลฟ์")}{plan.script && <span className="cr-quiet"> · {plan.script.title}</span>}</h3>
+        <ol className="cr-rundown">
+          {segments.map((s, i) => <li key={i} aria-current={i === segIndex ? "step" : undefined} data-done={i < segIndex || undefined}>
+            <button type="button" onClick={() => goSegment(i)}>
+              <span className="cr-run-num">{i + 1}</span><span className="cr-run-title">{s.title}</span>
+              <span className="cr-run-time">{i === segIndex ? mmss(remaining) : mmss(s.seconds)}</span>
+            </button>
+          </li>)}
+        </ol>
+      </section>}
+
+      <section className="cr-sheet-sec" aria-labelledby="cr-sec-clips">
+        <h3 id="cr-sec-clips">{t("คลิปกันเงียบ")}</h3>
+        <div className="cr-clips">
+          {plan.clips.length ? plan.clips.map((clip) => <button key={clip.fileId} type="button" className="cr-btn" onClick={() => {
+            send({ type: "clip", fileId: clip.fileId });
+            log("คนตัดต่อ", t("เปิดคลิปกันเงียบ") + " · " + clip.name, "action");
+          }}><Film size={15} aria-hidden />{clip.name}</button>) : <p className="cr-quiet">{t("ยังไม่มีคลิปกันเงียบ เตรียมได้ที่ขั้นตอน 3")}</p>}
+        </div>
+      </section>
+
+      <section className="cr-sheet-sec" aria-labelledby="cr-sec-transcript">
+        <h3 id="cr-sec-transcript">{t("ถอดเสียงสด")}</h3>
+        <p className="cr-transcript">
+          {lines.length || interim ? <>{lines.slice(-4).join(" ")} <span className="cr-interim">{interim}</span></>
+            : <span className="cr-quiet">{t(speech === "unsupported" ? "การถอดเสียงใช้ได้เฉพาะ Google Chrome" : "ข้อความที่พูดจะขึ้นที่นี่เมื่อเริ่มไลฟ์")}</span>}
+        </p>
+      </section>
+
+      <section className="cr-sheet-sec" aria-labelledby="cr-sec-crew">
+        <h3 id="cr-sec-crew">{t("ทีมงาน AI")}</h3>
+        <ol className="cr-feed">
+          {!feed.length && <li className="cr-quiet">{t("การตัดสินใจของทีม AI จะขึ้นที่นี่")}</li>}
+          {feed.map((f) => <li key={f.id} data-tone={f.tone}>
+            <span className="cr-role" data-role={f.role}>{t(f.role)}</span>
+            <span>{f.text}{f.count > 1 && <span className="cr-quiet"> ×{f.count}</span>}</span>
+            <time>{f.time}</time>
+          </li>)}
+        </ol>
+      </section>
+    </aside>
   </section>;
 }
