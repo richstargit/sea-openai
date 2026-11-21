@@ -9,7 +9,7 @@ import { useLanguage } from "@/components/language-provider";
 import { playOverlay, studioPost, studioRequest } from "@/components/studio/studio-api";
 import { useLiveDetection } from "@/lib/live-detect";
 import { type LiveSentence, useLiveSpeech } from "@/lib/live-speech";
-import { type CustomMotion, type Decision, type LiveProduct, type Segment, productImage, fillMotion } from "@/lib/live-plan";
+import { type CustomMotion, type Decision, type LiveProduct, type Segment, productImage, fillMotion, motionOn } from "@/lib/live-plan";
 import { cuesFromSpeech, namesProduct } from "@/lib/live-cues";
 import type { StepProps } from "./live-studio";
 import "./control-room.css";
@@ -166,7 +166,9 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     ...(kit ? Object.entries(kit.moments).filter(([moment]) => moment !== "celebrate").map(([moment, id]) => ({ id, description: MOMENT_NOTES[moment] ?? moment })) : []),
     ...(kit?.custom ?? []).map((m) => ({ id: "custom:" + m.id, description: `${MOMENT_NOTES[m.moment] ?? m.moment}: ${m.description}` })),
     ...GENERAL_MOTIONS.map(([id, description]) => ({ id, description })),
-  ].slice(0, 60).filter((m, i, all) => m.id && all.findIndex((x) => x.id === m.id) === i), [kit]);
+  ].filter((m) => motionOn(plan, m.id)).slice(0, 60).filter((m, i, all) => m.id && all.findIndex((x) => x.id === m.id) === i), [kit, plan]);
+  // a motion the shop turned off in the motion library never plays; `fallback` is used when the kit's pick is off
+  const pickOn = (id: string | undefined, fallback: string) => (id && motionOn(plan, id) ? id : fallback);
 
   // ---------- built-in detection: frames from videoRef, decisions + tracked box back ----------
   const transcript = useCallback(() => finals.current.filter((f) => Date.now() - f.at < 10000).map((f) => f.text).join(" "), []);
@@ -199,7 +201,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   }
   /** The AI-designed motion for a kit moment: the kit's pick, else rotate through the moment's motions (never the same twice). */
   function customForMoment(moment: CustomMotion["moment"], p: LiveProduct | null): OverlayEvent | null {
-    const list = (kit?.custom ?? []).filter((m) => m.moment === moment && (p || !customNeedsProduct(m)));
+    const list = (kit?.custom ?? []).filter((m) => m.moment === moment && motionOn(plan, "custom:" + m.id) && (p || !customNeedsProduct(m)));
     const picked = list.find((m) => "custom:" + m.id === kit?.moments[moment]);
     const last = lastCustom.current[moment];
     const m = picked ?? list[(list.findIndex((x) => x.id === last) + 1) % list.length];
@@ -345,7 +347,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     const moment = KIT_MOMENT[kind];
     const custom = moment && customForMoment(moment, p);
     if (custom) return custom;
-    if (kit && moment) return { type: "graphic", preset: kit.moments[moment], data, ...at, image: p ? imageUrl(p) : undefined, theme: kit.theme.look, ttl: 2200 };
+    if (kit && moment && motionOn(plan, kit.moments[moment])) return { type: "graphic", preset: kit.moments[moment], data, ...at, image: p ? imageUrl(p) : undefined, theme: kit.theme.look, ttl: 2200 };
     return { type: kind, payload: kind === "product_card" ? { ...data, ...at, image: p ? imageUrl(p) : undefined } : data, ttl: 2200 };
   }
   /** spotlight at the tracked box when there is one, else the product card */
@@ -380,7 +382,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     log("ผู้กำกับ", t("เข้าช่วง") + ` ${i + 1}: ${segments[i].title}`);
     const next = products.find((p) => p.id === segments[i].productId) ?? null;
     if (liveRef.current) enqueue({
-      event: customForMoment("transition", next) ?? { type: "graphic", preset: kit?.moments.transition || "iris-swap", data: { kicker: "ต่อไป", text: segments[i].title, ...productData(next), name: next?.name ?? segments[i].title }, x: 0.5, y: 0.5, theme: kit?.theme.look, ttl: 1800 },
+      event: customForMoment("transition", next) ?? { type: "graphic", preset: pickOn(kit?.moments.transition, "iris-swap"), data: { kicker: "ต่อไป", text: segments[i].title, ...productData(next), name: next?.name ?? segments[i].title }, x: 0.5, y: 0.5, theme: kit?.theme.look, ttl: 1800 },
       key: "transition", role: "Motion", text: t("เปลี่ยนช่วง") + " · " + segments[i].title,
     });
   }
@@ -566,7 +568,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     const shop = plan.style.shop || "SnapPromo";
     lastBig.current = 0;
     play({
-      event: customForMoment("intro", null) ?? { type: "graphic", preset: kit?.moments.intro || "blinds-sting", data: { text: kit?.sting.headline || shop, sub: kit?.sting.kicker, kicker: "LIVE", title: kit?.sting.headline || shop, name: shop }, theme: kit?.theme.look, ttl: 1600 },
+      event: customForMoment("intro", null) ?? { type: "graphic", preset: pickOn(kit?.moments.intro, "blinds-sting"), data: { text: kit?.sting.headline || shop, sub: kit?.sting.kicker, kicker: "LIVE", title: kit?.sting.headline || shop, name: shop }, theme: kit?.theme.look, ttl: 1600 },
       key: "intro", role: "Motion", text: t("เปิดไลฟ์") + " · " + (kit?.sting.headline || shop),
     });
   }

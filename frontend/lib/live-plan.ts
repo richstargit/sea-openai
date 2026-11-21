@@ -56,7 +56,13 @@ export type OverlayCue = { at: number; event: "product_card" | "price_pop" | "pr
 export type Segment = { kind: "intro" | "product" | "interlude" | "outro"; productId: string | null; title: string; seconds: number; opening: string; talkingPoints: string[]; callToAction: string; cues: OverlayCue[] };
 export type ShowScript = { title: string; segments: Segment[] };
 
-export type LivePlan = { style: LiveStyle; lineup: LineupItem[]; clips: PreviewClip[]; kit: MotionKit | null; script: ShowScript | null };
+export type LivePlan = {
+  style: LiveStyle; lineup: LineupItem[]; clips: PreviewClip[]; kit: MotionKit | null; script: ShowScript | null;
+  /** motions the shop turned off for its lives: library preset ids and "custom:<id>" for AI-designed ones */
+  off?: string[];
+};
+/** May the live use this motion? (library preset id, or "custom:<id>") */
+export const motionOn = (plan: Pick<LivePlan, "off">, id: string) => !plan.off?.includes(id);
 
 export const defaultPlan = (): LivePlan => ({
   style: { shop: "", tone: "สนุก เป็นกันเอง", language: "th", accent: "#d23b2a", accent2: "#1f6f5c", font: "", mood: "", tagStyle: "tag" },

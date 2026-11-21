@@ -1,15 +1,16 @@
 "use client";
 
-import { type CSSProperties, useEffect, useState } from "react";
-import { ArrowRight, Camera, Check, CircleAlert, Film, LoaderCircle, Palette, Radio, RefreshCw, Sparkles, Trash2, WandSparkles } from "lucide-react";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { ArrowRight, Camera, Check, CircleAlert, Film, LoaderCircle, Palette, Play, Radio, RefreshCw, Sparkles, Star, Trash2, WandSparkles } from "lucide-react";
 import { useLanguage } from "@/components/language-provider";
 import { clock } from "@/components/studio/script/api";
 import { playOverlay, studioPost, studioRequest } from "@/components/studio/studio-api";
-import { type LineupItem, type LiveProduct, type MotionKit, type PreviewClip, type Segment, director, productImage } from "@/lib/live-plan";
+import { type CustomMotion, type LineupItem, type LiveProduct, type MotionKit, type PreviewClip, type Segment, director, fillMotion, productImage } from "@/lib/live-plan";
 import { saleFormatOptions } from "@/lib/sale-formats";
 import { baht, hideBroken } from "./catalog-step";
 import { TAG_STYLES } from "./setup-step";
 import type { StepProps } from "./live-studio";
+import { MotionLibrary } from "./motion-library";
 import "../studio/video/video.css";
 import "./steps.css";
 
@@ -52,7 +53,8 @@ async function agentClip(body: object) {
 }
 
 /** Step 3: before going live, the director's script, the shop's motion kit and short clips that fill dead air. */
-export function PrepareStep({ plan, setPlan, products, next }: StepProps) {
+export function PrepareStep(props: StepProps) {
+  const { plan, setPlan, products, next } = props;
   const { t } = useLanguage();
   const [scriptBusy, setScriptBusy] = useState(false);
   const [scriptError, setScriptError] = useState("");
@@ -75,7 +77,9 @@ export function PrepareStep({ plan, setPlan, products, next }: StepProps) {
     const product = products.find((p) => p.id === item.productId);
     return product ? [{ item, product }] : [];
   });
-  const { script, kit, style } = plan;
+  const { script, kit: rawKit, style } = plan;
+  // a kit made only to hold custom motions has no reasoning or sting: treat it as "no kit" for the kit section
+  const kit = rawKit && (rawKit.reasoning || rawKit.sting?.headline) ? rawKit : null;
   const lineupIds = new Set(items.map(({ product }) => product.id));
   const otherClips = plan.clips.filter((clip) => !lineupIds.has(clip.productId));
 
@@ -230,6 +234,9 @@ export function PrepareStep({ plan, setPlan, products, next }: StepProps) {
       </div>}
     </section>
 
+    <MotionDesigner plan={plan} setPlan={setPlan} products={products} noLineup={noLineup} />
+    <MotionLibrary {...props} />
+
     {/* (c) Dead-air clips and AI live graphics */}
     <section className="vs-card" aria-labelledby="ls-clips-title">
       <div className="ls-card-head">
@@ -317,4 +324,139 @@ function ClipTile({ clip, label, transparent, onPlay, onRemove }: { clip: Previe
       <button type="button" className="vs-btn ls-icon" data-tone="danger" aria-label={t("ลบคลิป") + " " + label} onClick={onRemove}><Trash2 size={15} aria-hidden /></button>
     </div>
   </li>;
+}
+
+const DESIGN_MOMENTS: [CustomMotion["moment"], string][] = [
+  ["intro", "เปิดไลฟ์"], ["productIn", "สินค้าขึ้นจอ"], ["price", "ราคา"], ["deal", "โปร"],
+  ["callToAction", "ชวน CF"], ["transition", "เปลี่ยนสินค้า"], ["celebrate", "ฉลอง"], ["outro", "ปิดไลฟ์"],
+];
+const MOMENT_LABEL = Object.fromEntries(DESIGN_MOMENTS) as Record<CustomMotion["moment"], string>;
+const PREVIEW_SRC = "/overlay/index.html?preview=1#" + "a".repeat(43);
+
+/** Step 3 (d): the AI Motion Designer. One shared preview stage plays the selected motion, so 12+ cards stay light. */
+function MotionDesigner({ plan, setPlan, products, noLineup }: Pick<StepProps, "plan" | "setPlan" | "products"> & { noLineup: boolean }) {
+  const { t } = useLanguage();
+  const [count, setCount] = useState(6);
+  const [picked, setPicked] = useState<Set<CustomMotion["moment"]>>(() => new Set(DESIGN_MOMENTS.map(([m]) => m)));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [selected, setSelected] = useState<{ id: string; n: number } | null>(null); // n bumps to replay
+  const frame = useRef<HTMLIFrameElement>(null);
+  const loaded = useRef(false);
+
+  const custom = plan.kit?.custom ?? [];
+  const first = plan.lineup.map((item) => products.find((p) => p.id === item.productId)).find(Boolean);
+  const current = custom.find((m) => m.id === selected?.id);
+  const theme = plan.kit?.theme.look;
+
+  const send = () => {
+    if (!current || !loaded.current) return;
+    const layers = fillMotion(current, { name: first?.name ?? "สินค้าตัวอย่าง", price: first?.price ?? 199, code: first?.id ?? "A01", shop: plan.style.shop || "ร้านของคุณ" });
+    frame.current?.contentWindow?.postMessage({ source: "snappromo-control", event: { type: "graphic", preset: "compose", data: { layers }, ...(theme ? { theme } : {}) } }, location.origin);
+  };
+  useEffect(send, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function design() {
+    setBusy(true);
+    setError("");
+    try {
+      const { motions } = await director.designMotions(plan, products, count, picked.size === DESIGN_MOMENTS.length ? undefined : [...picked]);
+      if (!motions?.length) throw new Error("AI ยังไม่ได้ motion กลับมา ลองอีกครั้ง");
+      setPlan((p) => {
+        const old = p.kit?.custom ?? [];
+        const ids = new Set(old.map((m) => m.id));
+        const fresh = motions.map((m) => { let id = m.id, n = 2; while (ids.has(id)) id = m.id + "-" + n++; ids.add(id); return { ...m, id }; });
+        const base: MotionKit = p.kit ?? {
+          theme: { accent: p.style.accent, accent2: p.style.accent2, look: "paper", tagStyle: p.style.tagStyle },
+          moments: { intro: "", productIn: "", price: "", deal: "", callToAction: "", transition: "", celebrate: "", deadAir: "", outro: "" },
+          sting: { headline: "", kicker: "", entrance: "" }, reasoning: "",
+        };
+        return { ...p, kit: { ...base, custom: [...old, ...fresh] } };
+      });
+      setSelected({ id: motions[0].id, n: 0 });
+    } catch (e) { setError(errorText(e, "ออกแบบ motion ไม่สำเร็จ")); }
+    finally { setBusy(false); }
+  }
+  const patchKit = (fn: (kit: MotionKit) => MotionKit) => setPlan((p) => p.kit ? { ...p, kit: fn(p.kit) } : p);
+  const makeMain = (m: CustomMotion) => patchKit((k) => ({ ...k, moments: { ...k.moments, [m.moment]: "custom:" + m.id } }));
+  const remove = (m: CustomMotion) => {
+    patchKit((k) => ({ ...k, custom: (k.custom ?? []).filter((c) => c.id !== m.id), moments: k.moments[m.moment] === "custom:" + m.id ? { ...k.moments, [m.moment]: "" } : k.moments }));
+    if (selected?.id === m.id) setSelected(null);
+  };
+  const toggle = (m: CustomMotion["moment"]) => setPicked((s) => { const n = new Set(s); if (n.has(m)) n.delete(m); else n.add(m); return n; });
+
+  return <section id="ai-motion-designer" tabIndex={-1} className="vs-card ls-md" aria-labelledby="ls-md-title" aria-busy={busy}>
+    <div className="ls-card-head">
+      <div><h3 id="ls-md-title">{t("ออกแบบ motion ใหม่ด้วย AI")}</h3><p>{t("ให้ AI ออกแบบกราฟิกหลายแบบต่อช่วงของไลฟ์ ใช้ชื่อ ราคา และโค้ดสินค้าจริงของร้านคุณ ห้องควบคุมจะเลือกใช้ให้ตรงจังหวะ")}</p></div>
+    </div>
+    <div className="vs-row ls-md-controls">
+      <div className="vs-field">
+        <span className="ls-field-label" id="ls-md-count">{t("จำนวนที่ให้ออกแบบ")}</span>
+        <div className="vs-seg ls-md-count" role="radiogroup" aria-labelledby="ls-md-count">
+          {[6, 9, 12].map((n) => <label key={n}><input type="radio" name="ls-md-count" checked={count === n} disabled={busy} onChange={() => setCount(n)} /><span>{n}</span></label>)}
+        </div>
+      </div>
+      <fieldset className="vs-field">
+        <legend className="ls-field-label">{t("ช่วงที่ต้องการ")}</legend>
+        <div className="ls-md-chips">
+          {DESIGN_MOMENTS.map(([m, label]) => <label key={m} className="ls-md-chip"><input type="checkbox" checked={picked.has(m)} disabled={busy} onChange={() => toggle(m)} /><span>{t(label)}</span></label>)}
+        </div>
+      </fieldset>
+      <div className="vs-actions">
+        <button type="button" className="vs-btn ls-md-go" disabled={busy || noLineup || picked.size === 0} onClick={() => void design()}>
+          {busy ? <LoaderCircle className="animate-spin" size={16} aria-hidden /> : <WandSparkles size={16} aria-hidden />}
+          {t(busy ? "กำลังออกแบบ motion…" : "ให้ AI ออกแบบ motion")}
+        </button>
+        {picked.size === 0 && <span className="vs-hint">{t("เลือกอย่างน้อย 1 ช่วง")}</span>}
+        <span className="ls-sr-status" role="status">{busy ? t("กำลังออกแบบ motion…") : ""}</span>
+      </div>
+      {error && <div className="vs-notice" data-tone="error" role="alert"><span className="vs-notice-icon" aria-hidden><CircleAlert size={18} /></span><p>{t(error)}</p></div>}
+    </div>
+
+    {custom.length === 0
+      ? <div className="vs-row"><div className="ls-empty">
+          <span className="ls-empty-icon" aria-hidden><WandSparkles size={22} /></span>
+          <h4>{t("ยังไม่มี motion ที่ AI ออกแบบ")}</h4>
+          <p className="ls-muted">{t("AI จะวาดป้ายและเอฟเฟกต์เป็นชั้น ๆ ให้แต่ละช่วงของไลฟ์ เช่น เปิดไลฟ์ ราคา โปร และชวนกด CF แล้วคุณดูตัวอย่างและเลือกแบบที่ใช่เป็นแบบหลักได้")}</p>
+        </div></div>
+      : <div className="vs-row ls-md-gallery">
+          <div className="ls-md-stage" aria-live="polite">
+            <div className="ls-md-screen">
+              <iframe ref={frame} src={PREVIEW_SRC} title={t("ตัวอย่าง motion")} tabIndex={-1}
+                onLoad={() => { loaded.current = true; send(); }} />
+              {!current && <p>{t("เลือก motion เพื่อดูตัวอย่าง")}</p>}
+            </div>
+            {current && <p className="vs-hint">{current.name} · {t("ตัวอย่างใช้สินค้า")} {first?.name ?? t("ตัวอย่าง")}</p>}
+          </div>
+          {DESIGN_MOMENTS.filter(([m]) => custom.some((c) => c.moment === m)).map(([m, label]) => {
+            const list = custom.filter((c) => c.moment === m);
+            return <div key={m} className="ls-md-group">
+              <h4>{t(label)} <span className="vs-chip">{list.length}</span></h4>
+              <ul className="ls-md-cards">
+                {list.map((motion) => {
+                  const active = selected?.id === motion.id;
+                  const main = plan.kit?.moments[motion.moment] === "custom:" + motion.id;
+                  return <li key={motion.id} className="ls-md-card" data-active={active || undefined}>
+                    <button type="button" className="ls-md-poster" aria-label={t("เล่นดู") + " " + motion.name}
+                      style={{ "--a": plan.style.accent, "--b": plan.style.accent2 } as CSSProperties}
+                      onClick={() => setSelected((s) => ({ id: motion.id, n: (s?.n ?? 0) + 1 }))}>
+                      <Play size={22} aria-hidden /><span>{t(MOMENT_LABEL[motion.moment])}</span>
+                    </button>
+                    <div className="ls-md-body">
+                      <h5>{motion.name}</h5>
+                      <p>{motion.description}</p>
+                      <div className="ls-md-meta"><span className="vs-chip">{t(MOMENT_LABEL[motion.moment])}</span><span className="vs-chip">{motion.seconds} {t("วินาที")}</span>{main && <span className="vs-chip" data-state="ready"><Check size={13} aria-hidden />{t("ใช้เป็นหลัก")}</span>}</div>
+                      <div className="ls-md-actions">
+                        <button type="button" className="vs-btn" onClick={() => setSelected((s) => ({ id: motion.id, n: (s?.n ?? 0) + 1 }))}><Play size={15} aria-hidden />{t("เล่นดู")}</button>
+                        <button type="button" className="vs-btn" disabled={main} onClick={() => makeMain(motion)}><Star size={15} aria-hidden />{t(main ? "ใช้เป็นหลักอยู่" : "ใช้เป็นหลัก")}</button>
+                        <button type="button" className="vs-btn ls-icon" data-tone="danger" aria-label={t("ลบ") + " " + motion.name} onClick={() => remove(motion)}><Trash2 size={15} aria-hidden /></button>
+                      </div>
+                    </div>
+                  </li>;
+                })}
+              </ul>
+            </div>;
+          })}
+        </div>}
+  </section>;
 }

@@ -193,7 +193,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .cr-sheet { animation: none !important; }
-  .cr-box, .cr-go, .cr-tile, .cr-progress::-webkit-progress-value { transition: none; }
+  .cr-go, .cr-tile, .cr-progress::-webkit-progress-value { transition: none; }
   .cr-tile:active:not(:disabled) { transform: none; }
 }
 

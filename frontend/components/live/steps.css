@@ -236,3 +236,35 @@
 .ls-current-photos { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .ls-current-photos img { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; }
 .ls-cancel { justify-self: center; }
+
+/* ---------- Step 3: AI Motion Designer ---------- */
+.ls-md-controls { display: grid; gap: var(--g4); }
+.ls-md-count { max-width: 280px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ls-md-chips { display: flex; flex-wrap: wrap; gap: var(--g2); }
+.ls-md-chip { position: relative; }
+.ls-md-chip input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.ls-md-chip span { display: inline-flex; align-items: center; min-height: 40px; padding: 0 var(--g4); border-radius: var(--r5); border: 1px solid var(--line); background: white; color: var(--quiet); font-size: .9rem; font-weight: 560; }
+.ls-md-chip:hover span { color: var(--ink); border-color: #aca592; }
+.ls-md-chip input:checked + span { background: var(--ink); border-color: var(--ink); color: white; }
+.ls-md-chip input:focus-visible + span { outline: 2px solid #326b91; outline-offset: 2px; }
+.ls-md-chip input:disabled + span { opacity: .56; }
+.ls-md-go { min-height: 48px; padding-inline: var(--g5); }
+.ls-md-gallery { display: grid; gap: var(--g5); }
+.ls-md-stage { display: grid; gap: var(--g2); position: sticky; top: 72px; z-index: 2; max-width: 640px; }
+.ls-md-screen { position: relative; aspect-ratio: 16 / 9; border-radius: var(--r2); overflow: hidden; background: #1d1d1b repeating-conic-gradient(#2a2a27 0 25%, #1d1d1b 0 50%) 0 0 / 20px 20px; box-shadow: 0 0 0 1px var(--card-line); }
+.ls-md-screen iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; }
+.ls-md-screen p { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: #cfcbbd; font-size: .9rem; pointer-events: none; }
+.ls-md-group { display: grid; gap: var(--g3); }
+.ls-md-group h4 { display: flex; align-items: center; gap: var(--g2); font-size: 1rem; font-weight: 650; }
+.ls-md-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--g4); list-style: none; margin: 0; padding: 0; }
+.ls-md-card { display: grid; grid-template-rows: auto 1fr; background: white; border: 1px solid var(--card-line); border-radius: var(--r2); overflow: hidden; }
+.ls-md-card[data-active] { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+.ls-md-poster { display: grid; place-content: center; justify-items: center; gap: 6px; aspect-ratio: 16 / 9; border: 0; color: white; cursor: pointer; background: linear-gradient(135deg, var(--a), var(--b)); font-weight: 650; }
+.ls-md-poster:hover { filter: brightness(1.06); }
+.ls-md-poster:focus-visible { outline: 2px solid #326b91; outline-offset: -4px; }
+.ls-md-body { display: grid; gap: var(--g2); align-content: start; padding: var(--g3) var(--g4) var(--g4); min-width: 0; }
+.ls-md-body h5 { font-size: .98rem; font-weight: 640; overflow-wrap: anywhere; }
+.ls-md-body p { margin: 0; color: var(--quiet); font-size: .85rem; }
+.ls-md-meta, .ls-md-actions { display: flex; flex-wrap: wrap; gap: var(--g2); align-items: center; }
+@media (max-width: 720px) { .ls-md-stage { position: static; max-width: none; } .ls-md-cards { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { .ls-md-poster { transition: none; } }
