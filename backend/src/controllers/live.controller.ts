@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { loggedInUser } from '@/controllers/auth.controller.js'
 import { createProduct, deleteProduct, listProducts, productBody, productPatch, productPhoto, updateProduct } from '@/services/live/catalog.js'
 import { decide, decideBody, kitBody, motionKit, planBody, planLive } from '@/services/live/director.js'
+import { designMotions, motionsBody } from '@/services/live/motions.js'
 import { transcribeLive, transcribeQuery, understand, understandBody } from '@/services/live/speech.js'
 import { locateBody, locateProduct } from '@/services/live/locate.js'
 
@@ -13,6 +14,9 @@ export const livePlan: RequestHandler = async (request, response) => {
 }
 export const liveMotionKit: RequestHandler = async (request, response) => {
   response.json(await motionKit(kitBody.parse(request.body), timeout(60_000)))
+}
+export const liveMotions: RequestHandler = async (request, response) => {
+  response.json(await designMotions(motionsBody.parse(request.body), timeout(90_000)))
 }
 export const liveDecide: RequestHandler = async (request, response) => {
   response.json(await decide(decideBody.parse(request.body), timeout(15_000)))

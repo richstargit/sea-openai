@@ -331,6 +331,11 @@ export const ANNOTATIONS: Annotations = {
     secured: true,
     summary: "Pick the shop's motion kit: colours, tag style and a preset for every live moment",
   },
+  'POST /agent/live/motions': {
+    tags: ['Live'],
+    secured: true,
+    summary: 'AI Motion Designer: { shop, mood, accent?, accent2?, products[{name,price}], count 1-12, moments? } -> { motions: [{ id, name, moment, description, seconds, layers (compose layers) }], latencyMs }',
+  },
   'GET /agent/live/products': { tags: ['Live'], secured: true, summary: "List the account's live catalog" },
   'POST /agent/live/products': { tags: ['Live'], secured: true, summary: 'Add a product with 1-3 photos (mirrored to the detection service)' },
   'PATCH /agent/live/products/:code': { tags: ['Live'], secured: true, summary: 'Edit a product; new photos replace the old ones' },

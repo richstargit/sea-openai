@@ -69,11 +69,6 @@
 .cr-screen video { object-fit: cover; }
 .cr-screen > iframe { z-index: 6; pointer-events: none; background: transparent; }
 .cr-screen-msg { position: absolute; inset: 0; z-index: 7; display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0; padding: 24px; text-align: center; color: var(--cr-quiet); background: rgb(0 0 0 / .55); }
-.cr-box { position: absolute; z-index: 2; border: 2px solid #ffd23f; border-radius: 6px; transition: left .12s linear, top .12s linear, width .12s linear, height .12s linear; }
-.cr-box[data-verified] { border-color: var(--cr-green); box-shadow: 0 0 0 1px rgb(0 0 0 / .5); }
-.cr-box:not([data-verified]) { border-style: dashed; }
-.cr-box[data-verified] span { background: var(--cr-green); }
-.cr-box span { position: absolute; left: -2px; bottom: 100%; padding: 1px 6px; border-radius: 4px 4px 0 0; background: #ffd23f; color: #111; font-size: .72rem; font-weight: 700; white-space: nowrap; }
 .cr-chip { position: absolute; top: 10px; z-index: 3; padding: 3px 8px; border-radius: 5px; font-family: var(--font-mono); font-size: .75rem; font-weight: 700; }
 .cr-chip-pgm { left: 10px; background: rgb(0 0 0 / .6); color: var(--cr-green); }
 .cr-chip-live { right: 10px; background: var(--cr-red); color: white; }

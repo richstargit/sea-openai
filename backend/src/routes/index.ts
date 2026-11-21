@@ -44,7 +44,7 @@ import {
   createRateLimiter,
 } from '@/middlewares/rate-limit.middleware.js'
 import healthRoutes from '@/routes/health.route.js'
-import { liveCreateProduct, liveDecide, liveDeleteProduct, liveLocate, liveMotionKit, livePhoto, livePlan, liveProducts, liveTranscribe, liveUnderstand, liveUpdateProduct } from '@/controllers/live.controller.js'
+import { liveCreateProduct, liveDecide, liveDeleteProduct, liveLocate, liveMotionKit, liveMotions, livePhoto, livePlan, liveProducts, liveTranscribe, liveUnderstand, liveUpdateProduct } from '@/controllers/live.controller.js'
 import hookMachineRoutes from '@/routes/hook-machine.route.js'
 import videoJobRoutes from '@/routes/video-job.route.js'
 import { AUDIO_LIMIT, AUDIO_TYPES } from '@/services/live/speech.js'
@@ -104,6 +104,8 @@ router.get('/agent/files/:id', apiRateLimiter, downloadAgentFile)
 const liveLimiter = createRateLimiter(1200)
 router.post('/agent/live/plan', apiRateLimiter, livePlan)
 router.post('/agent/live/motion-kit', apiRateLimiter, liveMotionKit)
+// heavier call: one structured generation of up to 12 motions
+router.post('/agent/live/motions', createRateLimiter(20), liveMotions)
 router.post('/agent/live/decide', liveLimiter, liveDecide)
 // product box on the live frame, every few seconds while live (~450 per 15 min at one call every 2 s)
 router.post('/agent/live/locate', createRateLimiter(600), liveLocate)

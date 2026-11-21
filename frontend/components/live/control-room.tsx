@@ -599,8 +599,6 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
 
 
   // ---------- view ----------
-  const view = box ? toView(box) : null;
-  const boxVerified = !!detection.product; // a box with a confirmed product: the grounding model matched it to a catalog photo
   const aiProduct = products.find((p) => p.id === ai.id) ?? null;
   const chipText = { idle: "รอเริ่มไลฟ์", watching: "กำลังดู…", confirming: "กำลังยืนยัน", verified: "ยืนยันแล้ว ✓", none: "ไม่พบสินค้าในภาพ" }[ai.status];
   const rows: { icon: typeof Radio; label: string; short: string; status: Status; detail: string }[] = [
@@ -649,9 +647,6 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
       <div className="cr-stage">
         <div className="cr-screen">
           <video ref={videoRef} autoPlay muted playsInline onLoadedMetadata={(e) => setVideoAspect(e.currentTarget.videoWidth / e.currentTarget.videoHeight || 16 / 9)} />
-          {view && <div className="cr-box" data-verified={boxVerified || undefined} style={{ left: `${view.x * 100}%`, top: `${view.y * 100}%`, width: `${view.w * 100}%`, height: `${view.h * 100}%` }}>
-            <span>{boxVerified ? `${detectedName || t("สินค้า")} ✓` : t("กำลังยืนยัน")}</span>
-          </div>}
           {mode === "obs" && <>
             <span className="cr-chip cr-chip-pgm">PGM</span>
             {live && <span className="cr-chip cr-chip-live">LIVE {timecode(elapsed)}</span>}
