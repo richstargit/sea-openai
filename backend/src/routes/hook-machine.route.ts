@@ -6,7 +6,12 @@ import { createRateLimiter } from '@/middlewares/rate-limit.middleware.js'
 const router = Router()
 
 // Starting a job costs real model calls, so those routes get a tighter limit.
-export const expensive = createRateLimiter(30, 15 * 60 * 1000)
+// 30 starts per 15 minutes by default. Tests that start many jobs raise it.
+const expensiveLimit = Number(process.env.HOOK_MACHINE_EXPENSIVE_LIMIT)
+export const expensive = createRateLimiter(
+  Number.isInteger(expensiveLimit) && expensiveLimit > 0 ? expensiveLimit : 30,
+  15 * 60 * 1000,
+)
 
 router.get('/capabilities', hm.capabilities)
 router.get('/voice/options', hm.voiceOptions)

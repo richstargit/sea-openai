@@ -231,6 +231,8 @@ describe('one button video api', () => {
     dataDir = mkdtempSync(path.join(os.tmpdir(), 'vj-test-'))
     process.env.HOOK_MACHINE_DATA_DIR = dataDir
     process.env.HOOK_MACHINE_MOCK_AI = 'true'
+    // This file starts far more jobs than one account would in 15 minutes.
+    process.env.HOOK_MACHINE_EXPENSIVE_LIMIT = '1000'
     jest.resetModules()
     app = (await import('@/app.js')).default
     composerModule = await import('@/services/video-job/composer.js')
