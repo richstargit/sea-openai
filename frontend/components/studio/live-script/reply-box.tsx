@@ -1,8 +1,9 @@
 "use client";
 
-import { Ban, Check, CircleHelp, Copy, LoaderCircle } from "lucide-react";
+import { Ban, Check, CircleHelp, LoaderCircle } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { useLanguage } from "@/components/language-provider";
+import { CopyButton } from "./copy-button";
 import { type Reply, type ReplyStatus, liveApi } from "./api";
 
 const KEEP = 5;
@@ -20,21 +21,6 @@ function StatusChip({ status }: { status: ReplyStatus }) {
   const { t } = useLanguage();
   const icon = status === "answered" ? <Check size={14} aria-hidden /> : status === "unknown" ? <CircleHelp size={14} aria-hidden /> : <Ban size={14} aria-hidden />;
   return <span className="vs-chip" data-state={STATUS[status].chip}>{icon}{t(STATUS[status].label)}</span>;
-}
-
-function CopyReply({ text }: { text: string }) {
-  const { t } = useLanguage();
-  const [done, setDone] = useState(false);
-  return <button type="button" className="vs-btn ls-copy" onClick={async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setDone(true);
-      setTimeout(() => setDone(false), 1500);
-    } catch { /* clipboard can be blocked; the text stays selectable on screen */ }
-  }}>
-    {done ? <Check size={16} aria-hidden /> : <Copy size={16} aria-hidden />}
-    {t(done ? "คัดลอกแล้ว" : "คัดลอก")}
-  </button>;
 }
 
 /**
@@ -90,7 +76,7 @@ export function ReplyBox({ showId }: { showId: string }) {
         <div className="ls-reply-foot">
           <StatusChip status={item.reply.status} />
           {item.reply.note && <span className="vs-hint">{item.reply.note}</span>}
-          <CopyReply text={item.reply.text} />
+          <CopyButton text={item.reply.text} />
         </div>
         {item.reply.basis && item.reply.basis.length > 0 && <p className="vs-hint">{t("อ้างอิงจาก")} {item.reply.basis.join(" ")}</p>}
       </li>)}

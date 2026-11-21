@@ -109,14 +109,14 @@ async function gather(productUrl: string | null, queries: string[]) {
     try {
       const page = await webRead(productUrl)
       if (page) findings.push(page)
-    } catch (error) {
+    } catch {
       warnings.push('อ่านหน้าสินค้าไม่ได้ ใช้ข้อมูลจากโน้ตและรูปแทน')
     }
   }
   for (const query of queries.slice(0, 3)) {
     try {
       findings.push(...(await webSearch(query, 4)))
-    } catch (error) {
+    } catch {
       warnings.push('ค้นข้อมูลบนเว็บไม่สำเร็จบางส่วน')
     }
   }

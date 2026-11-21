@@ -107,7 +107,7 @@ function StudioWorkspace({ live, userId }: { live: boolean; userId: string }) {
 
   return <>
     <div className="studio-intro">
-      <h1>{t(live ? "สร้างกราฟิกสำหรับไลฟ์" : "วันนี้อยากสร้างคลิปอะไร?")}</h1>
+      <h2>{t(live ? "สร้างกราฟิกสำหรับไลฟ์" : "วันนี้อยากสร้างคลิปอะไร?")}</h2>
       <p>{t(live ? "ออกแบบป้ายโปร่งใส แล้วส่งขึ้นจอไลฟ์เมื่อพร้อม" : "เริ่มจากรูป คลิปอ้างอิง หรือไอเดียสั้น ๆ ของคุณ")}</p>
     </div>
     <form className={`studio-composer ${dragging ? "is-dragging" : ""}`} aria-label={t("บรีฟวิดีโอ")}

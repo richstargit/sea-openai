@@ -25,8 +25,9 @@ function micMessage(error: unknown): string {
   return "ไม่ได้รับสิทธิ์ใช้ไมโครโฟน กรุณาอนุญาตไมโครโฟนในเบราว์เซอร์แล้วลองใหม่";
 }
 
-export function useListening(options: { showId: string; enabled: boolean }) {
-  const { showId, enabled } = options;
+/** `enabled`: a live script is ready to listen to. `keyboard`: the space bar may start and stop (only after the seller has agreed to the microphone notice). */
+export function useListening(options: { showId: string; enabled: boolean; keyboard: boolean }) {
+  const { showId, enabled, keyboard } = options;
   const [status, setStatus] = useState<ListenStatus>("idle");
   const [reconnecting, setReconnecting] = useState(false);
   const [lines, setLines] = useState<Line[]>([]);
@@ -52,6 +53,8 @@ export function useListening(options: { showId: string; enabled: boolean }) {
   const mock = useRef(false);
   const wake = useRef<WakeLockLike | null>(null);
   const onStream = useRef(false);
+  // apply and dispatch call each other (a finished request lets the next waiting one go), so each reaches the other here.
+  const engine = useRef<{ apply: (step: Step) => void; dispatch: (utterance: Utterance) => void }>({ apply: () => undefined, dispatch: () => undefined });
 
   const setStatusBoth = (next: ListenStatus) => { statusRef.current = next; setStatus(next); };
 
@@ -107,12 +110,11 @@ export function useListening(options: { showId: string; enabled: boolean }) {
     gate.current = step.gate;
     if (flushTimer.current) clearTimeout(flushTimer.current);
     flushTimer.current = null;
-    if (step.send) dispatch(step.send);
+    if (step.send) engine.current.dispatch(step.send);
     if (step.flushAt !== null) {
-      flushTimer.current = setTimeout(() => apply(flush(gate.current, Date.now())), Math.max(0, step.flushAt - Date.now()));
+      flushTimer.current = setTimeout(() => engine.current.apply(flush(gate.current, Date.now())), Math.max(0, step.flushAt - Date.now()));
     }
     setPending(step.gate.inFlight);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- dispatch and apply call each other and always read refs
   }, []);
 
   const dispatch = useCallback((utterance: Utterance) => {
@@ -137,9 +139,11 @@ export function useListening(options: { showId: string; enabled: boolean }) {
       })
       .finally(() => {
         if (run.current !== mine) return;
-        apply(complete(gate.current, Date.now()));
+        engine.current.apply(complete(gate.current, Date.now()));
       });
-  }, [apply, fail]);
+  }, [fail]);
+
+  useEffect(() => { engine.current = { apply, dispatch }; }, [apply, dispatch]);
 
   const offerUtterance = useCallback((utterance: Utterance) => apply(offer(gate.current, utterance, Date.now())), [apply]);
 
@@ -254,7 +258,7 @@ export function useListening(options: { showId: string; enabled: boolean }) {
 
   // The space bar starts and stops listening, as long as the seller is not typing or pressing a control.
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !keyboard) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.code !== "Space" || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
       const target = event.target as HTMLElement | null;
@@ -264,7 +268,7 @@ export function useListening(options: { showId: string; enabled: boolean }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [enabled, toggle]);
+  }, [enabled, keyboard, toggle]);
 
   // The screen lock is dropped when the tab is hidden, so it is asked for again when the tab comes back.
   useEffect(() => {
