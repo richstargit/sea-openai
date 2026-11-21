@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Radio, Monitor, Tag } from "lucide-react";
 import { useLanguage } from "@/components/language-provider";
-import { playOverlay, studioPost } from "./studio-api";
+import { playOverlay, studioPost, studioRequest } from "./studio-api";
 
 export function LiveControls({ overlayOrigin }: { overlayOrigin: string }) {
   const { t } = useLanguage();
@@ -12,6 +12,24 @@ export function LiveControls({ overlayOrigin }: { overlayOrigin: string }) {
   const [price, setPrice] = useState("299");
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
+  const [connected, setConnected] = useState<number | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    async function refresh() {
+      if (document.visibilityState === "visible") {
+        try {
+          const result = await studioRequest<{ connected: number }>("/agent/overlay/status", { signal: controller.signal, cache: "no-store" });
+          if (!controller.signal.aborted) setConnected(result.connected);
+        } catch {
+          if (!controller.signal.aborted) setConnected(null);
+        }
+      }
+      if (!controller.signal.aborted) timer = setTimeout(refresh, 3000);
+    }
+    void refresh();
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [url]);
   async function act(action: () => Promise<void>) {
     setBusy(true);
     setStatus("");
@@ -23,9 +41,11 @@ export function LiveControls({ overlayOrigin }: { overlayOrigin: string }) {
     <h2><Radio />{t("ควบคุมไลฟ์")}</h2>
     <div className="live-grid">
       <section><h3><Monitor />OBS Browser Source</h3>
+        <p role="status">{t(connected === null ? "ยังไม่ทราบสถานะการเชื่อมต่อ" : connected > 0 ? "เชื่อมต่อ overlay แล้ว" : "กำลังรอ Browser Source เชื่อมต่อ")}{connected ? ` (${connected})` : ""}</p>
         <p>{t("คัดลอก URL ไปวางใน Browser Source ขนาด 1920 × 1080")}</p>
         <button type="button" className="studio-small-button" disabled={busy} onClick={() => void act(async () => {
           const link = await studioPost<{ path: string }>("/agent/overlay/link", {});
+          setConnected(0);
           setUrl(new URL(link.path, overlayOrigin).href);
         })}>{t("สร้างลิงก์ OBS ใหม่ (แทนลิงก์เดิม)")}</button>
         {url && <input aria-label="OBS URL" readOnly value={url} onFocus={(e) => e.target.select()} />}

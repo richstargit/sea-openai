@@ -5,6 +5,7 @@ import { StoredFile } from '@/models/agent-storage.model.js'
 import { mongo } from '@/models/mongo.js'
 import { blenderOnline } from '@/services/video/blender.js'
 import {
+  connectedOverlayCount,
   overlayOwner,
   publishOverlay,
   rotateOverlay,
@@ -21,6 +22,9 @@ export const addSkill: RequestHandler = async (request, response) => {
   response
     .status(201)
     .json(await saveStyle(loggedInUser(response).id, markdown))
+}
+export const overlayStatus: RequestHandler = (_request, response) => {
+  response.json({ connected: connectedOverlayCount(loggedInUser(response).id) })
 }
 export const overlayLink: RequestHandler = async (_request, response) => {
   response.json({ path: await rotateOverlay(loggedInUser(response).id) })

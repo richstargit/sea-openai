@@ -99,6 +99,11 @@ export const ANNOTATIONS: Annotations = {
     secured: true,
     summary: 'Add a personal video style from SKILL.md',
   },
+  'GET /agent/overlay/status': {
+    tags: ['Overlay'],
+    secured: true,
+    summary: 'Count connected overlay sources for the signed-in account',
+  },
   'POST /agent/overlay/link': {
     tags: ['Overlay'],
     secured: true,

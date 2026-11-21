@@ -34,6 +34,7 @@ import {
   overlayLink,
   overlayMedia,
   overlayPublish,
+  overlayStatus,
   skills,
 } from '@/controllers/video.controller.js'
 import {
@@ -81,6 +82,7 @@ router.post(
 router.get('/agent/files/:id', apiRateLimiter, downloadAgentFile)
 router.get('/agent/skills', skills)
 router.post('/agent/skills', apiRateLimiter, addSkill)
+router.get('/agent/overlay/status', overlayStatus)
 router.post('/agent/overlay/link', apiRateLimiter, overlayLink)
 router.post('/agent/overlay/events', apiRateLimiter, overlayPublish)
 router.get('/overlay/media/:id', overlayMedia)

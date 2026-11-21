@@ -54,7 +54,7 @@ async function startBackend(env) {
 }
 
 test('persisted agent resumes after a backend restart and reuses completed work', {
-  timeout: 30_000,
+  timeout: process.env.TEST_OBS_URL ? 90_000 : 30_000,
 }, async () => {
   const uri = process.env.TEST_MONGODB_URI || 'mongodb://127.0.0.1:27017'
   const database = `sea_openai_test_${randomUUID().replaceAll('-', '')}`
@@ -298,6 +298,10 @@ test('persisted agent resumes after a backend restart and reuses completed work'
     assert.equal(video.headers.get('content-type'), 'video/webm')
     assert.ok((await video.arrayBuffer()).byteLength > 1000)
 
+    if (process.env.TEST_OBS_URL) {
+      const { checkObsPrice } = await import('./overlay-obs.mjs')
+      await checkObsPrice({ origin: backend.origin, api, alice })
+    }
     if (process.env.TEST_OVERLAY_BROWSER) {
       const { checkOverlayBrowser } = await import('./overlay-browser.mjs')
       await checkOverlayBrowser({

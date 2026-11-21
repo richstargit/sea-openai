@@ -23,6 +23,11 @@ export async function checkOverlayBrowser({ origin, api, alice, bob, clip }) {
     await page.waitForSelector('body[data-connected=true]', {
       state: 'attached',
     })
+    const connected = async (user) =>
+      (await (await api('/agent/overlay/status', 'GET', user.cookie)).json())
+        .connected
+    assert.equal(await connected(alice), 1)
+    assert.equal(await connected(bob), 0)
     assert.equal(
       (await publish(bob, { type: 'sales', total: 9999 })).delivered,
       0,
@@ -62,6 +67,7 @@ export async function checkOverlayBrowser({ origin, api, alice, bob, clip }) {
     )
     await issue(alice)
     await page.waitForFunction(() => !document.body.dataset.connected)
+    assert.equal(await connected(alice), 0)
     assert.equal(
       (
         await api(`/overlay/media/${clip.id}`, 'GET', undefined, undefined, {

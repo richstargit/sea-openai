@@ -56,6 +56,12 @@ export async function overlayOwner(token: string) {
   if (!account) throw new AppError('UNAUTHORIZED', { key: 'so-overlay-link' })
   return { id: account._id, hash }
 }
+export function connectedOverlayCount(userId: string) {
+  let count = 0
+  for (const [socket, owner] of clients)
+    if (owner.id === userId && socket.readyState === WebSocket.OPEN) count++
+  return count
+}
 export async function publishOverlay(userId: string, body: unknown) {
   const parsed = overlayEvent.safeParse(body)
   const event = parsed.success ? parsed.data : { type: 'default' as const }
@@ -105,8 +111,10 @@ export function attachOverlay(server: Server) {
         clearTimeout(expiry)
         clients.set(socket, owner)
         socket.send(JSON.stringify({ type: 'ready' }))
-      } catch {
-        socket.close(1008)
+      } catch (error) {
+        if (error instanceof AppError && error.codeName === 'UNAUTHORIZED')
+          socket.close(1008, 'Invalid overlay link')
+        else socket.close(1013, 'Try again later')
       }
     })
   })
