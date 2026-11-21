@@ -1,6 +1,205 @@
-# sea-openai
+# SnapPromo
 
-## Backend
+**ไลฟ์คนเดียว แต่มีทีม AI ทั้งทีม**: ระบบช่วยร้านค้าออนไลน์ขนาดเล็กทำวิดีโอขายของจากรูปสินค้า และคุมกราฟิกบนจอไลฟ์แบบเรียลไทม์
+
+> โปรโตไทป์สำหรับ Hackathon, Track 2 · AI-Native Products & Operations
+> สินค้า ราคา และข้อความตัวอย่างในหน้าเว็บเป็นข้อมูลจำลองทั้งหมด
+
+ขั้นตอนติดตั้ง, API, ตัวแปร environment และการต่อ OBS อยู่ในหัวข้อ [Technical reference](#technical-reference) ท้ายไฟล์นี้
+
+---
+
+## ระบบนี้ทำอะไร
+
+SnapPromo มี 3 ส่วนหลัก ทุกส่วนใช้บัญชีผู้ใช้เดียวกัน และเก็บข้อมูลไว้ใน MongoDB
+
+| ส่วน | หน้า | ร้านค้าได้อะไร |
+| --- | --- | --- |
+| **Video Studio** | `/studio` | ใส่รูปสินค้า (PNG สูงสุด 4 รูป) กับบรีฟสั้น ๆ แล้วได้คลิปขายของ AI วางช็อต เขียนบท เลือกสไตล์ ทำเสียงพากย์ ซับ และเสียงประกอบ จากนั้นตรวจเฟรมก่อน render สั่งแก้คลิปเดิมเป็นภาษาคนได้ |
+| **Live Studio** | `/studio/live` | ผู้ช่วยตอนไลฟ์: ใส่คลังสินค้า เลือกสไตล์ร้าน ให้ AI เขียนสคริปต์ทั้งไลฟ์และออกแบบชุด motion ประจำร้าน พอเริ่มไลฟ์ ระบบดูภาพจากกล้อง ฟังสิ่งที่แม่ค้าพูด แล้วส่งป้ายราคา การ์ดสินค้า หรือดีลขึ้นจอ OBS เอง |
+| **Editor** | `/editor` | ตัดต่อคลิปต่อบนไทม์ไลน์ (ตัด แยก ใส่ข้อความ ใส่เพลง) สั่งแก้ด้วย AI ได้ แล้ว export เป็น MP4 |
+
+### Flow ของ Video Studio
+
+```mermaid
+flowchart LR
+  A[รูปสินค้า + บรีฟ<br/>หรือคลิป/ลิงก์อ้างอิง] --> B[AI Director<br/>อ่านสินค้า เลือกรูปแบบการขาย<br/>และสไตล์ภาพ]
+  B --> C[Storyboard<br/>แบ่ง beat และช็อต]
+  C --> D[AI เขียนฉากเป็นโค้ด<br/>HTML + GSAP + Three.js<br/>บน HyperFrames]
+  D --> E[ตรวจเฟรมก่อน render<br/>ซับล้นกรอบ, ราคาอ่านยาก,<br/>ข้อความบังสินค้า]
+  E -->|ไม่ผ่าน| D
+  E -->|ผ่าน| F[Render วิดีโอ<br/>+ เสียงพากย์ + SFX]
+  F --> G[ดาวน์โหลด / แก้คลิปนี้ /<br/>เปิดใน Editor]
+```
+
+Video Studio มีโหมดที่สองชื่อ **Hook Machine** โหมดนี้เรียนรู้วิธีพูดจากคลิปที่ร้านชอบ (ดึงคลิป ถอดเสียง แล้ววิเคราะห์ hook ตาม rubric) จากนั้นเขียน hook และบทให้สินค้าใหม่ ทำเสียงพากย์ไทยหรืออังกฤษหลายสไตล์พร้อมให้คะแนนแต่ละเทค แล้วประกอบเป็น MP4 ที่มีซับไทยฝังในภาพ
+
+### Flow ของ Live Studio
+
+1. **คลังสินค้า**: ใส่รหัส CF ชื่อ ราคา คำอธิบายรูปลักษณ์ และรูปอ้างอิง 1–3 รูป ระบบจับสินค้าใช้ข้อมูลชุดนี้
+2. **สไตล์และลำดับไลฟ์**: ชื่อร้าน น้ำเสียงแม่ค้า สีแบรนด์ อารมณ์ของ motion และลำดับสินค้าที่จะขาย
+3. **เตรียมก่อนไลฟ์**: AI เขียนสคริปต์ทั้งไลฟ์ (ช่วงเปิด ช่วงขายแต่ละชิ้น ช่วงคั่น ช่วงปิด พร้อมคิวกราฟิก) ออกแบบชุด motion ของร้าน และทำคลิปสั้นไว้เปิดตอนแม่ค้าพัก
+4. **ห้องควบคุม**: ต่อ OBS ผ่าน Browser Source ขนาด 1920 × 1080 ระหว่างไลฟ์ ระบบทำงานเป็นวงรอบ
+   - **ดู**: จับว่าแม่ค้ายกสินค้าชิ้นไหนขึ้นมา และตีกรอบตำแหน่งสินค้าในภาพ
+   - **ฟัง**: ถอดเสียงสิ่งที่แม่ค้าพูด แล้วแปลงเป็นเจตนา เช่น บอกราคา ลดราคา ของแถม ใกล้หมด
+   - **ตัดสินใจ**: เลือก motion ที่เหมาะกับจังหวะนั้น และไม่แสดงสินค้าที่กล้องไม่ได้เห็นจริง
+   - **ขึ้นจอ**: ส่งกราฟิกโปร่งใสเข้า OBS ทันที และซูมกล้องไปที่สินค้าผ่าน obs-websocket ได้
+
+---
+
+## ทำเพื่อใคร
+
+**กลุ่มเป้าหมายหลัก**: ร้านค้าออนไลน์ขนาดเล็กในไทย เช่น ร้านกาแฟ ขนม เครื่องสำอาง สินค้าชุมชน หรืองานคราฟต์ ที่ขายผ่านวิดีโอสั้นและไลฟ์บนแพลตฟอร์มอย่าง Shopee หรือ TikTok ร้านกลุ่มนี้มีรูปสินค้าอยู่แล้ว แต่ทำคอนเทนต์เองและมักไลฟ์คนเดียว
+
+**ปัญหาที่ร้านเจอ**
+
+- จ้างช่างภาพ คนเขียนบท และคนตัดต่อไม่ไหว
+- ถ้าใช้ template คลิปจะหน้าตาเหมือนร้านอื่น
+- ตอนไลฟ์คนเดียว ต้องพูด ยกของ อ่านคอมเมนต์ และขึ้นป้ายราคาพร้อมกัน
+- พอโปรเปลี่ยน ต้องทำคลิปและป้ายใหม่ทั้งหมด
+
+**สิ่งที่ SnapPromo ทำแทน**
+
+- **ก่อนไลฟ์**: เปลี่ยนรูปสินค้าเป็นคลิปขายของที่มีฉากเป็นของสินค้านั้นเอง (น้ำพริกต้องดูร้อนและหอม ซีรั่มต้องดูสะอาดน่าเชื่อถือ) ไม่ใช่ template เดิม
+- **ระหว่างไลฟ์**: ทำหน้าที่แทนทีมงานหลังกล้อง ได้แก่ คนเขียนสคริปต์ คนทำกราฟิก และคนกดป้ายราคา แม่ค้าจึงขายต่อได้โดยไม่ต้องหยุดกดเอง
+
+---
+
+## ใช้ OpenAI อะไรในตัวระบบ
+
+ตอน runtime ระบบเรียก OpenAI API ผ่าน [backend/src/services/openai.service.ts](backend/src/services/openai.service.ts) เปลี่ยนโมเดลได้ด้วยตัวแปร environment (ดู [OpenAI text generation](#openai-text-generation))
+
+| งาน | API / โมเดลเริ่มต้น | อยู่ที่ |
+| --- | --- | --- |
+| AI Director: วางบรีฟ storyboard และเขียนฉาก HyperFrames เป็นโค้ด | Responses API · `gpt-6.2-astra` | [agent.service.ts](backend/src/services/agent.service.ts), [video/](backend/src/services/video/), [video-engine/](backend/integrations/video-engine/) |
+| สร้างและแก้ภาพสินค้าในฉาก | Images API · `gpt-image-2.6-sunburst` | [video/production.ts](backend/src/services/video/production.ts) |
+| เสียงพากย์คลิป | `gpt-realtime-2.1` | [video/speech.ts](backend/src/services/video/speech.ts) |
+| เสียงพากย์ Hook Machine และการให้คะแนนแต่ละเทค | `gpt-4o-mini-tts`, `gpt-realtime-2.1-mini`, `gpt-audio-1.5` | [hook-machine/voice/](backend/src/services/hook-machine/voice/) |
+| ถอดเสียง: คลิปอ้างอิง ซับ และเสียงแม่ค้าตอนไลฟ์ | `gpt-transcribe`, `gpt-4o-mini-transcribe` | [live/speech.ts](backend/src/services/live/speech.ts), [video/captions.ts](backend/src/services/video/captions.ts) |
+| ตัดสินใจตอนไลฟ์ทุก 1 วินาที (สินค้า, ยกขึ้นหรือยัง, motion, คำกล่าวอ้างเสี่ยง) | Decisions API · `gpt-6-luna` | [live/director.ts](backend/src/services/live/director.ts) |
+| ตีกรอบตำแหน่งสินค้าในเฟรมไลฟ์ | Responses API · `gpt-6.2-sol` | [live/locate.ts](backend/src/services/live/locate.ts) |
+| ออกแบบชุด motion ของร้าน (AI Motion Designer) | Structured output | [live/motions.ts](backend/src/services/live/motions.ts) |
+
+ข้อจำกัดด้านความปลอดภัย: AI ใน Studio ได้เฉพาะเครื่องมือทำวิดีโอ ไม่ได้รับ shell, filesystem, browser automation หรือสิทธิ์คุม OBS ส่วนการเตรียมฉากและตรวจเฟรมรันใน Docker container ที่ตัดเครือข่ายแยกต่องาน
+
+---
+
+## ใช้ OpenAI Codex ทำอะไรไปบ้าง
+
+ทีมใช้ **Codex Desktop** ในช่วงคิดไอเดียและทำต้นแบบ และระบบดึง skill ที่ติดตั้งไว้ให้ Codex มาใช้ตอน runtime ด้วย
+
+### 1. คิดไอเดียและจำลองกรรมการ
+
+- อ่านเอกสารโจทย์ Hackathon แล้วช่วยเลือก Track 2 · AI-Native Products & Operations
+- ปั้นไอเดียจาก "ผู้ช่วยสรุปออเดอร์ไลฟ์" ไปเป็น "สินค้าแต่ละชิ้นมีทีมทำคอนเทนต์ของตัวเอง" ซึ่งต่อมากลายเป็น SnapPromo
+- จำลองกรรมการให้คะแนนรายเกณฑ์ (เช่น Real-World Value, Build Quality) แล้วใช้ผลนั้นปรับ flow ของสินค้า
+- ค้น public skill ด้านวิดีโอสินค้า Blender และ motion graphic แล้วจัดหมวดตามแนวภาพ เพื่อหาจุดที่ทีมควรสร้างเอง ข้อสรุปคือ ความหลากหลายของสไตล์หาได้จากภายนอก ส่วนที่ต้องสร้างเองคือการเลือกสไตล์ให้ตรงกับสิ่งที่ร้านอยากขาย และการแก้งานต่อจากของเดิม
+- ศึกษาทักษะการพูดขายและการเขียนบทวิดีโอขายของ เพื่อป้อนเป็นแนวทางให้ AI เขียนบท
+
+### 2. ต้นแบบระบบจับสินค้าจากภาพไลฟ์ (ส่วนที่ยากที่สุด)
+
+Codex สร้างเดโมแยกไว้ในโฟลเดอร์ `demo/` (ตอนนี้ลบออกจาก repo แล้ว) และแบ่งงานให้ subagent 4 ตัวทำพร้อมกัน
+
+| subagent | งาน |
+| --- | --- |
+| `fashion` | ทดสอบเสื้อผ้าที่ลายคล้ายกัน, benchmark โมเดลตีกรอบ, ประกอบภาพทดสอบจากรูปห้องจริงพร้อมกรอบเฉลย |
+| `kitchen` | เพิ่มการหาตำแหน่ง (`locate`) และ endpoint สตรีมผลทีละเฟรม พร้อมชุดทดสอบ |
+| `audit` | ทดสอบหน้า Detect จริงใน Chrome ทั้งภาพนิ่งและการเลื่อนวิดีโอ |
+| `review` | รีวิวโค้ดและหาบั๊กใน flow ของเฟรมและรายงานผล |
+
+สิ่งที่ได้จากเดโมนี้:
+
+- หน้า Catalog และ Detect ที่ใช้ OpenAI Decisions API จับว่าในเฟรมมีสินค้าชิ้นไหน พร้อมความน่าจะเป็นของแต่ละตัว และสถานะว่าแม่ค้ายกสินค้าขึ้นมาหรือยัง
+- eval เทียบความแม่นแบบ "ภาพอย่างเดียว" กับ "ภาพ + ข้อความ" ผลคือ **Choice + ภาพอย่างเดียว** ดีที่สุด
+- ร้านจำลองหลายประเภท (เสื้อผ้า เครื่องครัว แก้วน้ำ ฯลฯ) และภาพทดสอบหลายตำแหน่งหลายพื้นหลัง
+- benchmark โมเดลตีกรอบ และวิธีส่งเฟรมในกรอบที่มีไม้บรรทัด 0–1000 ให้โมเดลอ่านขอบเอง โดยตอบ `null` ได้ถ้าไม่มีสินค้า ในโค้ดบันทึกว่า `gpt-6.2-sol` ชนะ benchmark ที่ 10/12 กรอบ (IoU ≥ 0.5), ไม่ตีกรอบผิดเลยใน 6 กรณีที่ไม่มีสินค้า และใช้เวลาเฉลี่ย 3.0 วินาที
+- คำแนะนำเรื่อง pitch: ให้กรรมการเป็นคนเลือกสินค้าหรือเปลี่ยนราคากลางไลฟ์เอง
+
+วิธีการจากเดโมถูกย้ายเข้าตัวสินค้าจริงใน [live/locate.ts](backend/src/services/live/locate.ts) และ [frontend/lib/live-detect.ts](frontend/lib/live-detect.ts)
+
+### 3. Skill ของ Codex ถูกใช้ต่อใน runtime
+
+Video engine หา `SKILL.md` ตามลำดับนี้: `VIDEO_SKILLS_DIR` → `~/.agents/skills` → **`~/.codex/skills`** → [backend/integrations/video-skills/](backend/integrations/video-skills/) ([runtime.mjs](backend/integrations/video-engine/runtime.mjs)) skill ที่ติดตั้งไว้ให้ Codex (เช่นชุด `hyperframes-*`) จึงกลายเป็นคู่มือที่ AI Director อ่านตอนออกแบบฉากด้วย
+
+### 4. แนวคิด "Codex เขียนฉากเป็นโค้ด"
+
+หัวใจของสินค้าคือ AI ไม่ได้หยิบ template มาเติมคำ แต่เขียน motion graphic เป็นโค้ด HTML, GSAP และ Three.js ใหม่ให้สินค้าแต่ละชิ้น แล้วตรวจเฟรมก่อน render ถ้าไม่ผ่านก็แก้เองก่อนส่ง ในตัวระบบ ขั้นนี้รันผ่าน OpenAI Responses API (`gpt-6.2-astra`) บน HyperFrames
+
+---
+
+## อะไร base มาจากภายนอก และอะไรทำเอง
+
+### ของภายนอกที่นำมาใช้
+
+| ของ | ใช้ทำอะไร | สัญญาอนุญาต / หมายเหตุ |
+| --- | --- | --- |
+| [HyperFrames](https://www.npmjs.com/package/hyperframes) `0.9.75` + skill ชุด `hyperframes-*` | เขียนวิดีโอเป็น HTML แล้ว render, player ใน Editor, คลังเสียง SFX | skill อ่านจาก `~/.agents/skills` หรือ `~/.codex/skills` |
+| [Lemo-Opuscar](https://github.com/lemomo-ai/lemo-opuscar/tree/e3cb16f63768c68693ff0e15171d6e755457cc32) | สไตล์ภาพยนตร์ 43 แบบ (ukiyo-e, pixel RPG, art deco ฯลฯ) ให้ AI Director เลือก | MIT, รวมไว้ใน [video-skills/lemo-styles](backend/integrations/video-skills/lemo-styles/) |
+| [OneTake](https://github.com/feitangyuan/onetake) | แนวทางถ่ายกล้องต่อเนื่องเทคเดียว (ไม่บังคับ) | ใช้ได้เฉพาะงานไม่เชิงพาณิชย์ ไม่ได้รวมไว้ใน repo |
+| [FilmCraft](https://github.com/storytold/filmcraft) | หลักการไทม์ไลน์ของ Editor (split, trim, ripple delete, undo/redo) | MIT, ทีมแปลงเป็น TypeScript เอง ไม่ได้ฝัง Rust engine ([docs/filmcraft.md](frontend/docs/filmcraft.md)) |
+| skill `apple-design` | แนวทางออกแบบ UI และ motion ของ Editor | ผู้ใช้เป็นคนจัดหาให้ ([apple-design.md](frontend/docs/design/apple-design.md)) |
+| Agent Reach `1.6.1` + yt-dlp | อ่านหน้าเว็บ ลิงก์ และคลิปอ้างอิงสาธารณะ | ส่ง URL ไป Jina Reader เฉพาะลิงก์ที่ผู้ใช้ให้มา |
+| GSAP, Three.js, Blender (bridge ในเครื่อง), FFmpeg | แอนิเมชัน 3D และเข้ารหัสวิดีโอ | |
+| obs-websocket v5 | ซูมกล้องใน OBS ไปที่สินค้า | |
+| Next.js 16, React 19, shadcn/Radix, Tailwind 4 | Frontend | |
+| Express 5, LangGraph, MongoDB/Mongoose, Zod | Backend: agent ที่บันทึกสถานะ, ฐานข้อมูล, ตรวจ input | |
+
+public skill ที่ศึกษาเป็นแนวคิดเท่านั้น ไม่ได้นำโค้ดมาใช้: [ecommerce-video-skills](https://github.com/xianyu110/ecommerce-video-skills), [vargHQ product-photo-to-video](https://github.com/vargHQ/skills/blob/main/product-photo-to-video/SKILL.md)
+
+### ส่วนที่ทีมสร้างเอง
+
+- **AI Director ของ Video Studio**: บรีฟ → storyboard → ออกแบบหลายฉากพร้อมกัน → ตรวจเฟรมและความต่อเนื่อง → render, รวมถึงการแก้คลิปเดิมผ่าน `projectId`
+- **รูปแบบการขาย 16 แบบ** ([sale-formats.ts](backend/src/services/video/sale-formats.ts)): showcase, promotion, flash sale, new launch, bundle, before/after, how-to, comparison, review ฯลฯ แต่ละแบบเป็นโครง beat ให้ AI ทำตาม โดยดึงข้อเท็จจริงจากบรีฟเท่านั้น ไม่แต่งราคาหรือคำกล่าวอ้างเอง
+- **Hook Machine**: เรียนรู้สไตล์การพูดจากคลิปอ้างอิง ใช้ rubric ให้เกรด hook เขียนบทให้พอดีความยาวเสียง ให้คะแนนเทคเสียง และประกอบคลิปพร้อมซับไทย ([hook-machine/](backend/src/services/hook-machine/), [compose/](backend/src/services/compose/))
+- **Live Director**: สคริปต์ทั้งไลฟ์ ชุด motion ประจำร้าน การตัดสินใจทุกวินาที การตีกรอบสินค้า และการถอดเสียงพร้อมแปลงเป็นเจตนา ([live/](backend/src/services/live/))
+- **คลังกราฟิก overlay**: 156 กราฟิก / 611 preset ด้วย GSAP แบบ seek-safe, รูปแบบ event `LiveCut`, ธีม paper/ink/pop, การหลบหน้าแม่ค้า (face box), กราฟิก `compose` ที่สร้างจากข้อมูลล้วน ๆ ให้ AI ออกแบบ motion ใหม่ได้โดยไม่ต้องแก้โค้ด, SFX ([public/overlay/](backend/public/overlay/))
+- **Editor** บนเบราว์เซอร์ที่บันทึกลงบัญชี และ export MP4 ใน Docker
+- ระบบบัญชีและ session, การแยกข้อมูลตามเจ้าของ, sandbox สำหรับ render, ชุดทดสอบ backend (Jest) และ frontend (node:test, Playwright)
+- โครง backend (Express + TypeScript) มาจากโปรเจกต์เดิมของทีม แล้วเปลี่ยนชื่อ prefix จาก `af` เป็น `so`
+
+---
+
+## เริ่มใช้งานแบบเร็ว
+
+ต้องมี Node.js 22, MongoDB, Docker, FFmpeg และ Chrome
+
+```sh
+# backend (port 8080)
+cd backend
+npm ci
+# สร้าง backend/.env.development แล้วใส่ OPENAI_API_KEY, MONGODB_URI และ APP_ORIGINS=http://localhost:3000
+npm run dev
+
+# build sandbox สำหรับ render (รันจาก root ของ repo ครั้งเดียว)
+docker build -t sea-video-sandbox:0.9.75 backend/integrations/video-sandbox
+
+# frontend (port 3000)
+cd frontend
+npm ci
+npm run dev
+```
+
+เปิด http://localhost:3000 สมัครบัญชีที่ `/register` แล้วเข้า `/studio` หรือ `/studio/live`
+
+รายละเอียดทั้งหมด (endpoint, OBS overlay, event ของ overlay, Blender bridge, Agent Reach, การทดสอบ) อยู่ในหัวข้อ [Technical reference](#technical-reference) ด้านล่าง
+
+## โครงสร้าง repo
+
+```text
+backend/    Express + TypeScript API, AI director, live director, overlay และการ render
+  integrations/video-engine/   engine เขียนฉาก HyperFrames
+  integrations/video-skills/   style guide ที่รวมมาใน repo (Lemo-Opuscar)
+  public/overlay/              หน้า overlay สำหรับ OBS และคลังกราฟิก
+frontend/   Next.js: landing page, Video Studio, Live Studio, Editor
+```
+
+---
+
+## Technical reference
+
+รายละเอียดเทคนิคด้านล่างเขียนเป็นภาษาอังกฤษ
+
+### Backend
 
 The main API lives in `backend/` and uses Express and TypeScript. Use Node.js 22.
 
@@ -30,7 +229,7 @@ The backend writes logs to the console. Set `ACTIVITY_LOG_ENABLED=false` to turn
 
 To run the compiled server, run `npm run build` followed by `npm start` from `backend/`. With `NODE_ENV=production`, set `APP_ORIGINS` to a comma-separated list of allowed origins in the environment or in `backend/.env.production`.
 
-### Account and session
+#### Account and session
 
 Open `http://localhost:3000/register` to create an account or `/login` to sign in. Studio requires a session. The frontend forwards `/auth/*` and `/agent/*` to the backend; configure `BACKEND_ORIGIN` before building the frontend if the backend uses another address.
 
@@ -51,7 +250,7 @@ curl -s -c "$cookie_jar" http://localhost:8080/auth/login \
 curl -s -b "$cookie_jar" http://localhost:8080/auth/me
 ```
 
-### OpenAI text generation
+#### OpenAI text generation
 
 Set `OPENAI_API_KEY` in your environment or in `backend/.env.development` for local development. The default model is `gpt-6.2-astra`. Set `OPENAI_MODEL` to select the model used by the agent and text service, or pass `model` when calling `generateText()`. The video agent uses `gpt-image-2.6-sunburst` for images and `gpt-realtime-2.1` for narration. To change those defaults, set `OPENAI_IMAGE_MODEL` or `OPENAI_SPEECH_MODEL` in the same environment.
 
@@ -69,7 +268,7 @@ To try the service directly from `backend/` after setting the API key, run:
 node --import tsx --input-type=module -e 'import "./src/env.ts"; import { generateText } from "./src/services/openai.service.ts"; console.log(await generateText("Say hello in Thai."))'
 ```
 
-### Video Studio
+#### Video Studio
 
 Editor timelines and media persist under the authenticated user in the MongoDB collections `editor_projects` and `editor_media_chunks`. The editor compiles the timeline into a HyperFrames composition. The player previews that composition, and Export MP4 validates the saved revision in Docker and renders it on the backend host at 30 fps.
 
@@ -120,7 +319,7 @@ curl -s -b "$cookie_jar" http://localhost:8080/agent/chat \
 
 The response includes an owner-authenticated download URL in `files`. The API fields `referenceUrl` and `referenceFile` accept a public URL and the ID of an uploaded reference clip respectively. Upload bytes to `POST /agent/files?name=example.webm` as `application/octet-stream`.
 
-### OBS overlay
+#### OBS overlay
 
 1. In Studio generate an OBS link. In OBS add a **Browser Source**, paste the complete link and set the source size to 1920 × 1080.
 2. Wait for **Overlay connected** in Live Studio. If the first Browser Source was created by automation and stays blank, keep the source in the scene collection and reopen OBS with that collection. The existing overlay URL remains valid.
@@ -156,7 +355,7 @@ A `spotlight` event pops a product card out of a point in the 1920 × 1080 frame
 
 Run `npm run test:agent-mongo` from `backend/` for the restart, ownership and render checks. Set `TEST_OVERLAY_BROWSER=1` to also exercise real Chromium playback, timeline advancement, fallback, the slot limit and overlay link rotation. These tests use an isolated database and a mock OpenAI provider. To verify native rendering, start a separate OBS test instance with a Browser Source already in its scene collection and obs-websocket enabled. Set `TEST_OBS_URL` and `TEST_OBS_PASSWORD` for the same test command. The test temporarily adds a Browser Source to the active scene, publishes A1 at ฿299, captures its pixels and checks that it clears. Set `TEST_OBS_SCREENSHOT` to retain the PNG.
 
-### Backend structure
+#### Backend structure
 
 The main backend already includes this structure for adding new API features.
 
