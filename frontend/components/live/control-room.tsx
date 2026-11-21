@@ -812,9 +812,7 @@ export function ControlRoom({ plan, setPlan, products, overlayOrigin }: StepProp
                 <h2 className="cr-seg-title">{segment.title}</h2>
               </div>
             </div>
-            <p className="cr-opening">{segment.opening}</p>
-            {segment.talkingPoints.length > 0 && <ul className="cr-points">{segment.talkingPoints.map((point, i) => <li key={i}>{point}</li>)}</ul>}
-            {segment.callToAction && <p className="cr-cta">{segment.callToAction}</p>}
+            {current && <p className="cr-cta">{baht(current.price)} · CF {current.id}</p>}
             {pool.length > 1 && <div className="cr-focus" role="group" aria-label={t("เปลี่ยนสินค้าเอง")}>
               {pool.map((p) => <button key={p.id} type="button" className="cr-btn" aria-pressed={p.id === current?.id} onClick={() => focusOn(p, "กดเลือก")}>{p.name}</button>)}
             </div>}
