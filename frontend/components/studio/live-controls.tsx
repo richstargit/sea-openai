@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, CircleDashed, CircleHelp, Monitor, Tag } from "lucide-react";
+import { Check, CircleDashed, CircleHelp, Monitor } from "lucide-react";
 import { useLanguage } from "@/components/language-provider";
 import { CopyButton } from "./live-script/copy-button";
-import { playOverlay, studioPost, studioRequest } from "./studio-api";
+import { studioPost, studioRequest } from "./studio-api";
 
 export type Obs = {
   /** How many Browser Sources are connected, or null when the status could not be read. */
@@ -106,44 +106,4 @@ export function ObsPanel({ obs, overlayOrigin, prompterUrl }: { obs: Obs; overla
       <p className="vs-hint" role="status">{status}</p>
     </div>
   </details>;
-}
-
-/** The price tag test: sends a price tag to the connected overlay. */
-export function PriceTagTest({ obs }: { obs: Obs }) {
-  const { t } = useLanguage();
-  const [sku, setSku] = useState("A1");
-  const [price, setPrice] = useState("299");
-  const [style, setStyle] = useState("tag");
-  const [status, setStatus] = useState("");
-  const [busy, setBusy] = useState(false);
-  async function act(action: () => Promise<void>) {
-    setBusy(true);
-    setStatus("");
-    try { await action(); }
-    catch (error) { setStatus(error instanceof Error ? error.message : t("ลองอีกครั้ง")); }
-    finally { setBusy(false); }
-  }
-  return <form className="ls-tag" onSubmit={(e) => { e.preventDefault(); void act(async () => {
-    const result = await playOverlay({ type: "price", sku, price: Number(price), style });
-    setStatus(t(result.delivered ? "ส่งไปยังหน้าจอที่เชื่อมต่อแล้ว" : "ยังไม่มีหน้าจอเชื่อมต่อ เปิดลิงก์ใน OBS ก่อน"));
-  }); }}>
-    <h3><Tag size={17} aria-hidden />{t("ป้ายราคา")}</h3>
-    <div className="ls-tag-fields">
-      <div className="vs-field"><label>SKU</label><input required maxLength={80} value={sku} onChange={(e) => setSku(e.target.value)} /></div>
-      <div className="vs-field"><label>{t("ราคา (บาท)")}</label><input required type="number" min="0" max="999999999" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
-      <div className="vs-field"><label>{t("สไตล์ป้าย")}</label><select className="vs-select" value={style} onChange={(e) => setStyle(e.target.value)}>
-        <option value="tag">{t("ป้ายแขวน")}</option><option value="sticker">{t("สติกเกอร์ราคา")}</option>
-        <option value="receipt">{t("ใบเสร็จ")}</option><option value="flap">{t("ป้ายพลิก")}</option>
-      </select></div>
-    </div>
-    <div className="vs-actions">
-      <button type="submit" disabled={busy} className="vs-btn">{t("ขึ้นป้ายราคาทันที")}</button>
-      <button type="button" disabled={busy || obs.rendering} className="vs-btn" onClick={() => void act(async () => {
-        await studioPost("/agent/overlay/motion", { type: "price", sku, price: Number(price) });
-        obs.setRendering(true);
-        setStatus(t("กำลังออกแบบ motion ใหม่ จะขึ้นจอเองเมื่อเสร็จ"));
-      })}>{t(obs.rendering ? "กำลังเจน motion…" : "เจน motion ใหม่ (รอได้)")}</button>
-    </div>
-    <p className="vs-hint" role="status">{status}</p>
-  </form>;
 }
