@@ -6,9 +6,9 @@
 import { studioPost, studioRequest } from "@/components/studio/studio-api";
 import type { SaleFormat } from "@/lib/sale-formats";
 
-/** A product in the detection catalog (demo/ service). Images are file names under /live-images/. */
-export type LiveProduct = { id: string; name: string; description: string; distinct?: string; price: number; images: string[] };
-export const productImage = (file: string) => `/live-images/${encodeURIComponent(file)}`;
+/** A product in the account's live catalog (Mongo). `id` is the CF code the detector reports; images are photo file ids. */
+export type LiveProduct = { id: string; key?: string; name: string; description: string; distinct?: string; price: number; images: string[]; synced?: boolean };
+export const productImage = (fileId: string) => `/agent/live/photos/${encodeURIComponent(fileId)}`;
 
 export type TagStyle = "tag" | "sticker" | "receipt" | "flap";
 export type LiveStyle = {
@@ -55,16 +55,24 @@ export function savePlan(userId: string, plan: LivePlan) {
   try { localStorage.setItem(key(userId), JSON.stringify(plan)); } catch { /* storage is optional */ }
 }
 
-// ---------- catalog (detection service) ----------
+// ---------- catalog (Mongo, per account; the backend mirrors it into the detection service) ----------
+type ProductInput = { id: string; name: string; description: string; distinct?: string; price: number; images: string[] };
+const toBody = ({ id, ...rest }: Partial<ProductInput>) => ({ ...(id ? { code: id } : {}), ...rest });
 export const catalog = {
-  list: () => studioRequest<LiveProduct[]>("/live-api/catalog"),
-  /** images: 1–3 data URLs (JPEG/PNG). */
-  add: (product: { id: string; name: string; description: string; distinct?: string; price: number; images: string[] }) =>
-    studioPost<LiveProduct>("/live-api/catalog", product),
-  remove: async (id: string) => {
-    const response = await fetch("/live-api/catalog/" + encodeURIComponent(id), { method: "DELETE" });
+  list: () => studioRequest<LiveProduct[]>("/agent/live/products"),
+  /** images: 1–3 data URLs (JPEG/PNG/WebP). */
+  add: (product: ProductInput) => studioPost<LiveProduct>("/agent/live/products", toBody(product)),
+  /** Edit by current code; send images only to replace the photos. */
+  update: (code: string, patch: Partial<ProductInput>) =>
+    studioRequest<LiveProduct>("/agent/live/products/" + encodeURIComponent(code), {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toBody(patch)),
+    }),
+  remove: async (code: string) => {
+    const response = await fetch("/agent/live/products/" + encodeURIComponent(code), { method: "DELETE" });
     if (!response.ok) throw new Error("ลบสินค้าไม่สำเร็จ");
   },
+  /** Push every product to the detection service again (e.g. after it restarted). */
+  sync: () => studioPost<{ synced: number; total: number }>("/agent/live/products/sync", {}),
 };
 
 // ---------- AI (backend) ----------

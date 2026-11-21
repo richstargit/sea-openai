@@ -44,7 +44,7 @@ import {
   createRateLimiter,
 } from '@/middlewares/rate-limit.middleware.js'
 import healthRoutes from '@/routes/health.route.js'
-import { liveDecide, liveMotionKit, livePlan } from '@/controllers/live.controller.js'
+import { liveCreateProduct, liveDecide, liveDeleteProduct, liveMotionKit, livePhoto, livePlan, liveProducts, liveSyncProducts, liveUpdateProduct } from '@/controllers/live.controller.js'
 import hookMachineRoutes from '@/routes/hook-machine.route.js'
 import videoJobRoutes from '@/routes/video-job.route.js'
 import { FILE_LIMIT } from '@/services/agent-tools/files.js'
@@ -104,6 +104,12 @@ const liveLimiter = createRateLimiter(1200)
 router.post('/agent/live/plan', apiRateLimiter, livePlan)
 router.post('/agent/live/motion-kit', apiRateLimiter, liveMotionKit)
 router.post('/agent/live/decide', liveLimiter, liveDecide)
+router.get('/agent/live/products', liveProducts)
+router.post('/agent/live/products', apiRateLimiter, liveCreateProduct)
+router.post('/agent/live/products/sync', apiRateLimiter, liveSyncProducts)
+router.patch('/agent/live/products/:code', apiRateLimiter, liveUpdateProduct)
+router.delete('/agent/live/products/:code', apiRateLimiter, liveDeleteProduct)
+router.get('/agent/live/photos/:id', livePhoto)
 router.get('/agent/skills', skills)
 router.post('/agent/skills', apiRateLimiter, addSkill)
 router.get('/agent/overlay/status', overlayStatus)
