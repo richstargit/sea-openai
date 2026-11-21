@@ -9,7 +9,7 @@ import { useLanguage } from "@/components/language-provider";
 import { playOverlay, studioPost, studioRequest } from "@/components/studio/studio-api";
 import { useLiveDetection } from "@/lib/live-detect";
 import { type LiveSentence, useLiveSpeech } from "@/lib/live-speech";
-import { type Decision, type LiveProduct, type Segment, productImage } from "@/lib/live-plan";
+import { type CustomMotion, type Decision, type LiveProduct, type Segment, productImage, fillMotion } from "@/lib/live-plan";
 import { cuesFromSpeech, namesProduct } from "@/lib/live-cues";
 import type { StepProps } from "./live-studio";
 import "./control-room.css";
@@ -33,6 +33,7 @@ type Queued = { event: OverlayEvent; key: string; role: Role; text: string };
 
 const PREVIEW_SRC = "/overlay/index.html?preview=1#" + "a".repeat(43); // index.html: "/overlay/" gets a trailing-slash redirect from Next
 const MODE_KEY = "snappromo-live-mode";
+const NEEDS_PRODUCT = /\{(name|price|code)\}/;
 const BIG_GAP = 3500; // at most one big motion per 3.5 s
 const GRACE = 2500; // a verified product stays verified this long after its box drops (tracking jitter)
 const TOPIC = 8000; // a product the host just named is the topic this long (text-only graphics)
@@ -136,6 +137,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   const verif = useRef<{ id: string; at: number } | null>(null);
   const spoken = useRef<{ id: string; at: number } | null>(null);
   const lastMoment = useRef(0);
+  const lastCustom = useRef<Record<string, string>>({});
   // when each product last got its on-camera moment (follow-the-camera rule)
   const momentFor = useRef<Record<string, number>>({});
   const noneSince = useRef(0);
@@ -162,8 +164,9 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   const tagStyle = kit?.theme.tagStyle ?? plan.style.tagStyle;
   const motions = useMemo(() => [
     ...(kit ? Object.entries(kit.moments).filter(([moment]) => moment !== "celebrate").map(([moment, id]) => ({ id, description: MOMENT_NOTES[moment] ?? moment })) : []),
+    ...(kit?.custom ?? []).map((m) => ({ id: "custom:" + m.id, description: `${MOMENT_NOTES[m.moment] ?? m.moment}: ${m.description}` })),
     ...GENERAL_MOTIONS.map(([id, description]) => ({ id, description })),
-  ].filter((m, i, all) => m.id && all.findIndex((x) => x.id === m.id) === i), [kit]);
+  ].slice(0, 60).filter((m, i, all) => m.id && all.findIndex((x) => x.id === m.id) === i), [kit]);
 
   // ---------- built-in detection: frames from videoRef, decisions + tracked box back ----------
   const transcript = useCallback(() => finals.current.filter((f) => Date.now() - f.at < 10000).map((f) => f.text).join(" "), []);
@@ -190,7 +193,22 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     const s = spoken.current;
     return s && Date.now() - s.at < TOPIC ? pool.find((p) => p.id === s.id) ?? null : null;
   }
+  const customNeedsProduct = (m: CustomMotion) => NEEDS_PRODUCT.test(JSON.stringify(m.layers));
+  function customEventFor(m: CustomMotion, p: LiveProduct | null): OverlayEvent {
+    return { type: "graphic", preset: "compose", data: { layers: fillMotion(m, { name: p?.name, price: p?.price, code: p?.id, shop: plan.style.shop }) }, theme: kit?.theme.look, ttl: m.seconds * 1000, aiName: m.name };
+  }
+  /** The AI-designed motion for a kit moment: the kit's pick, else rotate through the moment's motions (never the same twice). */
+  function customForMoment(moment: CustomMotion["moment"], p: LiveProduct | null): OverlayEvent | null {
+    const list = (kit?.custom ?? []).filter((m) => m.moment === moment && (p || !customNeedsProduct(m)));
+    const picked = list.find((m) => "custom:" + m.id === kit?.moments[moment]);
+    const last = lastCustom.current[moment];
+    const m = picked ?? list[(list.findIndex((x) => x.id === last) + 1) % list.length];
+    if (!m || (!picked && m.id === last)) { delete lastCustom.current[moment]; return null; }
+    lastCustom.current[moment] = m.id;
+    return customEventFor(m, p);
+  }
   function needsProduct(preset: string) {
+    if (preset.startsWith("custom:")) { const m = kit?.custom?.find((x) => "custom:" + x.id === preset); return !!m && customNeedsProduct(m); }
     return PRODUCT_PRESET.test(preset) || (!!kit && [kit.moments.productIn, kit.moments.price, kit.moments.deal, kit.moments.callToAction].includes(preset));
   }
 
@@ -293,8 +311,9 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   function play(item: Queued) {
     lastBig.current = Date.now();
     lastByKey.current.set(item.key, Date.now());
-    send(item.event);
-    log(item.role, item.text, "action");
+    const { aiName, ...event } = item.event;
+    send(event);
+    log(item.role, aiName ? `Motion · ${aiName} (${t("ออกแบบโดย AI")})` : item.text, "action");
   }
 
   // the monitor crops the camera (object-fit: cover) and mirrors it in local preview; map detector boxes onto it
@@ -324,11 +343,15 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     }
     const data = { ...productData(p), ...extra };
     const moment = KIT_MOMENT[kind];
+    const custom = moment && customForMoment(moment, p);
+    if (custom) return custom;
     if (kit && moment) return { type: "graphic", preset: kit.moments[moment], data, ...at, image: p ? imageUrl(p) : undefined, theme: kit.theme.look, ttl: 2200 };
     return { type: kind, payload: kind === "product_card" ? { ...data, ...at, image: p ? imageUrl(p) : undefined } : data, ttl: 2200 };
   }
   /** spotlight at the tracked box when there is one, else the product card */
   function productEvent(p: LiveProduct): { event: OverlayEvent; label: string } {
+    const custom = customForMoment("productIn", p);
+    if (custom) return { event: custom, label: "product_card" };
     const at = placement(p);
     if (at.box) return { event: { type: "spotlight", ...at, image: imageUrl(p), name: p.name, price: p.price, motion: "pop" }, label: "spotlight" };
     return { event: buildEvent("product_card", p), label: "product_card" };
@@ -357,7 +380,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     log("ผู้กำกับ", t("เข้าช่วง") + ` ${i + 1}: ${segments[i].title}`);
     const next = products.find((p) => p.id === segments[i].productId) ?? null;
     if (liveRef.current) enqueue({
-      event: { type: "graphic", preset: kit?.moments.transition || "iris-swap", data: { kicker: "ต่อไป", text: segments[i].title, ...productData(next), name: next?.name ?? segments[i].title }, x: 0.5, y: 0.5, theme: kit?.theme.look, ttl: 1800 },
+      event: customForMoment("transition", next) ?? { type: "graphic", preset: kit?.moments.transition || "iris-swap", data: { kicker: "ต่อไป", text: segments[i].title, ...productData(next), name: next?.name ?? segments[i].title }, x: 0.5, y: 0.5, theme: kit?.theme.look, ttl: 1800 },
       key: "transition", role: "Motion", text: t("เปลี่ยนช่วง") + " · " + segments[i].title,
     });
   }
@@ -383,9 +406,9 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     const at = placement(p);
     const cue = all.filter((c) => (!c.needsProduct || p) && (!BOX_PRESETS.has(c.preset) || (c.needsProduct && at.box))).sort((a, b) => b.priority - a.priority)[0];
     if (!cue) return;
-    const event: OverlayEvent = cue.kind === "graphic"
+    const event: OverlayEvent = (cue.preset === "cf-keycaps" && customForMoment("callToAction", p)) || (cue.kind === "graphic"
       ? { type: "graphic", preset: cue.preset, data: { ...productData(cue.needsProduct ? p : null), ...cue.data }, ...(cue.needsProduct ? at : {}), image: cue.needsProduct && p ? imageUrl(p) : undefined, theme: kit?.theme.look, ttl: 2200 }
-      : { type: cue.preset, payload: { ...cue.data, ...(cue.preset === "zoom" && at.box ? { box: at.box } : {}) }, ttl: 2200 };
+      : { type: cue.preset, payload: { ...cue.data, ...(cue.preset === "zoom" && at.box ? { box: at.box } : {}) }, ttl: 2200 });
     enqueue({ event, key: "cue:" + cue.preset, role: "คนตัดต่อ", text: `${t("ตัดต่อ")} · ${cue.reason} → ${cue.preset}` }, 4000);
   }
   // fallback when cuesFromSpeech has nothing; p is only a verified or just-named product, never the run-of-show's guess
@@ -445,8 +468,11 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
       }
     }
     if (d.motion && d.motion !== "none" && (d.motionConfidence ?? 0) >= 0.5) {
+      const cm = d.motion.startsWith("custom:") ? kit?.custom?.find((x) => "custom:" + x.id === d.motion) : undefined;
+      if (d.motion.startsWith("custom:") && !cm) return;
       const mp = needsProduct(d.motion) ? (BOX_PRESETS.has(d.motion) ? vp : fp) : null;
       if (needsProduct(d.motion) && !mp) return;
+      if (cm) return enqueue({ event: customEventFor(cm, mp), key: d.motion, role: "Motion", text: "" }, 8000);
       const at = placement(mp);
       if (BOX_PRESETS.has(d.motion) && !at.box) return;
       const text = (lines.at(-1) ?? mp?.name ?? "").slice(0, 40);
@@ -540,7 +566,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     const shop = plan.style.shop || "SnapPromo";
     lastBig.current = 0;
     play({
-      event: { type: "graphic", preset: kit?.moments.intro || "blinds-sting", data: { text: kit?.sting.headline || shop, sub: kit?.sting.kicker, kicker: "LIVE", title: kit?.sting.headline || shop, name: shop }, theme: kit?.theme.look, ttl: 1600 },
+      event: customForMoment("intro", null) ?? { type: "graphic", preset: kit?.moments.intro || "blinds-sting", data: { text: kit?.sting.headline || shop, sub: kit?.sting.kicker, kicker: "LIVE", title: kit?.sting.headline || shop, name: shop }, theme: kit?.theme.look, ttl: 1600 },
       key: "intro", role: "Motion", text: t("เปิดไลฟ์") + " · " + (kit?.sting.headline || shop),
     });
   }
@@ -548,6 +574,8 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     liveRef.current = false;
     setLive(false); // also stops detection and speech (enabled: live)
     queue.current = [];
+    const outro = customForMoment("outro", null);
+    if (outro) play({ event: outro, key: "outro", role: "Motion", text: "" });
     send({ type: "zoom_out" });
     log("ผู้กำกับ", t("จบไลฟ์") + " · " + timecode(elapsed), "action");
   }
