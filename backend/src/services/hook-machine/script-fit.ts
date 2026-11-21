@@ -5,12 +5,13 @@
 import { z } from 'zod'
 
 import { aiIsMocked, structured } from '@/services/hook-machine/ai.js'
+import { cleanDisplayText } from '@/services/hook-machine/rubric.js'
 import {
+  judgeFit,
   type LengthBudget,
   spokenUnits,
   totalUnits,
 } from '@/services/hook-machine/script-budget.js'
-import { cleanDisplayText } from '@/services/hook-machine/rubric.js'
 
 const tightenSchema = z.object({ lines: z.array(z.string()) })
 
@@ -32,7 +33,8 @@ export type TightenFn = (args: TightenArgs) => Promise<string[]>
 export const tightenLines: TightenFn = async (args) => {
   // Demo mode has no model; the lines are returned as they are.
   if (aiIsMocked()) return args.lines
-  const unit = args.budget.unit === 'chars' ? 'characters, spaces not counted' : 'words'
+  const unit =
+    args.budget.unit === 'chars' ? 'characters, spaces not counted' : 'words'
   const result = await structured({
     name: 'script_tighten',
     schema: tightenSchema,
@@ -52,7 +54,9 @@ export const tightenLines: TightenFn = async (args) => {
       totalUnitsNow: totalUnits(args.lines, args.languageCode),
     }),
   })
-  const cleaned = result.lines.map((line) => cleanDisplayText(line)).filter(Boolean)
+  const cleaned = result.lines
+    .map((line) => cleanDisplayText(line))
+    .filter(Boolean)
   return cleaned.length > 0 ? cleaned : args.lines
 }
 
@@ -63,7 +67,8 @@ export function translationBudgetPrompt(args: {
   budget: LengthBudget
   languageName: string
 }): string {
-  const unit = args.budget.unit === 'chars' ? 'characters (spaces not counted)' : 'words'
+  const unit =
+    args.budget.unit === 'chars' ? 'characters (spaces not counted)' : 'words'
   const weights = args.sourceLines.map((line) =>
     Math.max(1, spokenUnits(line, args.sourceCode)),
   )
@@ -72,4 +77,40 @@ export function translationBudgetPrompt(args: {
     Math.max(2, Math.floor((args.budget.totalUnits * w) / sum)),
   )
   return `LENGTH BUDGET (hard limit): the finished video has a fixed length, so the translation must be as short as the original takes to say. All ${args.languageName} lines together may have at most ${args.budget.totalUnits} ${unit}. Per line limits, in order: ${perLine.join(', ')}. Translate to fit, not word for word: keep the meaning and the persuasion, drop filler and repeated detail, and never add a fact. Count before you answer and shorten if you are over.`
+}
+
+const MAX_TIGHTEN_PASSES = 2
+
+/** Tightens the lines until the estimate is inside the budget, at most two passes. */
+export async function tightenToBudget(args: {
+  lines: string[]
+  languageCode: string
+  languageName: string
+  budget: LengthBudget
+  productName: string | null
+  tighten: TightenFn
+}): Promise<{ lines: string[]; passes: number }> {
+  let lines = args.lines
+  let passes = 0
+  while (passes < MAX_TIGHTEN_PASSES) {
+    const verdict = judgeFit(totalUnits(lines, args.languageCode), args.budget)
+    if (verdict.status !== 'tighten') break
+    const next = await args.tighten({
+      lines,
+      languageCode: args.languageCode,
+      languageName: args.languageName,
+      budget: args.budget,
+      productName: args.productName,
+    })
+    passes += 1
+    // A reply that is not shorter did not help; stop instead of looping on it.
+    if (
+      totalUnits(next, args.languageCode) >=
+      totalUnits(lines, args.languageCode)
+    ) {
+      break
+    }
+    lines = next
+  }
+  return { lines, passes }
 }

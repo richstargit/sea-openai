@@ -2,10 +2,13 @@
 // gaps between phrases, then speed it up or slow it down a little. The plans
 // are pure so they can be tested without ffmpeg; applyFit runs the plan.
 
-import { detectPauses, probeDuration } from '@/services/compose/ffmpeg.js'
 import { hookMachineConfig } from '@/config/hook-machine.config.js'
+import { detectPauses, probeDuration } from '@/services/compose/ffmpeg.js'
 import { runCli } from '@/services/hook-machine/exec.js'
-import { ACCEPT_MAX, ACCEPT_MIN } from '@/services/hook-machine/script-budget.js'
+import {
+  ACCEPT_MAX,
+  ACCEPT_MIN,
+} from '@/services/hook-machine/script-budget.js'
 
 export type Pause = { start: number; end: number }
 export type Segment = { start: number; end: number }

@@ -145,8 +145,12 @@ export function tighterBudget(
 }
 
 /** The part of a prompt that tells the writer how much it may say. */
-export function budgetPrompt(budget: LengthBudget, languageName: string): string {
-  const unit = budget.unit === 'chars' ? 'characters (spaces not counted)' : 'words'
+export function budgetPrompt(
+  budget: LengthBudget,
+  languageName: string,
+): string {
+  const unit =
+    budget.unit === 'chars' ? 'characters (spaces not counted)' : 'words'
   return `LENGTH BUDGET (hard limit, the video must end on time):
 - The finished video is ${budget.targetSec} seconds. All spoken ${languageName} lines together may have at most ${budget.totalUnits} ${unit}. Count before you answer and cut if you are over.
 - Use about ${budget.beats} beats. The hook beat at most ${budget.hookUnits} ${unit}, the closing call to action beat at most ${budget.closingUnits} ${unit}, and each beat in between at most ${budget.bodyBeatUnits} ${unit}.
