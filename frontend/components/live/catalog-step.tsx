@@ -1,7 +1,7 @@
 "use client";
 
 import { type ChangeEvent, type FormEvent, useRef, useState } from "react";
-import { ArrowRight, Camera, CircleAlert, ImagePlus, LoaderCircle, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { ArrowRight, Camera, CircleAlert, ImagePlus, LoaderCircle, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useLanguage } from "@/components/language-provider";
 import { shrinkImage } from "@/components/studio/script/api";
 import { type LiveProduct, catalog, productImage } from "@/lib/live-plan";
@@ -36,7 +36,6 @@ export function CatalogStep({ products, reloadProducts, setPlan, next }: StepPro
   const [status, setStatus] = useState("");
   // the product being edited; its photos stay unless new ones are chosen
   const [editing, setEditing] = useState<LiveProduct | null>(null);
-  const [syncing, setSyncing] = useState(false);
 
   function startEdit(product: LiveProduct) {
     setEditing(product);
@@ -84,9 +83,9 @@ export function CatalogStep({ products, reloadProducts, setPlan, next }: StepPro
     setStatus("");
     try {
       const fields = { id, name, price, description: form.description.trim(), distinct: form.distinct.trim() };
-      const saved = editing
+      await (editing
         ? await catalog.update(editing.id, { ...fields, ...(photos.length ? { images: photos } : {}) })
-        : await catalog.add({ ...fields, images: photos });
+        : await catalog.add({ ...fields, images: photos }));
       // a renamed code follows the product into the lineup and clips
       if (editing && editing.id !== id)
         setPlan((plan) => ({ ...plan, lineup: plan.lineup.map((item) => item.productId === editing.id ? { ...item, productId: id } : item), clips: plan.clips.map((clip) => clip.productId === editing.id ? { ...clip, productId: id } : clip) }));
@@ -94,7 +93,7 @@ export function CatalogStep({ products, reloadProducts, setPlan, next }: StepPro
       setForm(blank);
       setPhotos([]);
       setEditing(null);
-      setStatus(t(editing ? "บันทึกการแก้ไขแล้ว" : "เพิ่มสินค้าแล้ว") + " · " + name + (saved.synced === false ? " · " + t("ยังส่งเข้าระบบจับสินค้าไม่ได้ กดซิงก์อีกครั้งเมื่อระบบพร้อม") : ""));
+      setStatus(t(editing ? "บันทึกการแก้ไขแล้ว" : "เพิ่มสินค้าแล้ว") + " · " + name);
     } catch (error) {
       setProblem(error instanceof Error ? error.message : "บันทึกไม่สำเร็จ");
     } finally {
@@ -130,10 +129,6 @@ export function CatalogStep({ products, reloadProducts, setPlan, next }: StepPro
         <div className="ls-list-head">
           <h3 id="ls-products-title">{t("สินค้าในคลัง")}</h3>
           <span className="vs-chip">{products.length} {t("ชิ้น")}</span>
-          {products.length > 0 && <button type="button" className="vs-link ls-sync" disabled={syncing} onClick={() => {
-            setSyncing(true);
-            void catalog.sync().then((r) => setStatus(t("ซิงก์เข้าระบบจับสินค้าแล้ว") + ` ${r.synced}/${r.total}`)).catch((e) => setProblem(e instanceof Error ? e.message : "ซิงก์ไม่สำเร็จ")).finally(() => setSyncing(false));
-          }}><RefreshCw size={14} aria-hidden className={syncing ? "animate-spin" : undefined} />{t("ซิงก์ระบบจับสินค้า")}</button>}
         </div>
         {products.length === 0
           ? <div className="ls-empty">

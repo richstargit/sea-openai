@@ -44,7 +44,7 @@ import {
   createRateLimiter,
 } from '@/middlewares/rate-limit.middleware.js'
 import healthRoutes from '@/routes/health.route.js'
-import { liveCreateProduct, liveDecide, liveDeleteProduct, liveLocate, liveMotionKit, livePhoto, livePlan, liveProducts, liveSyncProducts, liveTranscribe, liveUnderstand, liveUpdateProduct } from '@/controllers/live.controller.js'
+import { liveCreateProduct, liveDecide, liveDeleteProduct, liveLocate, liveMotionKit, livePhoto, livePlan, liveProducts, liveTranscribe, liveUnderstand, liveUpdateProduct } from '@/controllers/live.controller.js'
 import hookMachineRoutes from '@/routes/hook-machine.route.js'
 import videoJobRoutes from '@/routes/video-job.route.js'
 import { AUDIO_LIMIT, AUDIO_TYPES } from '@/services/live/speech.js'
@@ -113,7 +113,6 @@ router.post('/agent/live/transcribe', speechLimiter, raw({ type: AUDIO_TYPES, li
 router.post('/agent/live/understand', speechLimiter, liveUnderstand)
 router.get('/agent/live/products', liveProducts)
 router.post('/agent/live/products', apiRateLimiter, liveCreateProduct)
-router.post('/agent/live/products/sync', apiRateLimiter, liveSyncProducts)
 router.patch('/agent/live/products/:code', apiRateLimiter, liveUpdateProduct)
 router.delete('/agent/live/products/:code', apiRateLimiter, liveDeleteProduct)
 router.get('/agent/live/photos/:id', livePhoto)

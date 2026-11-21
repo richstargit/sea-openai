@@ -1,7 +1,7 @@
 import type { RequestHandler } from 'express'
 import { z } from 'zod'
 import { loggedInUser } from '@/controllers/auth.controller.js'
-import { createProduct, deleteProduct, listProducts, productBody, productPatch, productPhoto, syncProducts, updateProduct } from '@/services/live/catalog.js'
+import { createProduct, deleteProduct, listProducts, productBody, productPatch, productPhoto, updateProduct } from '@/services/live/catalog.js'
 import { decide, decideBody, kitBody, motionKit, planBody, planLive } from '@/services/live/director.js'
 import { transcribeLive, transcribeQuery, understand, understandBody } from '@/services/live/speech.js'
 import { locateBody, locateProduct } from '@/services/live/locate.js'
@@ -40,9 +40,6 @@ export const liveUpdateProduct: RequestHandler = async (request, response) => {
 export const liveDeleteProduct: RequestHandler = async (request, response) => {
   await deleteProduct(loggedInUser(response).id, codeParam.parse(request.params.code))
   response.sendStatus(204)
-}
-export const liveSyncProducts: RequestHandler = async (_request, response) => {
-  response.json(await syncProducts(loggedInUser(response).id))
 }
 export const livePhoto: RequestHandler = async (request, response) => {
   const { bytes, type } = await productPhoto(loggedInUser(response).id, z.uuid().parse(request.params.id))

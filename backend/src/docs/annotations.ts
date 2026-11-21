@@ -333,7 +333,6 @@ export const ANNOTATIONS: Annotations = {
   },
   'GET /agent/live/products': { tags: ['Live'], secured: true, summary: "List the account's live catalog" },
   'POST /agent/live/products': { tags: ['Live'], secured: true, summary: 'Add a product with 1-3 photos (mirrored to the detection service)' },
-  'POST /agent/live/products/sync': { tags: ['Live'], secured: true, summary: 'Mirror the whole catalog to the detection service again' },
   'PATCH /agent/live/products/:code': { tags: ['Live'], secured: true, summary: 'Edit a product; new photos replace the old ones' },
   'DELETE /agent/live/products/:code': { tags: ['Live'], secured: true, summary: 'Delete a product and its photos' },
   'GET /agent/live/photos/:id': { tags: ['Live'], secured: true, summary: 'A product photo for its owner' },

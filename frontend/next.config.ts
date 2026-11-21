@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-import { backendOrigin, liveDetectOrigin } from "./lib/backend";
+import { backendOrigin } from "./lib/backend";
 
 const nextConfig: NextConfig = {
   async rewrites() {
@@ -9,8 +9,6 @@ const nextConfig: NextConfig = {
         source: `/${prefix}/:path*`,
         destination: `${backendOrigin}/${prefix}/:path*`,
       })),
-      { source: "/live-api/:path*", destination: `${liveDetectOrigin}/api/:path*` },
-      { source: "/live-images/:path*", destination: `${liveDetectOrigin}/images/:path*` },
     ];
   },
   experimental: {

@@ -7,7 +7,7 @@ import { studioPost, studioRequest } from "@/components/studio/studio-api";
 import type { SaleFormat } from "@/lib/sale-formats";
 
 /** A product in the account's live catalog (Mongo). `id` is the CF code the detector reports; images are photo file ids. */
-export type LiveProduct = { id: string; key?: string; name: string; description: string; distinct?: string; price: number; images: string[]; synced?: boolean };
+export type LiveProduct = { id: string; key?: string; name: string; description: string; distinct?: string; price: number; images: string[] };
 export const productImage = (fileId: string) => `/agent/live/photos/${encodeURIComponent(fileId)}`;
 
 export type TagStyle = "tag" | "sticker" | "receipt" | "flap";
@@ -55,7 +55,7 @@ export function savePlan(userId: string, plan: LivePlan) {
   try { localStorage.setItem(key(userId), JSON.stringify(plan)); } catch { /* storage is optional */ }
 }
 
-// ---------- catalog (Mongo, per account; the backend mirrors it into the detection service) ----------
+// ---------- catalog (Mongo, per account) ----------
 type ProductInput = { id: string; name: string; description: string; distinct?: string; price: number; images: string[] };
 const toBody = ({ id, ...rest }: Partial<ProductInput>) => ({ ...(id ? { code: id } : {}), ...rest });
 export const catalog = {
@@ -71,8 +71,6 @@ export const catalog = {
     const response = await fetch("/agent/live/products/" + encodeURIComponent(code), { method: "DELETE" });
     if (!response.ok) throw new Error("ลบสินค้าไม่สำเร็จ");
   },
-  /** Push every product to the detection service again (e.g. after it restarted). */
-  sync: () => studioPost<{ synced: number; total: number }>("/agent/live/products/sync", {}),
 };
 
 // ---------- AI (backend) ----------
