@@ -1,176 +1,176 @@
 # SnapPromo
 
-**ไลฟ์คนเดียว แต่มีทีม AI ทั้งทีม**: ระบบช่วยร้านค้าออนไลน์ขนาดเล็กทำวิดีโอขายของจากรูปสินค้า และคุมกราฟิกบนจอไลฟ์แบบเรียลไทม์
+**Go live alone, with a whole AI crew.** SnapPromo helps small online shops turn product photos into sales videos and runs the on-screen graphics of a live stream in real time.
 
-> โปรโตไทป์สำหรับ Hackathon, Track 2 · AI-Native Products & Operations
-> สินค้า ราคา และข้อความตัวอย่างในหน้าเว็บเป็นข้อมูลจำลองทั้งหมด
+> A hackathon prototype for Track 2 · AI-Native Products & Operations.
+> Every product, price and line of copy shown on the site is an illustrative sample.
 
-ขั้นตอนติดตั้ง, API, ตัวแปร environment และการต่อ OBS อยู่ในหัวข้อ [Technical reference](#technical-reference) ท้ายไฟล์นี้
+For setup, the API, environment variables and the OBS connection, see [Technical reference](#technical-reference) at the end of this file.
 
 ---
 
-## ระบบนี้ทำอะไร
+## What it does
 
-SnapPromo มี 3 ส่วนหลัก ทุกส่วนใช้บัญชีผู้ใช้เดียวกัน และเก็บข้อมูลไว้ใน MongoDB
+SnapPromo has three parts. All three share one account, and the data is stored in MongoDB.
 
-| ส่วน | หน้า | ร้านค้าได้อะไร |
+| Part | Page | What the shop gets |
 | --- | --- | --- |
-| **Video Studio** | `/studio` | ใส่รูปสินค้า (PNG สูงสุด 4 รูป) กับบรีฟสั้น ๆ แล้วได้คลิปขายของ AI วางช็อต เขียนบท เลือกสไตล์ ทำเสียงพากย์ ซับ และเสียงประกอบ จากนั้นตรวจเฟรมก่อน render สั่งแก้คลิปเดิมเป็นภาษาคนได้ |
-| **Live Studio** | `/studio/live` | ผู้ช่วยตอนไลฟ์: ใส่คลังสินค้า เลือกสไตล์ร้าน ให้ AI เขียนสคริปต์ทั้งไลฟ์และออกแบบชุด motion ประจำร้าน พอเริ่มไลฟ์ ระบบดูภาพจากกล้อง ฟังสิ่งที่แม่ค้าพูด แล้วส่งป้ายราคา การ์ดสินค้า หรือดีลขึ้นจอ OBS เอง |
-| **Editor** | `/editor` | ตัดต่อคลิปต่อบนไทม์ไลน์ (ตัด แยก ใส่ข้อความ ใส่เพลง) สั่งแก้ด้วย AI ได้ แล้ว export เป็น MP4 |
+| **Video Studio** | `/studio` | Add product photos (up to four PNGs) and a short brief, and get a sales clip back. The AI plans the shots, writes the script, picks a style, and adds narration, subtitles and sound effects. It checks frames before rendering. You can ask for changes to the same clip in plain language. |
+| **Live Studio** | `/studio/live` | An assistant for live selling. Add your catalog and choose the shop's style. The AI writes the whole show script and designs the shop's motion kit. During the live, it watches the camera, listens to the host, and sends price tags, product cards and deals to OBS automatically. |
+| **Editor** | `/editor` | Keep editing on a timeline: trim, split, add text and music. You can also edit with AI prompts. Exports MP4. |
 
-### Flow ของ Video Studio
+### Video Studio flow
 
 ```mermaid
 flowchart LR
-  A[รูปสินค้า + บรีฟ<br/>หรือคลิป/ลิงก์อ้างอิง] --> B[AI Director<br/>อ่านสินค้า เลือกรูปแบบการขาย<br/>และสไตล์ภาพ]
-  B --> C[Storyboard<br/>แบ่ง beat และช็อต]
-  C --> D[AI เขียนฉากเป็นโค้ด<br/>HTML + GSAP + Three.js<br/>บน HyperFrames]
-  D --> E[ตรวจเฟรมก่อน render<br/>ซับล้นกรอบ, ราคาอ่านยาก,<br/>ข้อความบังสินค้า]
-  E -->|ไม่ผ่าน| D
-  E -->|ผ่าน| F[Render วิดีโอ<br/>+ เสียงพากย์ + SFX]
-  F --> G[ดาวน์โหลด / แก้คลิปนี้ /<br/>เปิดใน Editor]
+  A[Product photos + brief<br/>or a reference clip/link] --> B[AI Director<br/>reads the product, picks a<br/>sale format and visual style]
+  B --> C[Storyboard<br/>beats and shots]
+  C --> D[AI writes each scene as code<br/>HTML + GSAP + Three.js<br/>on HyperFrames]
+  D --> E[Frame check before render<br/>subtitle overflow, unreadable price,<br/>text covering the product]
+  E -->|fails| D
+  E -->|passes| F[Render video<br/>+ narration + SFX]
+  F --> G[Download / Revise this clip /<br/>Open in editor]
 ```
 
-Video Studio มีโหมดที่สองชื่อ **Hook Machine** โหมดนี้เรียนรู้วิธีพูดจากคลิปที่ร้านชอบ (ดึงคลิป ถอดเสียง แล้ววิเคราะห์ hook ตาม rubric) จากนั้นเขียน hook และบทให้สินค้าใหม่ ทำเสียงพากย์ไทยหรืออังกฤษหลายสไตล์พร้อมให้คะแนนแต่ละเทค แล้วประกอบเป็น MP4 ที่มีซับไทยฝังในภาพ
+Video Studio has a second mode, **Hook Machine**. It learns how a shop's favourite clips speak: it fetches the clips, transcribes them and grades their hooks with a rubric. It then writes hooks and a script for a new product, and records Thai or English narration in several voice styles, scoring each take. Finally it assembles an MP4 with burned-in Thai captions.
 
-### Flow ของ Live Studio
+### Live Studio flow
 
-1. **คลังสินค้า**: ใส่รหัส CF ชื่อ ราคา คำอธิบายรูปลักษณ์ และรูปอ้างอิง 1–3 รูป ระบบจับสินค้าใช้ข้อมูลชุดนี้
-2. **สไตล์และลำดับไลฟ์**: ชื่อร้าน น้ำเสียงแม่ค้า สีแบรนด์ อารมณ์ของ motion และลำดับสินค้าที่จะขาย
-3. **เตรียมก่อนไลฟ์**: AI เขียนสคริปต์ทั้งไลฟ์ (ช่วงเปิด ช่วงขายแต่ละชิ้น ช่วงคั่น ช่วงปิด พร้อมคิวกราฟิก) ออกแบบชุด motion ของร้าน และทำคลิปสั้นไว้เปิดตอนแม่ค้าพัก
-4. **ห้องควบคุม**: ต่อ OBS ผ่าน Browser Source ขนาด 1920 × 1080 ระหว่างไลฟ์ ระบบทำงานเป็นวงรอบ
-   - **ดู**: จับว่าแม่ค้ายกสินค้าชิ้นไหนขึ้นมา และตีกรอบตำแหน่งสินค้าในภาพ
-   - **ฟัง**: ถอดเสียงสิ่งที่แม่ค้าพูด แล้วแปลงเป็นเจตนา เช่น บอกราคา ลดราคา ของแถม ใกล้หมด
-   - **ตัดสินใจ**: เลือก motion ที่เหมาะกับจังหวะนั้น และไม่แสดงสินค้าที่กล้องไม่ได้เห็นจริง
-   - **ขึ้นจอ**: ส่งกราฟิกโปร่งใสเข้า OBS ทันที และซูมกล้องไปที่สินค้าผ่าน obs-websocket ได้
-
----
-
-## ทำเพื่อใคร
-
-**กลุ่มเป้าหมายหลัก**: ร้านค้าออนไลน์ขนาดเล็กในไทย เช่น ร้านกาแฟ ขนม เครื่องสำอาง สินค้าชุมชน หรืองานคราฟต์ ที่ขายผ่านวิดีโอสั้นและไลฟ์บนแพลตฟอร์มอย่าง Shopee หรือ TikTok ร้านกลุ่มนี้มีรูปสินค้าอยู่แล้ว แต่ทำคอนเทนต์เองและมักไลฟ์คนเดียว
-
-**ปัญหาที่ร้านเจอ**
-
-- จ้างช่างภาพ คนเขียนบท และคนตัดต่อไม่ไหว
-- ถ้าใช้ template คลิปจะหน้าตาเหมือนร้านอื่น
-- ตอนไลฟ์คนเดียว ต้องพูด ยกของ อ่านคอมเมนต์ และขึ้นป้ายราคาพร้อมกัน
-- พอโปรเปลี่ยน ต้องทำคลิปและป้ายใหม่ทั้งหมด
-
-**สิ่งที่ SnapPromo ทำแทน**
-
-- **ก่อนไลฟ์**: เปลี่ยนรูปสินค้าเป็นคลิปขายของที่มีฉากเป็นของสินค้านั้นเอง (น้ำพริกต้องดูร้อนและหอม ซีรั่มต้องดูสะอาดน่าเชื่อถือ) ไม่ใช่ template เดิม
-- **ระหว่างไลฟ์**: ทำหน้าที่แทนทีมงานหลังกล้อง ได้แก่ คนเขียนสคริปต์ คนทำกราฟิก และคนกดป้ายราคา แม่ค้าจึงขายต่อได้โดยไม่ต้องหยุดกดเอง
+1. **Catalog**: add each product's CF code, name, price, a description of how it looks, and 1–3 reference photos. Detection uses this data.
+2. **Style and lineup**: set the shop name, the host's tone, brand colours, the motion mood, and the order of products in the show.
+3. **Prepare**: the AI writes the full show script (opening, a segment per product, interludes, closing, each with graphic cues). It also designs the shop's motion kit and makes short clips to play while the host takes a break.
+4. **Control room**: connect OBS through a 1920 × 1080 Browser Source. During the live the system runs a loop:
+   - **Watch**: detect which product the host is holding up, and box its position in the frame.
+   - **Listen**: transcribe what the host says and turn it into intents such as price, discount, free gift or low stock.
+   - **Decide**: pick the motion that fits the moment, and never show a product the camera has not actually seen.
+   - **Show**: send transparent graphics to OBS at once. It can also zoom the camera onto the product through obs-websocket.
 
 ---
 
-## ใช้ OpenAI อะไรในตัวระบบ
+## Who it is for
 
-ตอน runtime ระบบเรียก OpenAI API ผ่าน [backend/src/services/openai.service.ts](backend/src/services/openai.service.ts) เปลี่ยนโมเดลได้ด้วยตัวแปร environment (ดู [OpenAI text generation](#openai-text-generation))
+**Primary users**: small online shops in Thailand, such as coffee, snacks, cosmetics, community products or crafts. These shops sell through short videos and live streams on platforms like Shopee or TikTok. They already have product photos, make their own content, and often go live alone.
 
-| งาน | API / โมเดลเริ่มต้น | อยู่ที่ |
+**Their problems**
+
+- They cannot afford a photographer, a scriptwriter and an editor.
+- Templates make their clips look like every other shop's.
+- Going live alone means talking, holding up products, reading comments and putting up price tags all at once.
+- Every time a promotion changes, the clips and tags have to be made again.
+
+**What SnapPromo does for them**
+
+- **Before the live**: it turns product photos into sales clips with scenes designed for that product, not a reused template. Chili paste should feel warm and fragrant; serum should feel clean and trustworthy.
+- **During the live**: it does the work of the crew behind the camera, the scriptwriter, the graphics operator and the person who puts up prices. The host keeps selling without stopping to press buttons.
+
+---
+
+## OpenAI in the product
+
+At runtime the system calls the OpenAI API through [backend/src/services/openai.service.ts](backend/src/services/openai.service.ts). Environment variables can change the model for each task (see [OpenAI text generation](#openai-text-generation)).
+
+| Task | API / default model | Code |
 | --- | --- | --- |
-| AI Director: วางบรีฟ storyboard และเขียนฉาก HyperFrames เป็นโค้ด | Responses API · `gpt-6.2-astra` | [agent.service.ts](backend/src/services/agent.service.ts), [video/](backend/src/services/video/), [video-engine/](backend/integrations/video-engine/) |
-| สร้างและแก้ภาพสินค้าในฉาก | Images API · `gpt-image-2.6-sunburst` | [video/production.ts](backend/src/services/video/production.ts) |
-| เสียงพากย์คลิป | `gpt-realtime-2.1` | [video/speech.ts](backend/src/services/video/speech.ts) |
-| เสียงพากย์ Hook Machine และการให้คะแนนแต่ละเทค | `gpt-4o-mini-tts`, `gpt-realtime-2.1-mini`, `gpt-audio-1.5` | [hook-machine/voice/](backend/src/services/hook-machine/voice/) |
-| ถอดเสียง: คลิปอ้างอิง ซับ และเสียงแม่ค้าตอนไลฟ์ | `gpt-transcribe`, `gpt-4o-mini-transcribe` | [live/speech.ts](backend/src/services/live/speech.ts), [video/captions.ts](backend/src/services/video/captions.ts) |
-| ตัดสินใจตอนไลฟ์ทุก 1 วินาที (สินค้า, ยกขึ้นหรือยัง, motion, คำกล่าวอ้างเสี่ยง) | Decisions API · `gpt-6-luna` | [live/director.ts](backend/src/services/live/director.ts) |
-| ตีกรอบตำแหน่งสินค้าในเฟรมไลฟ์ | Responses API · `gpt-6.2-sol` | [live/locate.ts](backend/src/services/live/locate.ts) |
-| ออกแบบชุด motion ของร้าน (AI Motion Designer) | Structured output | [live/motions.ts](backend/src/services/live/motions.ts) |
+| AI Director: brief, storyboard, and HyperFrames scenes written as code | Responses API · `gpt-6.2-astra` | [agent.service.ts](backend/src/services/agent.service.ts), [video/](backend/src/services/video/), [video-engine/](backend/integrations/video-engine/) |
+| Generate and edit product images for scenes | Images API · `gpt-image-2.6-sunburst` | [video/production.ts](backend/src/services/video/production.ts) |
+| Clip narration | `gpt-realtime-2.1` | [video/speech.ts](backend/src/services/video/speech.ts) |
+| Hook Machine narration and take scoring | `gpt-4o-mini-tts`, `gpt-realtime-2.1-mini`, `gpt-audio-1.5` | [hook-machine/voice/](backend/src/services/hook-machine/voice/) |
+| Transcription: reference clips, captions, and the host's speech during a live | `gpt-transcribe`, `gpt-4o-mini-transcribe` | [live/speech.ts](backend/src/services/live/speech.ts), [video/captions.ts](backend/src/services/video/captions.ts) |
+| One live decision per second (product, held up or not, motion, risky claims) | Decisions API · `gpt-6-luna` | [live/director.ts](backend/src/services/live/director.ts) |
+| Box the product's position in a live frame | Responses API · `gpt-6.2-sol` | [live/locate.ts](backend/src/services/live/locate.ts) |
+| Design the shop's motion kit (AI Motion Designer) | Structured output | [live/motions.ts](backend/src/services/live/motions.ts) |
 
-ข้อจำกัดด้านความปลอดภัย: AI ใน Studio ได้เฉพาะเครื่องมือทำวิดีโอ ไม่ได้รับ shell, filesystem, browser automation หรือสิทธิ์คุม OBS ส่วนการเตรียมฉากและตรวจเฟรมรันใน Docker container ที่ตัดเครือข่ายแยกต่องาน
+Safety limits: the Studio AI gets video production tools only. It never receives shell, filesystem, browser automation or OBS control tools. Scene preparation and frame checks run in a network-isolated Docker container per job.
 
 ---
 
-## ใช้ OpenAI Codex ทำอะไรไปบ้าง
+## How we used OpenAI Codex
 
-ทีมใช้ **Codex Desktop** ในช่วงคิดไอเดียและทำต้นแบบ และระบบดึง skill ที่ติดตั้งไว้ให้ Codex มาใช้ตอน runtime ด้วย
+The team used **Codex Desktop** while shaping the idea and prototyping. The product also reads skills installed for Codex at runtime.
 
-### 1. คิดไอเดียและจำลองกรรมการ
+### 1. Ideation and simulated judging
 
-- อ่านเอกสารโจทย์ Hackathon แล้วช่วยเลือก Track 2 · AI-Native Products & Operations
-- ปั้นไอเดียจาก "ผู้ช่วยสรุปออเดอร์ไลฟ์" ไปเป็น "สินค้าแต่ละชิ้นมีทีมทำคอนเทนต์ของตัวเอง" ซึ่งต่อมากลายเป็น SnapPromo
-- จำลองกรรมการให้คะแนนรายเกณฑ์ (เช่น Real-World Value, Build Quality) แล้วใช้ผลนั้นปรับ flow ของสินค้า
-- ค้น public skill ด้านวิดีโอสินค้า Blender และ motion graphic แล้วจัดหมวดตามแนวภาพ เพื่อหาจุดที่ทีมควรสร้างเอง ข้อสรุปคือ ความหลากหลายของสไตล์หาได้จากภายนอก ส่วนที่ต้องสร้างเองคือการเลือกสไตล์ให้ตรงกับสิ่งที่ร้านอยากขาย และการแก้งานต่อจากของเดิม
-- ศึกษาทักษะการพูดขายและการเขียนบทวิดีโอขายของ เพื่อป้อนเป็นแนวทางให้ AI เขียนบท
+- Read the hackathon brief and helped choose Track 2 · AI-Native Products & Operations.
+- Developed the idea from a "live order summary assistant" into "every product gets its own content team", which became SnapPromo.
+- Simulated the judges scoring each criterion (such as Real-World Value and Build Quality) and used the results to adjust the product flow.
+- Researched public skills for product video, Blender and motion graphics, and grouped them by visual approach to find where the team should build its own. The conclusion: variety of styles can come from outside sources; what the team must build is choosing the style that fits what the shop wants to sell, and revising from previous work.
+- Studied sales speaking and sales-video scriptwriting to guide how the AI writes scripts.
 
-### 2. ต้นแบบระบบจับสินค้าจากภาพไลฟ์ (ส่วนที่ยากที่สุด)
+### 2. Live product detection prototype (the hardest part)
 
-Codex สร้างเดโมแยกไว้ในโฟลเดอร์ `demo/` (ตอนนี้ลบออกจาก repo แล้ว) และแบ่งงานให้ subagent 4 ตัวทำพร้อมกัน
+Codex built a separate demo in a `demo/` folder (since removed from the repository). It split the work across four subagents running in parallel:
 
-| subagent | งาน |
+| Subagent | Work |
 | --- | --- |
-| `fashion` | ทดสอบเสื้อผ้าที่ลายคล้ายกัน, benchmark โมเดลตีกรอบ, ประกอบภาพทดสอบจากรูปห้องจริงพร้อมกรอบเฉลย |
-| `kitchen` | เพิ่มการหาตำแหน่ง (`locate`) และ endpoint สตรีมผลทีละเฟรม พร้อมชุดทดสอบ |
-| `audit` | ทดสอบหน้า Detect จริงใน Chrome ทั้งภาพนิ่งและการเลื่อนวิดีโอ |
-| `review` | รีวิวโค้ดและหาบั๊กใน flow ของเฟรมและรายงานผล |
+| `fashion` | Tested look-alike clothing, benchmarked box models, and composited test images onto real room photos with ground-truth boxes |
+| `kitchen` | Added localization (`locate`) and a per-frame streaming endpoint, with tests |
+| `audit` | Tested the Detect page in Chrome with still images and video seeking |
+| `review` | Reviewed the code and found bugs in the frame and reporting flow |
 
-สิ่งที่ได้จากเดโมนี้:
+What came out of the demo:
 
-- หน้า Catalog และ Detect ที่ใช้ OpenAI Decisions API จับว่าในเฟรมมีสินค้าชิ้นไหน พร้อมความน่าจะเป็นของแต่ละตัว และสถานะว่าแม่ค้ายกสินค้าขึ้นมาหรือยัง
-- eval เทียบความแม่นแบบ "ภาพอย่างเดียว" กับ "ภาพ + ข้อความ" ผลคือ **Choice + ภาพอย่างเดียว** ดีที่สุด
-- ร้านจำลองหลายประเภท (เสื้อผ้า เครื่องครัว แก้วน้ำ ฯลฯ) และภาพทดสอบหลายตำแหน่งหลายพื้นหลัง
-- benchmark โมเดลตีกรอบ และวิธีส่งเฟรมในกรอบที่มีไม้บรรทัด 0–1000 ให้โมเดลอ่านขอบเอง โดยตอบ `null` ได้ถ้าไม่มีสินค้า ในโค้ดบันทึกว่า `gpt-6.2-sol` ชนะ benchmark ที่ 10/12 กรอบ (IoU ≥ 0.5), ไม่ตีกรอบผิดเลยใน 6 กรณีที่ไม่มีสินค้า และใช้เวลาเฉลี่ย 3.0 วินาที
-- คำแนะนำเรื่อง pitch: ให้กรรมการเป็นคนเลือกสินค้าหรือเปลี่ยนราคากลางไลฟ์เอง
+- Catalog and Detect pages that use the OpenAI Decisions API to tell which product is in a frame, with a probability per product and whether the host is holding it up.
+- An eval comparing "image only" with "image + text". **Choice + image only** was the most accurate.
+- Several simulated shops (clothing, kitchenware, drinking glasses and more) and test images with varied positions and backgrounds.
+- A benchmark of box models, and a method that places the frame inside 0–1000 rulers so the model reads edges itself, with `null` as a valid answer when the product is absent. The code records that `gpt-6.2-sol` won the benchmark with 10/12 boxes at IoU ≥ 0.5, no false boxes in 6 absent-product cases, and a 3.0 s mean.
+- Pitch advice: let the judges pick the product or change the price in the middle of the live themselves.
 
-วิธีการจากเดโมถูกย้ายเข้าตัวสินค้าจริงใน [live/locate.ts](backend/src/services/live/locate.ts) และ [frontend/lib/live-detect.ts](frontend/lib/live-detect.ts)
+The demo's method was then moved into the product in [live/locate.ts](backend/src/services/live/locate.ts) and [frontend/lib/live-detect.ts](frontend/lib/live-detect.ts).
 
-### 3. Skill ของ Codex ถูกใช้ต่อใน runtime
+### 3. Codex skills used at runtime
 
-Video engine หา `SKILL.md` ตามลำดับนี้: `VIDEO_SKILLS_DIR` → `~/.agents/skills` → **`~/.codex/skills`** → [backend/integrations/video-skills/](backend/integrations/video-skills/) ([runtime.mjs](backend/integrations/video-engine/runtime.mjs)) skill ที่ติดตั้งไว้ให้ Codex (เช่นชุด `hyperframes-*`) จึงกลายเป็นคู่มือที่ AI Director อ่านตอนออกแบบฉากด้วย
+The video engine looks for `SKILL.md` in this order: `VIDEO_SKILLS_DIR` → `~/.agents/skills` → **`~/.codex/skills`** → [backend/integrations/video-skills/](backend/integrations/video-skills/) ([runtime.mjs](backend/integrations/video-engine/runtime.mjs)). Skills installed for Codex (such as the `hyperframes-*` set) therefore also serve as guides the AI Director reads while designing scenes.
 
-### 4. แนวคิด "Codex เขียนฉากเป็นโค้ด"
+### 4. The "Codex codes the scene" idea
 
-หัวใจของสินค้าคือ AI ไม่ได้หยิบ template มาเติมคำ แต่เขียน motion graphic เป็นโค้ด HTML, GSAP และ Three.js ใหม่ให้สินค้าแต่ละชิ้น แล้วตรวจเฟรมก่อน render ถ้าไม่ผ่านก็แก้เองก่อนส่ง ในตัวระบบ ขั้นนี้รันผ่าน OpenAI Responses API (`gpt-6.2-astra`) บน HyperFrames
+The core of the product is that the AI does not fill in a template. It writes a new motion graphic as HTML, GSAP and Three.js code for each product, checks the frames before rendering, and fixes failures itself before delivery. In the product this step runs through the OpenAI Responses API (`gpt-6.2-astra`) on HyperFrames.
 
 ---
 
-## อะไร base มาจากภายนอก และอะไรทำเอง
+## What we built on, and what we built
 
-### ของภายนอกที่นำมาใช้
+### External foundations
 
-| ของ | ใช้ทำอะไร | สัญญาอนุญาต / หมายเหตุ |
+| Source | Used for | License / notes |
 | --- | --- | --- |
-| [HyperFrames](https://www.npmjs.com/package/hyperframes) `0.9.75` + skill ชุด `hyperframes-*` | เขียนวิดีโอเป็น HTML แล้ว render, player ใน Editor, คลังเสียง SFX | skill อ่านจาก `~/.agents/skills` หรือ `~/.codex/skills` |
-| [Lemo-Opuscar](https://github.com/lemomo-ai/lemo-opuscar/tree/e3cb16f63768c68693ff0e15171d6e755457cc32) | สไตล์ภาพยนตร์ 43 แบบ (ukiyo-e, pixel RPG, art deco ฯลฯ) ให้ AI Director เลือก | MIT, รวมไว้ใน [video-skills/lemo-styles](backend/integrations/video-skills/lemo-styles/) |
-| [OneTake](https://github.com/feitangyuan/onetake) | แนวทางถ่ายกล้องต่อเนื่องเทคเดียว (ไม่บังคับ) | ใช้ได้เฉพาะงานไม่เชิงพาณิชย์ ไม่ได้รวมไว้ใน repo |
-| [FilmCraft](https://github.com/storytold/filmcraft) | หลักการไทม์ไลน์ของ Editor (split, trim, ripple delete, undo/redo) | MIT, ทีมแปลงเป็น TypeScript เอง ไม่ได้ฝัง Rust engine ([docs/filmcraft.md](frontend/docs/filmcraft.md)) |
-| skill `apple-design` | แนวทางออกแบบ UI และ motion ของ Editor | ผู้ใช้เป็นคนจัดหาให้ ([apple-design.md](frontend/docs/design/apple-design.md)) |
-| Agent Reach `1.6.1` + yt-dlp | อ่านหน้าเว็บ ลิงก์ และคลิปอ้างอิงสาธารณะ | ส่ง URL ไป Jina Reader เฉพาะลิงก์ที่ผู้ใช้ให้มา |
-| GSAP, Three.js, Blender (bridge ในเครื่อง), FFmpeg | แอนิเมชัน 3D และเข้ารหัสวิดีโอ | |
-| obs-websocket v5 | ซูมกล้องใน OBS ไปที่สินค้า | |
+| [HyperFrames](https://www.npmjs.com/package/hyperframes) `0.9.75` + the `hyperframes-*` skills | Video as HTML and its renderer, the Editor player, the SFX library | Skills are read from `~/.agents/skills` or `~/.codex/skills` |
+| [Lemo-Opuscar](https://github.com/lemomo-ai/lemo-opuscar/tree/e3cb16f63768c68693ff0e15171d6e755457cc32) | 43 film styles (ukiyo-e, pixel RPG, art deco and more) for the AI Director to choose from | MIT, bundled in [video-skills/lemo-styles](backend/integrations/video-skills/lemo-styles/) |
+| [OneTake](https://github.com/feitangyuan/onetake) | Optional single-camera continuous-take guide | Noncommercial use only; not bundled |
+| [FilmCraft](https://github.com/storytold/filmcraft) | Editor timeline semantics (split, trim, ripple delete, undo/redo) | MIT; adapted to TypeScript by the team, Rust engine not embedded ([docs/filmcraft.md](frontend/docs/filmcraft.md)) |
+| `apple-design` skill | Editor UI and motion design guidance | Supplied by the user ([apple-design.md](frontend/docs/design/apple-design.md)) |
+| Agent Reach `1.6.1` + yt-dlp | Reading public web pages, links and reference clips | Sends to Jina Reader only the URLs the user provides |
+| GSAP, Three.js, Blender (local bridge), FFmpeg | Animation, 3D and video encoding | |
+| obs-websocket v5 | Zooming the OBS camera onto the product | |
 | Next.js 16, React 19, shadcn/Radix, Tailwind 4 | Frontend | |
-| Express 5, LangGraph, MongoDB/Mongoose, Zod | Backend: agent ที่บันทึกสถานะ, ฐานข้อมูล, ตรวจ input | |
+| Express 5, LangGraph, MongoDB/Mongoose, Zod | Backend: stateful agent runs, storage, input validation | |
 
-public skill ที่ศึกษาเป็นแนวคิดเท่านั้น ไม่ได้นำโค้ดมาใช้: [ecommerce-video-skills](https://github.com/xianyu110/ecommerce-video-skills), [vargHQ product-photo-to-video](https://github.com/vargHQ/skills/blob/main/product-photo-to-video/SKILL.md)
+Public skills studied for ideas only, with no code reused: [ecommerce-video-skills](https://github.com/xianyu110/ecommerce-video-skills), [vargHQ product-photo-to-video](https://github.com/vargHQ/skills/blob/main/product-photo-to-video/SKILL.md).
 
-### ส่วนที่ทีมสร้างเอง
+### Built by the team
 
-- **AI Director ของ Video Studio**: บรีฟ → storyboard → ออกแบบหลายฉากพร้อมกัน → ตรวจเฟรมและความต่อเนื่อง → render, รวมถึงการแก้คลิปเดิมผ่าน `projectId`
-- **รูปแบบการขาย 16 แบบ** ([sale-formats.ts](backend/src/services/video/sale-formats.ts)): showcase, promotion, flash sale, new launch, bundle, before/after, how-to, comparison, review ฯลฯ แต่ละแบบเป็นโครง beat ให้ AI ทำตาม โดยดึงข้อเท็จจริงจากบรีฟเท่านั้น ไม่แต่งราคาหรือคำกล่าวอ้างเอง
-- **Hook Machine**: เรียนรู้สไตล์การพูดจากคลิปอ้างอิง ใช้ rubric ให้เกรด hook เขียนบทให้พอดีความยาวเสียง ให้คะแนนเทคเสียง และประกอบคลิปพร้อมซับไทย ([hook-machine/](backend/src/services/hook-machine/), [compose/](backend/src/services/compose/))
-- **Live Director**: สคริปต์ทั้งไลฟ์ ชุด motion ประจำร้าน การตัดสินใจทุกวินาที การตีกรอบสินค้า และการถอดเสียงพร้อมแปลงเป็นเจตนา ([live/](backend/src/services/live/))
-- **คลังกราฟิก overlay**: 156 กราฟิก / 611 preset ด้วย GSAP แบบ seek-safe, รูปแบบ event `LiveCut`, ธีม paper/ink/pop, การหลบหน้าแม่ค้า (face box), กราฟิก `compose` ที่สร้างจากข้อมูลล้วน ๆ ให้ AI ออกแบบ motion ใหม่ได้โดยไม่ต้องแก้โค้ด, SFX ([public/overlay/](backend/public/overlay/))
-- **Editor** บนเบราว์เซอร์ที่บันทึกลงบัญชี และ export MP4 ใน Docker
-- ระบบบัญชีและ session, การแยกข้อมูลตามเจ้าของ, sandbox สำหรับ render, ชุดทดสอบ backend (Jest) และ frontend (node:test, Playwright)
-- โครง backend (Express + TypeScript) มาจากโปรเจกต์เดิมของทีม แล้วเปลี่ยนชื่อ prefix จาก `af` เป็น `so`
+- **Video Studio AI Director**: brief → storyboard → parallel scene designs → frame and continuity checks → render, plus revising an existing clip through its `projectId`.
+- **16 sale formats** ([sale-formats.ts](backend/src/services/video/sale-formats.ts)): showcase, promotion, flash sale, new launch, bundle, before/after, how-to, comparison, review and more. Each is a beat skeleton the AI follows. Facts come only from the brief; the AI never invents prices or claims.
+- **Hook Machine**: learns speaking style from reference clips, grades hooks with a rubric, fits the script to the voice length, scores voice takes, and composes the clip with Thai captions ([hook-machine/](backend/src/services/hook-machine/), [compose/](backend/src/services/compose/)).
+- **Live Director**: the show script, the shop's motion kit, per-second decisions, product boxing, and speech transcription with intent detection ([live/](backend/src/services/live/)).
+- **Overlay graphics library**: 156 graphics / 611 presets on seek-safe GSAP timelines, the `LiveCut` event format, paper/ink/pop themes, face-box avoidance, a data-only `compose` graphic that lets the AI design new motion without code changes, and SFX ([public/overlay/](backend/public/overlay/)).
+- **Editor** in the browser, saved to the account, with MP4 export in Docker.
+- Accounts and sessions, owner-scoped data, the render sandbox, and backend (Jest) and frontend (node:test, Playwright) tests.
+- The backend skeleton (Express + TypeScript) comes from an earlier team project, with its prefix renamed from `af` to `so`.
 
 ---
 
-## เริ่มใช้งานแบบเร็ว
+## Quick start
 
-ต้องมี Node.js 22, MongoDB, Docker, FFmpeg และ Chrome
+You need Node.js 22, MongoDB, Docker, FFmpeg and Chrome.
 
 ```sh
 # backend (port 8080)
 cd backend
 npm ci
-# สร้าง backend/.env.development แล้วใส่ OPENAI_API_KEY, MONGODB_URI และ APP_ORIGINS=http://localhost:3000
+# create backend/.env.development with OPENAI_API_KEY, MONGODB_URI and APP_ORIGINS=http://localhost:3000
 npm run dev
 
-# build sandbox สำหรับ render (รันจาก root ของ repo ครั้งเดียว)
+# build the render sandbox once, from the repository root
 docker build -t sea-video-sandbox:0.9.75 backend/integrations/video-sandbox
 
 # frontend (port 3000)
@@ -179,25 +179,23 @@ npm ci
 npm run dev
 ```
 
-เปิด http://localhost:3000 สมัครบัญชีที่ `/register` แล้วเข้า `/studio` หรือ `/studio/live`
+Open http://localhost:3000, create an account at `/register`, then go to `/studio` or `/studio/live`.
 
-รายละเอียดทั้งหมด (endpoint, OBS overlay, event ของ overlay, Blender bridge, Agent Reach, การทดสอบ) อยู่ในหัวข้อ [Technical reference](#technical-reference) ด้านล่าง
+Full details (endpoints, the OBS overlay and its events, the Blender bridge, Agent Reach, tests) are in [Technical reference](#technical-reference) below.
 
-## โครงสร้าง repo
+## Repository layout
 
 ```text
-backend/    Express + TypeScript API, AI director, live director, overlay และการ render
-  integrations/video-engine/   engine เขียนฉาก HyperFrames
-  integrations/video-skills/   style guide ที่รวมมาใน repo (Lemo-Opuscar)
-  public/overlay/              หน้า overlay สำหรับ OBS และคลังกราฟิก
+backend/    Express + TypeScript API, AI director, live director, overlay and rendering
+  integrations/video-engine/   HyperFrames scene-writing engine
+  integrations/video-skills/   bundled style guides (Lemo-Opuscar)
+  public/overlay/              OBS overlay page and graphics library
 frontend/   Next.js: landing page, Video Studio, Live Studio, Editor
 ```
 
 ---
 
 ## Technical reference
-
-รายละเอียดเทคนิคด้านล่างเขียนเป็นภาษาอังกฤษ
 
 ### Backend
 
@@ -314,7 +312,7 @@ uv pip install --python integrations/agent-reach/.venv/bin/python -r integration
 ```sh
 curl -s -b "$cookie_jar" http://localhost:8080/agent/chat \
   -H 'Content-Type: application/json' \
-  -d '{"message":"สร้างคลิปป้ายโปร 299 บาท พื้นหลังโปร่งใส"}'
+  -d '{"message":"Make a promo tag clip for 299 baht on a transparent background"}'
 ```
 
 The response includes an owner-authenticated download URL in `files`. The API fields `referenceUrl` and `referenceFile` accept a public URL and the ID of an uploaded reference clip respectively. Upload bytes to `POST /agent/files?name=example.webm` as `application/octet-stream`.
@@ -329,8 +327,8 @@ The response includes an owner-authenticated download URL in `files`. The API fi
 | Event | Payload example |
 | --- | --- |
 | Live price | `{"type":"price","sku":"A1","price":299}` |
-| Product | `{"type":"product","name":"กาแฟเย็น"}` |
-| Ingredients | `{"type":"ingredients","text":"กาแฟ · นมสด"}` |
+| Product | `{"type":"product","name":"Iced coffee"}` |
+| Ingredients | `{"type":"ingredients","text":"Coffee · fresh milk"}` |
 | Sales total | `{"type":"sales","total":4200}` |
 | Preloaded transparent WebM | `{"type":"promo"}`, `gift`, `flash`, `transition` |
 | Generated WebM | `{"type":"clip","fileId":"<returned file ID>"}` |
@@ -342,7 +340,7 @@ Overlay graphics are prebuilt templates that show instantly. Price, product, ing
 A `spotlight` event pops a product card out of a point in the 1920 × 1080 frame, such as the host's fingertip when they name the product:
 
 ```json
-{ "type": "spotlight", "x": 0.66, "y": 0.5, "image": "data:image/png;base64,…", "name": "น้ำหอม Daily Glow", "price": 1590, "motion": "pop", "box": { "x": 0.56, "y": 0.5, "w": 0.2, "h": 0.32 } }
+{ "type": "spotlight", "x": 0.66, "y": 0.5, "image": "data:image/png;base64,…", "name": "Daily Glow perfume", "price": 1590, "motion": "pop", "box": { "x": 0.56, "y": 0.5, "w": 0.2, "h": 0.32 } }
 ```
 
 `x`, `y` and `box` are fractions of the frame. `motion` is `pop` (card on a leader line, default), `bubble`, `rise` or `flip`. The optional `box` draws corner brackets around an area. The card opens below the point when it is in the top 42 % of the frame and stays inside the frame horizontally. The OpenAI Decisions API returns probabilities and choices, not coordinates, so a caller can ask a `choice` question over a grid of frame cells and send the chosen cell as `box` and its top centre as `x`, `y`.
