@@ -55,6 +55,8 @@ export type VideoDoc = {
   mock: boolean
   /** Steps entered so far, for tests and debugging. */
   trail: VideoStep[]
+  /** Short Thai notes, for example that the clip length is a little off the chosen one. */
+  warnings?: string[]
 }
 
 /** What the API returns. */

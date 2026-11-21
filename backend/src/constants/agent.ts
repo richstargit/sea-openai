@@ -6,6 +6,7 @@ export function isPrivateAgentPath(path: string): boolean {
   return (
     normalized.startsWith('/agent/editor/') ||
     normalized.startsWith('/agent/overlay/') ||
+    normalized.startsWith('/agent/live-script/') ||
     normalized === '/agent/skills' ||
     normalized.startsWith('/auth/') ||
     normalized === '/agent/files' ||

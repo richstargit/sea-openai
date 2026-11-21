@@ -11,6 +11,7 @@
     "lint": "eslint",
     "test:editor": "node --test tests/editor-model.test.mjs",
     "test:photos": "node --test tests/photo-white.test.mjs",
+    "test:live": "node --test tests/live-audio.test.mjs tests/live-listening.test.mjs tests/live-items.test.mjs tests/live-reconnect.test.mjs",
     "test:editor:browser": "playwright test"
   },
   "dependencies": {

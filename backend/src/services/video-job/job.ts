@@ -1,11 +1,10 @@
-import { mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { readdir, rename, rm, stat } from 'node:fs/promises'
 import path from 'node:path'
-import { type SaleFormat, saleFormatGuide } from '@/services/video/sale-formats.js'
-
 import { hookMachineConfig } from '@/config/hook-machine.config.js'
 import { type Aspect, DEFAULT_ASPECT } from '@/services/compose/presets.js'
 import { aiIsMocked } from '@/services/hook-machine/ai.js'
 import { runProject } from '@/services/hook-machine/project.js'
+import { lengthBudget } from '@/services/hook-machine/script-budget.js'
 import {
   createDoc,
   deleteDoc,
@@ -20,13 +19,14 @@ import {
   modelInfo,
   stylePreset,
 } from '@/services/hook-machine/voice/catalog.js'
-import {
-  MAX_INPUT_CHARS,
-  spokenLines,
-} from '@/services/hook-machine/voice/job.js'
+import { spokenLines } from '@/services/hook-machine/voice/job.js'
 import { speechProvider } from '@/services/hook-machine/voice/provider.js'
 import { suggestStyles } from '@/services/hook-machine/voice/suggest.js'
 import { logger } from '@/services/logger.service.js'
+import {
+  type SaleFormat,
+  saleFormatGuide,
+} from '@/services/video/sale-formats.js'
 import {
   composer,
   placeholderImage,
@@ -37,6 +37,7 @@ import {
   VIDEO_ERRORS,
   VideoJobError,
 } from '@/services/video-job/errors.js'
+import { fitSpeech } from '@/services/video-job/fit-length.js'
 import {
   VIDEO_STEPS,
   type VideoDoc,
@@ -188,10 +189,13 @@ export async function startVideoJob(params: StartParams): Promise<VideoDoc> {
       mock,
       language: params.profile.language,
       input: {
-        notes: [params.brief, saleFormatGuide(params.saleFormat)].filter(Boolean).join('\n\n'),
+        notes: [params.brief, saleFormatGuide(params.saleFormat)]
+          .filter(Boolean)
+          .join('\n\n'),
         productUrl: params.productUrl,
         durationSec: params.durationSec,
         images: params.images,
+        voiceLanguage: params.voice.language,
       },
       brief: null,
       research: null,
@@ -347,32 +351,51 @@ async function pipeline(
   if (!language || !model || !preset) {
     throw new VideoJobError('voice_failed', 'unsupported voice settings')
   }
-  const { lines } = await spokenLines(project, video.voiceLanguage)
-  const input = lines.join('\n')
-  if (!input) throw new VideoJobError('voice_failed', 'nothing to read aloud')
-  if (input.length > MAX_INPUT_CHARS) {
-    throw new VideoJobError(
-      'script_too_long',
-      `spoken text is ${input.length} characters`,
-    )
-  }
   const productName = project.brief?.productName ?? null
   const instructions = buildInstructions(preset, language, productName)
-  const wav = await speechProvider().synthesize({
-    model: model.id,
-    voice: video.voice.voice,
-    input,
-    ...(model.supportsInstructions
-      ? { instructions }
-      : { speed: preset.speed }),
-  })
-  checkpoint()
-
   const dir = videoDir(id)
   if (!dir) throw new Error('bad video id')
-  await mkdir(dir, { recursive: true })
-  const audioPath = path.join(dir, 'voice.wav')
-  await writeFile(audioPath, wav)
+
+  // The translation, if any, is written to fit the length the user chose.
+  const { lines: spoken } = await spokenLines(
+    project,
+    video.voiceLanguage,
+    lengthBudget({
+      targetSec: video.durationSec,
+      language: video.voiceLanguage,
+    }),
+  )
+  if (spoken.length === 0) {
+    throw new VideoJobError('voice_failed', 'nothing to read aloud')
+  }
+  // Check the text against the budget, speak it as one text, shorten the long
+  // gaps and nudge the speed so the clip lands on the chosen length.
+  const speech = await fitSpeech({
+    lines: spoken,
+    languageCode: language.code,
+    languageName: language.name,
+    targetSec: video.durationSec,
+    productName,
+    dir,
+    mock: aiIsMocked(),
+    synthesize: (input) =>
+      speechProvider().synthesize({
+        model: model.id,
+        voice: video.voice.voice,
+        input,
+        ...(model.supportsInstructions
+          ? { instructions }
+          : { speed: preset.speed }),
+      }),
+  })
+  checkpoint()
+  const lines = speech.lines
+  const audioPath = speech.audioPath
+  if (speech.warnings.length > 0) {
+    await updateDoc<VideoDoc>('videos', id, (doc) => {
+      doc.warnings = speech.warnings
+    })
+  }
 
   // 6: the picture, captions and the voice become one MP4.
   await enter('compose')

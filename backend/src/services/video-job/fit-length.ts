@@ -5,14 +5,12 @@
 // 4. If it is still too long, tighten the text once more (at most two rounds), then
 //    accept the closest result with a warning. The video is never failed for length alone.
 
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import {
   ACCEPT_MAX,
   ACCEPT_MIN,
-  judgeFit,
-  type LengthBudget,
   lengthBudget,
   tighterBudget,
   totalUnits,
@@ -20,6 +18,7 @@ import {
 import {
   type TightenFn,
   tightenLines,
+  tightenToBudget,
 } from '@/services/hook-machine/script-fit.js'
 import {
   applyFit,
@@ -42,7 +41,9 @@ export type FitSpeechArgs = {
   /** Turns the joined text into a wav. */
   synthesize: (input: string) => Promise<Buffer>
   tighten?: TightenFn
-  fit?: (args: {
+  /** Demo mode has no real voice: the take is written as it is, with no fitting. */
+  mock?: boolean
+  applyFit?: (args: {
     inPath: string
     outPath: string
     targetSec: number
@@ -66,42 +67,26 @@ export const LENGTH_WARNING = {
   short: 'ความยาวคลิปน้อยกว่าที่เลือกเล็กน้อย',
 } as const
 
-/** Tightens the lines until the estimate is inside the budget, at most two passes. */
-export async function tightenToBudget(args: {
-  lines: string[]
-  languageCode: string
-  languageName: string
-  budget: LengthBudget
-  productName: string | null
-  tighten: TightenFn
-}): Promise<{ lines: string[]; passes: number }> {
-  let lines = args.lines
-  let passes = 0
-  while (passes < MAX_ROUNDS) {
-    const verdict = judgeFit(totalUnits(lines, args.languageCode), args.budget)
-    if (verdict.status !== 'tighten') break
-    const next = await args.tighten({
-      lines,
-      languageCode: args.languageCode,
-      languageName: args.languageName,
-      budget: args.budget,
-      productName: args.productName,
-    })
-    passes += 1
-    // A reply that is not shorter did not help; stop instead of looping on it.
-    if (totalUnits(next, args.languageCode) >= totalUnits(lines, args.languageCode)) {
-      break
-    }
-    lines = next
-  }
-  return { lines, passes }
-}
-
 export async function fitSpeech(args: FitSpeechArgs): Promise<FitSpeechResult> {
   const tighten = args.tighten ?? tightenLines
-  const fit = args.fit ?? applyFit
+  const fitTake = args.applyFit ?? applyFit
   const warnings: string[] = []
   await mkdir(args.dir, { recursive: true })
+
+  if (args.mock) {
+    const finalPath = path.join(args.dir, 'voice.wav')
+    await writeFile(finalPath, await args.synthesize(joinForSpeech(args.lines)))
+    return {
+      lines: args.lines,
+      audioPath: finalPath,
+      durationSec: 0,
+      rounds: 1,
+      tempo: null,
+      shortenedGaps: 0,
+      inRange: true,
+      warnings: [],
+    }
+  }
 
   let budget = lengthBudget({
     targetSec: args.targetSec,
@@ -148,7 +133,7 @@ export async function fitSpeech(args: FitSpeechArgs): Promise<FitSpeechResult> {
     const raw = path.join(args.dir, `voice-raw-${round}.wav`)
     const fitted = path.join(args.dir, `voice-fit-${round}.wav`)
     await writeFile(raw, await args.synthesize(input))
-    const result = await fit({
+    const result = await fitTake({
       inPath: raw,
       outPath: fitted,
       targetSec: args.targetSec,
@@ -178,7 +163,10 @@ export async function fitSpeech(args: FitSpeechArgs): Promise<FitSpeechResult> {
       budget,
       productName: args.productName,
     })
-    if (totalUnits(tightened, args.languageCode) >= totalUnits(lines, args.languageCode)) {
+    if (
+      totalUnits(tightened, args.languageCode) >=
+      totalUnits(lines, args.languageCode)
+    ) {
       break
     }
     lines = tightened
@@ -188,7 +176,6 @@ export async function fitSpeech(args: FitSpeechArgs): Promise<FitSpeechResult> {
 
   const finalPath = path.join(args.dir, 'voice.wav')
   if (best.path !== finalPath) {
-    const { rename } = await import('node:fs/promises')
     await rename(best.path, finalPath)
   }
   const share = best.result.durationSec / args.targetSec

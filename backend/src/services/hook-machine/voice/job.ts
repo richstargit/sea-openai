@@ -4,6 +4,8 @@ import path from 'node:path'
 import { hookMachineConfig } from '@/config/hook-machine.config.js'
 import { aiIsMocked, structured } from '@/services/hook-machine/ai.js'
 import { voiceTranslationSchema } from '@/services/hook-machine/schemas.js'
+import type { LengthBudget } from '@/services/hook-machine/script-budget.js'
+import { translationBudgetPrompt } from '@/services/hook-machine/script-fit.js'
 import { readDoc, updateDoc } from '@/services/hook-machine/store.js'
 import type {
   Project,
@@ -79,6 +81,8 @@ export function cleanSpoken(line: string): string {
 export async function spokenLines(
   project: Project,
   language: string,
+  /** When given, the translation must fit this budget (translate to fit, not word for word). */
+  budget?: LengthBudget,
 ): Promise<{ lines: string[]; fresh: boolean }> {
   const source = scriptLines(project)
   if (language === project.language) return { lines: source, fresh: false }
@@ -94,7 +98,16 @@ export async function spokenLines(
     instructions: `Translate a short video voiceover into ${target} so it can be read aloud.
 Return exactly one translated line for each input line, in the same order.
 Keep Latin brand and product names unchanged. Write numbers and prices the way they are spoken in words in ${target}.
-Sound like natural speech from a person, not a translation. No quotation marks, no dashes, no emoji.`,
+Sound like natural speech from a person, not a translation. No quotation marks, no dashes, no emoji.${
+      budget
+        ? `\n${translationBudgetPrompt({
+            sourceLines: source,
+            sourceCode: project.language,
+            budget,
+            languageName: target,
+          })}`
+        : ''
+    }`,
     input: JSON.stringify({
       lines: source,
       productName: project.brief?.productName ?? null,

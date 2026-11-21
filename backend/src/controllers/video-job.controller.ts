@@ -2,8 +2,6 @@ import path from 'node:path'
 
 import type { RequestHandler, Response } from 'express'
 import { z } from 'zod'
-import { saleFormatIds } from '@/services/video/sale-formats.js'
-
 import { loggedInUser } from '@/controllers/auth.controller.js'
 import { imageUrl } from '@/controllers/hook-machine.controller.js'
 import { ASPECTS, DEFAULT_ASPECT } from '@/services/compose/presets.js'
@@ -18,6 +16,7 @@ import {
   DEFAULT_MODEL,
   DEFAULT_VOICE,
 } from '@/services/hook-machine/voice/catalog.js'
+import { saleFormatIds } from '@/services/video/sale-formats.js'
 import {
   deleteVideoFully,
   isVideoRunning,

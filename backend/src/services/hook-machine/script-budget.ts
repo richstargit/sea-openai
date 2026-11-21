@@ -7,13 +7,13 @@ import { speechUnits } from '@/services/hook-machine/voice/scoring.js'
 /**
  * Spoken units per second of FINISHED audio (gaps between phrases included,
  * after the long gaps are shortened). Measured on gpt-4o-mini-tts with the
- * marin voice and the creator style: Thai 274 characters ran 28.0 s with the
- * lines joined by a space (9.8 per second, 10.7 once gaps over 0.4 s are cut
- * to 0.3 s) and English 57 words ran 17.6 s (3.2 per second, 3.4 after the cut).
- * The other languages are estimates from the comfortable speaking band, so
- * the measured fit step corrects them after the first take.
+ * marin voice and the creator style, on eight real finished takes (4 lengths in
+ * each language): Thai 9.7 to 11.0 characters per second (mean 10.1), English
+ * 3.6 to 4.0 words per second (mean 3.8). The other languages are estimates
+ * from the comfortable speaking band, so the measured fit step corrects them
+ * after the first take.
  */
-const MEASURED_RATE: Record<string, number> = { th: 10.5, en: 3.4 }
+const MEASURED_RATE: Record<string, number> = { th: 10.1, en: 3.8 }
 
 export function ratePerSecond(languageCode: string): number {
   const measured = MEASURED_RATE[languageCode]
@@ -21,6 +21,25 @@ export function ratePerSecond(languageCode: string): number {
   const info = languageInfo(languageCode)
   if (!info) return MEASURED_RATE.en ?? 3.4
   return Math.round(((info.band[0] + info.band[1]) / 2) * 1.1 * 100) / 100
+}
+
+/**
+ * The same content takes different spoken time in different languages: the
+ * same sales pitch is about 3.5 Thai characters per English word, and the
+ * English version takes roughly 70 percent of the speaking time of the Thai
+ * one (measured: 293 Thai characters became 81 English words, 29 s against 20 s).
+ * So a script written in one language has to be sized for the language that
+ * will be spoken. Other pairs are assumed to take the same time.
+ */
+const THAI_CHARS_PER_ENGLISH_WORD = 3.5
+
+/** How many units of `from` carry the same content as one unit of `to`. */
+export function contentFactor(from: string, to: string): number {
+  if (from === to) return 1
+  if (from === 'th' && to === 'en') return THAI_CHARS_PER_ENGLISH_WORD
+  if (from === 'en' && to === 'th') return 1 / THAI_CHARS_PER_ENGLISH_WORD
+  // Same speaking time: convert through seconds.
+  return ratePerSecond(from) / ratePerSecond(to)
 }
 
 /** A digit run is spoken as several syllables, which a plain count misses. */
@@ -81,11 +100,17 @@ export function suggestedBeatCount(targetSec: number): number {
 
 export function lengthBudget(args: {
   targetSec: number
+  /** The language the text is written in. */
   language: string
+  /** The language that will be spoken, when it is not the one the text is written in. */
+  spokenLanguage?: string
 }): LengthBudget {
+  const spoken = args.spokenLanguage ?? args.language
   const info = languageInfo(args.language)
   const unit = info?.unit ?? 'words'
-  const rate = ratePerSecond(args.language)
+  // The budget is worked out in the spoken language, then sized in the written one.
+  const scale = contentFactor(args.language, spoken)
+  const rate = ratePerSecond(spoken) * scale
   const aimSec = args.targetSec * AIM
   const total = Math.max(4, Math.round(rate * aimSec))
   const beats = suggestedBeatCount(args.targetSec)
@@ -145,10 +170,14 @@ export function tighterBudget(
 }
 
 /** The part of a prompt that tells the writer how much it may say. */
-export function budgetPrompt(budget: LengthBudget, languageName: string): string {
-  const unit = budget.unit === 'chars' ? 'characters (spaces not counted)' : 'words'
+export function budgetPrompt(
+  budget: LengthBudget,
+  languageName: string,
+): string {
+  const unit =
+    budget.unit === 'chars' ? 'characters (spaces not counted)' : 'words'
   return `LENGTH BUDGET (hard limit, the video must end on time):
-- The finished video is ${budget.targetSec} seconds. All spoken ${languageName} lines together may have at most ${budget.totalUnits} ${unit}. Count before you answer and cut if you are over.
+- The finished video is ${budget.targetSec} seconds. All spoken ${languageName} lines together may have at most ${budget.totalUnits} ${unit}, and should use at least ${Math.round(budget.totalUnits * 0.9)}: a script far under the budget leaves the video short. Aim for ${Math.round(budget.totalUnits * 0.95)}. Count before you answer, cut if you are over and add a supported benefit beat if you are well under.
 - Use about ${budget.beats} beats. The hook beat at most ${budget.hookUnits} ${unit}, the closing call to action beat at most ${budget.closingUnits} ${unit}, and each beat in between at most ${budget.bodyBeatUnits} ${unit}.
 - Write numbers and prices as they are spoken, for example thirty milliliters, not 30 ml. Spoken numbers take time.
 - Fewer words is fine, padding is not. Make the beats startSec and endSec add up to ${budget.targetSec}.`

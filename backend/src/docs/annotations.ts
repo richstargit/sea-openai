@@ -12,6 +12,12 @@ import {
   voiceBody,
   voiceOptionsQuery,
 } from '@/controllers/hook-machine.controller.js'
+import {
+  createShowBody,
+  replyBody as liveReplyBody,
+  sessionBody,
+  utteranceBody,
+} from '@/controllers/live-script.controller.js'
 import { createVideoBody } from '@/controllers/video-job.controller.js'
 import type { Annotations } from '@/docs/introspect.js'
 import { agentChatSchema, agentMessageSchema } from '@/schemas/agent.schema.js'
@@ -31,6 +37,8 @@ const agentStream = {
 
 const HM = '/agent/hook-machine'
 const TAG = ['Hook Machine']
+const LS = '/agent/live-script'
+const LIVE_TAG = ['Live script']
 
 export const ANNOTATIONS: Annotations = {
   'GET /agent/hyperframes/runtime.js': {
@@ -235,6 +243,82 @@ export const ANNOTATIONS: Annotations = {
     secured: true,
     summary: 'Save your own star rating for a take',
     bodySchema: ratingBody,
+  },
+  [`GET ${LS}/options`]: {
+    tags: LIVE_TAG,
+    secured: true,
+    summary: 'Limits and the live rubric',
+    description:
+      'Reports whether AI is ready, the limits for photos, comments and utterances, the live principles and the path of the seller prompter page.',
+  },
+  [`POST ${LS}/shows`]: {
+    tags: LIVE_TAG,
+    secured: true,
+    summary: 'Build a playbook for a live stream',
+    description:
+      'Starts one background job (202): reads the photos and brief, researches the product with Agent-Reach, writes graded opening hooks, product pitches in several wordings, chat prompts, objection answers and a closing in the chosen style, then checks every line against the facts. Prices, promotions, stock and deadlines come only from the offer the seller typed. Poll GET shows/:id (step, stepIndex, stepCount, playbook). One running show per account (409), two at once on the server (503). No text to speech anywhere.',
+    bodySchema: createShowBody,
+    errors: [400, 404, 409, 429, 503],
+  },
+  [`GET ${LS}/shows`]: {
+    tags: LIVE_TAG,
+    secured: true,
+    summary: 'Your latest playbooks, newest first',
+    description: 'At most 30. Each item has the same shape as a single show.',
+  },
+  [`GET ${LS}/shows/:id`]: {
+    tags: LIVE_TAG,
+    secured: true,
+    summary: 'Read one playbook and its progress',
+    description: 'Poll while status is running.',
+  },
+  [`DELETE ${LS}/shows/:id`]: {
+    tags: LIVE_TAG,
+    secured: true,
+    summary: 'Delete a playbook',
+    errors: [409],
+  },
+  [`POST ${LS}/shows/:id/reply`]: {
+    tags: LIVE_TAG,
+    secured: true,
+    summary: 'A short reply to one chat comment',
+    description:
+      'One small model call grounded in the playbook facts and the typed offer. status is answered, unknown (the seller says they will check) or declined. The comment is treated as untrusted data.',
+    bodySchema: liveReplyBody,
+    errors: [400, 429, 503],
+  },
+  [`POST ${LS}/shows/:id/session`]: {
+    tags: LIVE_TAG,
+    secured: true,
+    summary: 'Start listening while the seller talks',
+    description:
+      "Starts the account's single listening session (a new one ends the old one) and mints a short lived secret so the browser can open a realtime transcription socket to OpenAI directly. The API key never reaches the browser. showOnStream (default false) also sends suggested lines to the program overlay as a caption. The prompter page at prompterPath is for the seller only.",
+    bodySchema: sessionBody,
+    errors: [400, 404, 429, 503],
+  },
+  [`POST ${LS}/sessions/:sessionId/secret`]: {
+    tags: LIVE_TAG,
+    secured: true,
+    summary: 'A fresh transcription secret for a reconnect',
+    description:
+      'A socket should be replaced before about 55 minutes. A session that already started keeps working after its secret expires.',
+    errors: [404, 429, 503],
+  },
+  [`POST ${LS}/sessions/:sessionId/utterance`]: {
+    tags: LIVE_TAG,
+    secured: true,
+    summary: 'One speech to text result from the browser',
+    description:
+      "Partial results (final false) only update a light state and answer suggestion null. A finished sentence works out what the seller is doing (Decisions API, with fallbacks) and returns one suggestion: the next 1 to 3 lines to say, a cue for the price overlay (data only), an advisory warning and a hesitation flag. A sentence replaced by a newer one is dropped and answers null. Each new suggestion is also pushed to the account's OBS overlay link as a prompter event.",
+    bodySchema: utteranceBody,
+    errors: [404, 429],
+  },
+  [`DELETE ${LS}/sessions/:sessionId`]: {
+    tags: LIVE_TAG,
+    secured: true,
+    summary: 'End the listening session and free its state',
+    description: 'Sessions also end after 4 hours of silence.',
+    errors: [404],
   },
   [`POST ${HM}/videos`]: {
     tags: TAG,

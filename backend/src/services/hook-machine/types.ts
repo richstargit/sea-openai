@@ -111,6 +111,8 @@ export type Project = {
     productUrl: string | null
     durationSec: number
     images: string[]
+    /** The language the voice will speak, when it is not the script language. The script budget is written for it. */
+    voiceLanguage?: string
   }
   brief: ProductBrief | null
   research:
