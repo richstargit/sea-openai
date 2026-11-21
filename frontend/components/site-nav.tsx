@@ -16,10 +16,12 @@ import {
 } from "@/components/ui/sheet";
 
 export const navLinks = [
+  { href: "/#shop-features", label: "ฟีเจอร์สำหรับร้าน" },
   { href: "/#snap", label: "ถ่ายรูป ได้คลิป" },
   { href: "/#products", label: "ตัวอย่างสินค้า" },
   { href: "/#live", label: "ลูกมือไลฟ์" },
   { href: "/#measure", label: "วัดผล" },
+  { href: "/editor", label: "ตัดต่อคลิป" },
 ];
 
 export function Wordmark({ className }: { className?: string }) {
@@ -48,13 +50,13 @@ export function SiteNav() {
     <header className="material sticky top-0 z-50 border-b">
       <nav
         aria-label={t("เมนูหลัก")}
-        className="mx-auto flex min-h-16 w-full max-w-[1080px] flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2 pr-[max(1.25rem,env(safe-area-inset-right))] pl-[max(1.25rem,env(safe-area-inset-left))] sm:px-8"
+        className="mx-auto flex min-h-16 w-full max-w-[1280px] flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2 pr-[max(1.25rem,env(safe-area-inset-right))] pl-[max(1.25rem,env(safe-area-inset-left))] sm:px-8"
       >
         <Link href="/" className="shrink-0 rounded-md py-2 text-[1.0625rem] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60" aria-label={t("SnapPromo หน้าแรก")}>
           <Wordmark />
         </Link>
 
-        <ul className="hidden items-center gap-1 lg:flex">
+        <ul className="hidden items-center gap-1 xl:flex">
           {navLinks.map((l) => (
             <li key={l.href}>
               <Link
@@ -75,7 +77,7 @@ export function SiteNav() {
 
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon-sm" className="lg:hidden" aria-label={t("เปิดเมนู")}>
+              <Button variant="ghost" size="icon-sm" className="xl:hidden" aria-label={t("เปิดเมนู")}>
                 <Menu />
               </Button>
             </SheetTrigger>

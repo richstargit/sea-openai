@@ -19,6 +19,7 @@ const cols = [
     title: "เริ่มใช้งาน",
     links: [
       { href: "/studio", label: "ลองทำคลิปแรก" },
+      { href: "/editor", label: "ตัดต่อคลิป" },
       { href: "/#measure", label: "เวลาและต้นทุนต่อคลิป" },
     ],
   },

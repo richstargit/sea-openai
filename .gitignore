@@ -1,2 +1,5 @@
 .env
 .env.*
+
+# Upstream source downloaded for the editor adaptation.
+/references/filmcraft/

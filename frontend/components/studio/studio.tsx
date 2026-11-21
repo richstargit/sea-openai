@@ -1,17 +1,20 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { createDemoProject } from "@/lib/editor/demo";
 import { useLanguage } from "@/components/language-provider";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { Camera, Check, Download, ImagePlus, Plus, RotateCcw, X } from "lucide-react";
+import { Camera, Check, Scissors, ImagePlus, Plus, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Phone } from "@/components/phone";
-import { ClipScene } from "@/components/clip-scene";
+import { VideoFormatPicker } from "@/components/video-format-picker";
+import { VideoPreview } from "@/components/video-preview";
+import { videoFormats, videoRatio, type VideoSize } from "@/lib/video-formats";
 import { ProductArt } from "@/components/product-art";
 import { productList, products, type ProductKind } from "@/lib/demo-data";
 import { fade, spring } from "@/lib/spring";
@@ -40,11 +43,17 @@ const STAGE_MS = 1300;
 export function Studio() {
   const { t } = useLanguage();
   const reduce = useReducedMotion();
+  const router = useRouter();
+  const [activeVersion, setActiveVersion] = useState("A");
+  const [openingEditor, setOpeningEditor] = useState(false);
+  const [editorError, setEditorError] = useState("");
   const [step, setStep] = useState<Step>("photos");
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [kind, setKind] = useState<ProductKind>("food");
   const [price, setPrice] = useState("89");
   const [promo, setPromo] = useState("");
+  const [size, setSize] = useState<VideoSize>(videoFormats[0]);
+  const [validSize, setValidSize] = useState(true);
   const [stage, setStage] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const idRef = useRef(1);
@@ -110,6 +119,7 @@ export function Studio() {
     urlsRef.current = [];
     setPhotos([]);
     setPromo("");
+    setValidSize(true);
     setStep("photos");
   };
 
@@ -284,10 +294,14 @@ export function Studio() {
               </div>
             </div>
 
+            <div className="mt-8">
+              <VideoFormatPicker value={size} onChange={setSize} onValidityChange={setValidSize} />
+            </div>
+
             <div className="mt-10 flex items-center justify-between gap-4">
-              <Button variant="ghost" onClick={() => setStep("photos")}>
+              <Button variant="ghost" onClick={() => { setValidSize(true); setStep("photos"); }}>
                 {t(" ย้อนกลับ ")}</Button>
-              <Button size="lg" onClick={start} disabled={!price.trim()}>
+              <Button size="lg" onClick={start} disabled={!price.trim() || !validSize}>
                 {t(" สร้างคลิป ")}</Button>
             </div>
           </motion.section>
@@ -348,7 +362,11 @@ export function Studio() {
             <p className="mt-3 text-muted-foreground">
               {t(" สามเวอร์ชันเปิดต่างกัน เลือกอันที่ชอบหรือโพสต์ทดลองทั้งหมด ")}</p>
 
-            <Tabs defaultValue="A" className="mt-8">
+            <div className="mt-8">
+              <VideoFormatPicker value={size} onChange={setSize} onValidityChange={setValidSize} />
+            </div>
+
+            <Tabs value={activeVersion} onValueChange={setActiveVersion} className="mt-8">
               <TabsList className="w-full" aria-label={t("เวอร์ชันของคลิป")}>
                 {versions.map((v) => (
                   <TabsTrigger key={v.id} value={v.id}>
@@ -358,11 +376,7 @@ export function Studio() {
               </TabsList>
               {versions.map((v) => (
                 <TabsContent key={v.id} value={v.id} className="mt-8">
-                  <div className="mx-auto w-[min(300px,76vw)]">
-                    <Phone label={t("คลิปเวอร์ชัน ") + (v.id) + ": " + (v.line)}>
-                      <ClipScene product={theme} hook={t(v.line)} caption={t(theme.selling)} image={cover} />
-                    </Phone>
-                  </div>
+                  <VideoPreview size={size} product={theme} hook={v.line} caption={theme.selling} image={cover} />
                   <p className="mt-6 text-center">
                     <Badge variant="wash">{t(v.angle)}</Badge>
                   </p>
@@ -377,15 +391,24 @@ export function Studio() {
               </div>
               <div className="rounded-2xl bg-surface p-4">
                 <dt className="t-small text-muted-foreground">{t("รูปแบบ")}</dt>
-                <dd className="mt-1 text-[1.5rem] font-semibold">9:16</dd>
+                <dd className="mt-1 text-[1.5rem] font-semibold">{videoRatio(size)}</dd>
+                <p className="mt-1 text-sm tabular-nums text-muted-foreground">{size.width} × {size.height} px</p>
               </div>
             </dl>
             <p className="t-small mt-3 text-muted-foreground">
               {t(" เวลาข้างบนเป็นการจำลองหน้าจอ ตัวเลขจริงจะวัดเมื่อเชื่อมระบบสร้างวิดีโอแล้ว ")}</p>
 
             <div className="mt-8 flex flex-col gap-3">
-              <Button size="lg" disabled className="w-full">
-                <Download /> {t(" ดาวน์โหลดคลิป (เร็ว ๆ นี้) ")}</Button>
+              <Button size="lg" disabled={openingEditor || !validSize} className="w-full" onClick={async () => {
+                setOpeningEditor(true); setEditorError("");
+                try {
+                  const version = versions.find((item) => item.id === activeVersion) || versions[0];
+                  const result = await createDemoProject({ image: cover || `/editor/${kind}.svg`, title: t(version.line), caption: t(theme.selling), size, name: `${t(theme.name)} · ${version.id}` });
+                  router.push(`/editor?project=${result.project.id}`);
+                } catch { setEditorError(t("เปิดห้องตัดต่อไม่สำเร็จ กรุณาตรวจพื้นที่จัดเก็บของเบราว์เซอร์แล้วลองอีกครั้ง")); setOpeningEditor(false); }
+              }}>
+                <Scissors /> {t(openingEditor ? "กำลังเปิดห้องตัดต่อ" : "เปิดในห้องตัดต่อ")}</Button>
+              {editorError && <p role="alert" className="text-sm text-destructive">{editorError}</p>}
               <Button variant="secondary" size="lg" className="w-full" onClick={reset}>
                 <RotateCcw /> {t(" ทำสินค้าชิ้นใหม่ ")}</Button>
             </div>
