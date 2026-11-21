@@ -1,3 +1,9 @@
+import {
+  type Aspect,
+  DEFAULT_ASPECT,
+  presetFor,
+} from '@/services/compose/presets.js'
+
 /** The six visible steps of one button video, in order. */
 export const VIDEO_STEPS = [
   'brief',
@@ -34,6 +40,10 @@ export type VideoDoc = {
   projectId: string
   createdAt: string
   durationSec: number
+  /** The shape asked for, and the pixel size of the file that is made (smaller in demo mode). */
+  aspect: Aspect
+  width: number
+  height: number
   voiceLanguage: string
   voice: { model: string; voice: string; styleId: string }
   status: VideoStatus
@@ -58,6 +68,9 @@ export type VideoJob = {
   error: string | null
   createdAt: string
   durationSec: number
+  aspect: Aspect
+  width: number
+  height: number
   voiceLanguage: string
   file: { url: string; sizeBytes: number; durationSec: number } | null
 }
@@ -66,6 +79,9 @@ export const videoFileUrl = (id: string) =>
   `/agent/hook-machine/videos/${id}/file`
 
 export function toVideoJob(doc: VideoDoc): VideoJob {
+  // Jobs saved before the shapes existed were all 9:16.
+  const aspect = doc.aspect ?? DEFAULT_ASPECT
+  const preset = presetFor(aspect)
   return {
     id: doc.id,
     profileId: doc.profileId,
@@ -76,6 +92,9 @@ export function toVideoJob(doc: VideoDoc): VideoJob {
     error: doc.status === 'error' ? doc.error : null,
     createdAt: doc.createdAt,
     durationSec: doc.durationSec,
+    aspect,
+    width: doc.width ?? preset.width,
+    height: doc.height ?? preset.height,
     voiceLanguage: doc.voiceLanguage,
     file:
       doc.status === 'ready' && doc.file

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLanguage } from "@/components/language-provider";
-import { LENGTHS, type VideoLength } from "./api";
+import { type Aspect, DEFAULT_ASPECT, LENGTHS, recallAspect, rememberAspect, type VideoLength } from "./api";
+import { AspectPicker } from "./aspect-picker";
 import { CreateBar } from "./create-bar";
 import { type Photo, PhotoComposer } from "./photo-composer";
 import { type StyleState, StyleSection } from "./style-section";
@@ -30,8 +31,15 @@ export function VideoStudio() {
   const [brief, setBrief] = useState("");
   const [style, setStyle] = useState<StyleState>({ id: "", name: "", status: "loading" });
   const [length, setLength] = useState<VideoLength>(30);
+  const [aspect, setAspect] = useState<Aspect>(DEFAULT_ASPECT);
   const [voice, setVoice] = useState<VoiceChoice>({ language: "en", voice: "marin" });
   const options = useVoiceOptions();
+
+  // The last chosen shape comes back after the first paint, so the server and the browser render the same markup.
+  useEffect(() => {
+    queueMicrotask(() => { const saved = recallAspect(); if (saved) setAspect(saved); });
+  }, []);
+  const chooseAspect = useCallback((next: Aspect) => { setAspect(next); rememberAspect(next); }, []);
   const { job, problem, starting, start, reset } = useVideoJob();
 
   const working = starting || job?.status === "running";
@@ -44,9 +52,10 @@ export function VideoStudio() {
       brief: brief.trim(),
       images: photos.map((photo) => photo.url),
       durationSec: length,
+      aspect,
       voice: { language: voice.language, voice: voice.voice, model: options?.defaults.model },
     });
-  }, [reason, working, start, style.id, brief, photos, length, voice, options]);
+  }, [reason, working, start, style.id, brief, photos, length, aspect, voice, options]);
 
   // When the video comes back, bring it into view without animation if the user asked for none.
   const dock = useRef<HTMLDivElement>(null);
@@ -72,19 +81,22 @@ export function VideoStudio() {
         <StyleSection onState={setStyle} disabled={working} />
       </div>
 
-      <div className="vs-row" role="radiogroup" aria-labelledby="vs-length-label">
-        <span className="vs-label" id="vs-length-label">{t("ความยาว")}</span>
-        <div className="vs-seg">
-          {LENGTHS.map((s) => <label key={s}>
-            <input type="radio" name="vs-length" value={s} checked={length === s} disabled={working} onChange={() => setLength(s)} />
-            <span>{s} {t("วิ")}</span>
-          </label>)}
+      <div className="vs-row vs-pair">
+        <div className="vs-group" role="radiogroup" aria-labelledby="vs-length-label">
+          <span className="vs-label" id="vs-length-label">{t("ความยาว")}</span>
+          <div className="vs-seg">
+            {LENGTHS.map((s) => <label key={s}>
+              <input type="radio" name="vs-length" value={s} checked={length === s} disabled={working} onChange={() => setLength(s)} />
+              <span>{s} {t("วิ")}</span>
+            </label>)}
+          </div>
         </div>
+        <AspectPicker value={aspect} onChange={chooseAspect} disabled={working} />
       </div>
 
       <VoiceRow value={voice} onChange={setVoice} options={options} disabled={working} />
     </section>
 
-    <CreateBar job={job} starting={starting} problem={problem} reason={reason} onStart={go} onReset={reset} dockRef={dock} />
+    <CreateBar job={job} starting={starting} problem={problem} reason={reason} onStart={go} onReset={reset} dockRef={dock} aspect={aspect} />
   </div>;
 }

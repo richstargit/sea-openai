@@ -119,7 +119,14 @@ describe('one button video api', () => {
   let jobModule: typeof import('@/services/video-job/job.js')
   let store: typeof import('@/services/hook-machine/store.js')
   let dataDir: string
-  let composeCalls: { beats: unknown; images: number; title?: string }[] = []
+  let composeCalls: {
+    beats: unknown
+    images: number
+    title?: string
+    aspect: string
+    width: number
+    height: number
+  }[] = []
 
   const as = (who: Who = 'a') => {
     const agent = request(app)
@@ -178,6 +185,9 @@ describe('one button video api', () => {
         beats: req.beats,
         images: req.images.length,
         title: req.title,
+        aspect: req.aspect,
+        width: req.width,
+        height: req.height,
       })
       if (mode === 'fail')
         throw new Error('ffmpeg exploded at /Users/someone/secret.wav')
@@ -318,8 +328,11 @@ describe('one button video api', () => {
     })
     expect(Object.keys(done).sort()).toEqual(
       [
+        'aspect',
         'createdAt',
         'durationSec',
+        'height',
+        'width',
         'error',
         'file',
         'id',
@@ -563,6 +576,85 @@ describe('one button video api', () => {
     expect(doc?.errorCode).toBe('voice_failed')
     expect(doc?.trail).toContain('voice')
     expect(doc?.trail).not.toContain('compose')
+  })
+
+  it('makes any of the four shapes, 9:16 by default, at the demo size', async () => {
+    const { frameSize } = await import('@/services/compose/presets.js')
+    const profileId = await readyProfile('user-a')
+
+    // An old client sends no aspect and keeps getting 9:16.
+    const plain = await create('a', profileId)
+    expect(plain.status).toBe(202)
+    expect(plain.body.video).toMatchObject({
+      aspect: '9:16',
+      width: 360,
+      height: 640,
+    })
+    await finished('a', plain.body.video.id)
+    expect(composeCalls[0]).toMatchObject({
+      aspect: '9:16',
+      width: 360,
+      height: 640,
+    })
+
+    const expected: Record<string, [number, number]> = {
+      '9:16': [360, 640],
+      '4:5': [360, 450],
+      '1:1': [360, 360],
+      '16:9': [640, 360],
+    }
+    for (const [aspect, [width, height]] of Object.entries(expected)) {
+      composeCalls = []
+      const res = await create('a', profileId, { aspect })
+      expect(res.status).toBe(202)
+      expect(res.body.video).toMatchObject({ aspect, width, height })
+      expect(frameSize(aspect as never, true)).toEqual({ width, height })
+      const done = await finished('a', res.body.video.id)
+      expect(done).toMatchObject({ status: 'ready', aspect, width, height })
+      // The composer was asked for exactly that shape and size.
+      expect(composeCalls[0]).toMatchObject({ aspect, width, height })
+      const listed = (await as('a').get(`${BASE}/videos`)).body.videos.find(
+        (v: { id: string }) => v.id === res.body.video.id,
+      )
+      expect(listed).toMatchObject({ aspect, width, height })
+    }
+  })
+
+  it('rejects an unknown shape like any other bad field', async () => {
+    const profileId = await readyProfile('user-a')
+    for (const aspect of ['4:3', '21:9', 'portrait', '', 169, null]) {
+      const res = await create('a', profileId, { aspect })
+      expect(res.status).toBe(422)
+    }
+    expect(composeCalls).toHaveLength(0)
+  })
+
+  it('reads a job saved before the shapes existed as 9:16', async () => {
+    const id = crypto.randomUUID()
+    await store.createDoc('videos', {
+      id,
+      ownerId: 'user-a',
+      profileId: crypto.randomUUID(),
+      projectId: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+      durationSec: 30,
+      voiceLanguage: 'en',
+      voice: { model: 'm', voice: 'v', styleId: 'creator' },
+      status: 'error',
+      step: null,
+      stepIndex: 3,
+      errorCode: 'unknown',
+      error: 'x',
+      file: null,
+      mock: false,
+      trail: [],
+    } as never)
+    const res = await as('a').get(`${BASE}/videos/${id}`)
+    expect(res.body.video).toMatchObject({
+      aspect: '9:16',
+      width: 1080,
+      height: 1920,
+    })
   })
 
   it('draws a plain card when only text was given', async () => {

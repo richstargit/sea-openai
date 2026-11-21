@@ -6,8 +6,20 @@ import { createCanvas, type Image, loadImage } from '@napi-rs/canvas'
 
 import { childEnv, hookMachineConfig } from '@/config/hook-machine.config.js'
 
-import { cameraAt, sourceRect } from '@/services/compose/camera.js'
+import {
+  cameraAt,
+  chooseFraming,
+  containRect,
+  sourceRect,
+} from '@/services/compose/camera.js'
 import { buildEncodeArgs } from '@/services/compose/ffmpeg.js'
+import {
+  PRESETS,
+  type Preset,
+  type SafeArea,
+  safeBox,
+  unitScale,
+} from '@/services/compose/presets.js'
 import type {
   CaptionPage,
   ShotPlan,
@@ -23,33 +35,64 @@ export const DEFAULT_THEME: Omit<Theme, 'fontFamily'> = {
   captionText: '#ffffff',
 }
 
-/** Phone apps cover the top fifth and the bottom quarter, and buttons sit on the right. */
-export function safeArea(width: number, height: number) {
-  return {
-    left: Math.round(width * 0.085),
-    right: Math.round(width * 0.085),
-    top: Math.round(height * 0.12),
-    captionBottom: Math.round(height * 0.74),
-  }
-}
-
 export type CaptionLayout = {
   fontPx: number
   linePx: number
   maxTextWidth: number
 }
 
+/**
+ * Caption size and line width for one shape. The size grows with the frame
+ * (a 720 wide 9:16 frame is the reference, so that look is unchanged), and
+ * the line width is what the safe area leaves, so Thai wraps to the room
+ * each shape really has.
+ */
 export function captionLayout(
   width: number,
   height: number,
   fontSize?: number,
+  preset: Preset = PRESETS['9:16'],
 ): CaptionLayout {
-  const area = safeArea(width, height)
-  const fontPx = fontSize ?? Math.round(width * 0.058)
+  const k = unitScale(width, height)
+  const box = safeBox(preset.safe, width, height)
+  const fontPx =
+    fontSize ??
+    Math.round(Math.min(width, height) * 0.058 * preset.captionScale)
+  const room = width - box.left - box.right
+  const cap =
+    preset.captionMaxWidthPct === null
+      ? room
+      : Math.min(room, Math.round((width * preset.captionMaxWidthPct) / 100))
   return {
     fontPx,
     linePx: Math.round(fontPx * 1.42),
-    maxTextWidth: width - area.left - area.right - Math.round(width * 0.09),
+    // The caption box adds its own padding on both sides.
+    maxTextWidth: cap - Math.round(76 * k),
+  }
+}
+
+/** Where the caption box sits, in pixels. `lead` is 0 to 1 while a page eases in. */
+export function captionBox(
+  width: number,
+  height: number,
+  safe: SafeArea,
+  layout: CaptionLayout,
+  lineWidths: number[],
+  lead = 1,
+): { x: number; y: number; w: number; h: number; radius: number } {
+  const k = unitScale(width, height)
+  const edge = safeBox(safe, width, height)
+  const w = Math.min(
+    width - edge.left - edge.right,
+    Math.max(...lineWidths) + Math.round(76 * k),
+  )
+  const h = layout.linePx * lineWidths.length + Math.round(52 * k)
+  return {
+    x: (width - w) / 2,
+    y: edge.captionBottom - h + (1 - lead) * 14 * k,
+    w,
+    h,
+    radius: Math.round(36 * k),
   }
 }
 
@@ -70,6 +113,7 @@ type RenderPlan = {
   shots: ShotPlan[]
   images: Image[]
   layout: CaptionLayout
+  preset: Preset
   title?: string
   theme: Theme
   audioPath: string
@@ -100,6 +144,40 @@ export async function loadImages(
   return Promise.all(sources.map((s) => loadImage(s)))
 }
 
+/** The photo, enlarged to fill the frame and blurred, for the sides of a photo that does not. */
+function makeBackdrop(image: Image, width: number, height: number) {
+  const small = createCanvas(
+    Math.max(8, Math.round(width / 32)),
+    Math.max(8, Math.round(height / 32)),
+  )
+  const sctx = small.getContext('2d')
+  sctx.imageSmoothingEnabled = true
+  sctx.imageSmoothingQuality = 'high'
+  const cover = Math.max(small.width / image.width, small.height / image.height)
+  const sw = small.width / cover
+  const sh = small.height / cover
+  sctx.drawImage(
+    image,
+    (image.width - sw) / 2,
+    (image.height - sh) / 2,
+    sw,
+    sh,
+    0,
+    0,
+    small.width,
+    small.height,
+  )
+  const canvas = createCanvas(width, height)
+  const ctx = canvas.getContext('2d')
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  // Scaling the tiny copy back up is the blur.
+  ctx.drawImage(small, 0, 0, width, height)
+  ctx.fillStyle = 'rgba(20, 14, 8, 0.22)'
+  ctx.fillRect(0, 0, width, height)
+  return canvas
+}
+
 export async function renderClip(plan: RenderPlan): Promise<number> {
   const { width, height, fps, theme } = plan
   const total = Math.round(plan.durationSec * fps)
@@ -107,8 +185,12 @@ export async function renderClip(plan: RenderPlan): Promise<number> {
   const ctx = canvas.getContext('2d')
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
-  const area = safeArea(width, height)
+  const area = safeBox(plan.preset.safe, width, height)
+  const k = unitScale(width, height)
+  const unit = Math.min(width, height)
   const layout = plan.layout
+  const view = { width, height }
+  const backdrops = new Map<Image, ReturnType<typeof makeBackdrop>>()
 
   await mkdir(path.dirname(plan.outPath), { recursive: true })
   const ffmpeg = spawn(
@@ -159,20 +241,29 @@ export async function renderClip(plan: RenderPlan): Promise<number> {
     const shot = plan.shots[bi] ?? plan.shots[0]
     if (!shot) throw new Error('no camera plan')
     // The subject rides above the caption box, which sits low in the safe area.
-    const r = sourceRect(
-      cameraAt(shot, progress),
-      image,
-      { width, height },
-      { x: 0.5, y: 0.4 },
-    )
-    ctx.drawImage(image, r.sx, r.sy, r.sw, r.sh, 0, 0, width, height)
+    const focus = cameraAt(shot, progress)
+    const anchor = { x: 0.5, y: plan.preset.subjectY }
+    if (chooseFraming(plan.preset.fit, image, view) === 'cover') {
+      const r = sourceRect(focus, image, view, anchor)
+      ctx.drawImage(image, r.sx, r.sy, r.sw, r.sh, 0, 0, width, height)
+    } else {
+      // The whole photo on a blurred copy of itself, so nothing is cropped away or stretched.
+      let backdrop = backdrops.get(image)
+      if (!backdrop) {
+        backdrop = makeBackdrop(image, width, height)
+        backdrops.set(image, backdrop)
+      }
+      ctx.drawImage(backdrop, 0, 0)
+      const r = containRect(focus, image, view, anchor)
+      ctx.drawImage(image, r.dx, r.dy, r.dw, r.dh)
+    }
 
     // A soft shade under the captions keeps white text readable on a bright photo.
     const shade = ctx.createLinearGradient(
       0,
       height * 0.5,
       0,
-      area.captionBottom + 140,
+      area.captionBottom + 140 * k,
     )
     shade.addColorStop(0, 'rgba(20,14,8,0)')
     shade.addColorStop(1, 'rgba(20,14,8,0.42)')
@@ -181,22 +272,38 @@ export async function renderClip(plan: RenderPlan): Promise<number> {
 
     // Progress line along the top edge.
     ctx.fillStyle = theme.accent
-    ctx.fillRect(0, 0, Math.round(width * (t / plan.durationSec)), 6)
+    ctx.fillRect(
+      0,
+      0,
+      Math.round(width * (t / plan.durationSec)),
+      Math.max(4, Math.round(6 * k)),
+    )
 
     // Product name, during the first shot only.
     if (plan.title && bi === 0) {
       const fade = Math.min(1, t / 0.25, (beat.endSec - t) / 0.25)
       ctx.globalAlpha = Math.max(0, fade)
-      ctx.font = `700 ${Math.round(width * 0.042)}px ${theme.fontFamily}`
-      const w = ctx.measureText(plan.title).width
-      const padX = 34
-      const h = Math.round(width * 0.042 * 1.9)
+      const padX = Math.round(34 * k)
+      // A long name shrinks until it fits inside the safe area.
+      let titlePx = Math.round(unit * 0.042)
+      ctx.font = `700 ${titlePx}px ${theme.fontFamily}`
+      let w = ctx.measureText(plan.title).width
+      const room = width - area.left - area.right - padX * 2
+      if (w > room) {
+        titlePx = Math.max(
+          Math.round(titlePx * 0.6),
+          Math.floor(titlePx * (room / w)),
+        )
+        ctx.font = `700 ${titlePx}px ${theme.fontFamily}`
+        w = Math.min(ctx.measureText(plan.title).width, room)
+      }
+      const h = Math.round(titlePx * 1.9)
       ctx.fillStyle = theme.paper
       roundedRect(ctx, area.left, area.top, w + padX * 2, h, h / 2)
       ctx.fill()
       ctx.fillStyle = theme.ink
       ctx.textBaseline = 'middle'
-      ctx.fillText(plan.title, area.left + padX, area.top + h / 2 + 2)
+      ctx.fillText(plan.title, area.left + padX, area.top + h / 2 + 2 * k, room)
       ctx.globalAlpha = 1
     }
 
@@ -209,15 +316,16 @@ export async function renderClip(plan: RenderPlan): Promise<number> {
       ctx.globalAlpha = Math.max(0, lead)
       ctx.font = `700 ${layout.fontPx}px ${theme.fontFamily}`
       const widths = page.lines.map((l) => ctx.measureText(l).width)
-      const boxW = Math.min(
-        width - area.left - area.right,
-        Math.max(...widths) + 76,
+      const box = captionBox(
+        width,
+        height,
+        plan.preset.safe,
+        layout,
+        widths,
+        lead,
       )
-      const boxH = layout.linePx * page.lines.length + 52
-      const boxX = (width - boxW) / 2
-      const boxY = area.captionBottom - boxH + (1 - lead) * 14
       ctx.fillStyle = theme.captionBg
-      roundedRect(ctx, boxX, boxY, boxW, boxH, 36)
+      roundedRect(ctx, box.x, box.y, box.w, box.h, box.radius)
       ctx.fill()
       ctx.fillStyle = theme.captionText
       ctx.textAlign = 'center'
@@ -226,7 +334,7 @@ export async function renderClip(plan: RenderPlan): Promise<number> {
         ctx.fillText(
           line,
           width / 2,
-          boxY + 26 + layout.linePx * (i + 1) - layout.linePx * 0.28,
+          box.y + 26 * k + layout.linePx * (i + 1) - layout.linePx * 0.28,
         )
       })
       ctx.textAlign = 'start'

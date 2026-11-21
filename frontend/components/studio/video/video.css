@@ -151,15 +151,24 @@
 .vs-voice-now span { padding: 2px 10px; border-radius: var(--r5); background: var(--well); }
 .vs-voice-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--g4); padding-bottom: var(--g4); }
 
-/* Length: a segmented control */
-.vs-seg { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--g1); max-width: 26rem; padding: var(--g1); background: var(--well); border: 1px solid var(--line); border-radius: var(--r3); }
+/* Length and size share a row on wide screens, and stack on phones */
+.vs-pair { grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: var(--g4) var(--g5); align-items: start; }
+.vs-group { display: grid; gap: var(--g2); align-content: start; min-width: 0; }
+
+/* A segmented control. Each option is one label with a hidden radio, so the keyboard and screen readers get a real radio group. */
+.vs-seg { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--g1); padding: var(--g1); background: var(--well); border: 1px solid var(--line); border-radius: var(--r3); }
 .vs-seg label { position: relative; display: block; }
 .vs-seg input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
-.vs-seg span { display: grid; place-items: center; min-height: 44px; padding: 0 var(--g2); border-radius: var(--r4); color: var(--quiet); font-size: .92rem; font-weight: 560; white-space: nowrap; }
-.vs-seg label:hover span { color: var(--ink); }
+.vs-seg label > span { display: grid; place-items: center; min-height: 44px; padding: 0 var(--g2); border-radius: var(--r4); color: var(--quiet); font-size: .92rem; font-weight: 560; white-space: nowrap; }
+.vs-seg label:hover > span { color: var(--ink); }
 .vs-seg input:checked + span { background: var(--ink); color: white; font-weight: 650; }
 .vs-seg input:focus-visible + span { outline: 2px solid #326b91; outline-offset: 2px; }
 .vs-seg input:disabled + span { opacity: .56; }
+/* Size options draw the frame they stand for: a bordered box with the right ratio, ratio text, then a short word */
+.vs-seg-frames label > span { grid-template-columns: auto auto; grid-template-areas: "frame ratio" "word word"; justify-content: center; align-content: center; place-items: center; column-gap: 6px; row-gap: 2px; min-height: 64px; padding: var(--g2) var(--g1); }
+.vs-frame { grid-area: frame; display: block; height: 16px; border: 1.5px solid currentColor; border-radius: 3px; }
+.vs-seg-frames b { grid-area: ratio; font-weight: inherit; font-variant-numeric: tabular-nums; }
+.vs-seg-frames small { grid-area: word; font-size: .75rem; font-weight: 500; line-height: 1.4; opacity: .85; }
 
 /* 3. The end of the page: one place that changes with the job. Idle, running and error float over the page
    as a translucent layer (over solid surfaces, never over another translucent layer); the finished video sits in the flow. */
@@ -177,8 +186,13 @@
 .vs-bar-line span:last-child { color: var(--quiet); font-weight: 500; font-variant-numeric: tabular-nums; }
 
 .vs-result { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); gap: var(--g5); align-items: center; padding: var(--g4); background: white; border: 1px solid var(--card-line); border-radius: var(--r1); box-shadow: var(--lift); animation: vs-in .4s var(--spring) both; }
-.vs-result video { display: block; width: 100%; aspect-ratio: 9 / 16; max-height: 70svh; object-fit: contain; background: #222; border-radius: var(--r3); }
+.vs-result[data-shape=square] { grid-template-columns: minmax(0, 17rem) minmax(0, 1fr); }
+.vs-result[data-shape=wide] { grid-template-columns: minmax(0, 1fr); }
+.vs-result video { display: block; width: 100%; aspect-ratio: var(--ar, .5625); max-height: 70svh; object-fit: contain; background: #222; border-radius: var(--r3); }
+.vs-result[data-shape=wide] video { max-height: 60svh; }
 .vs-result-side { display: grid; gap: var(--g3); justify-items: start; }
+.vs-result[data-shape=wide] .vs-result-side { display: flex; flex-wrap: wrap; align-items: center; gap: var(--g3) var(--g4); }
+.vs-result[data-shape=wide] .vs-result-side h2 { flex: 1 1 100%; }
 .vs-result-side h2 { margin: 0; font-size: 1.23rem; font-weight: 650; letter-spacing: -.025em; line-height: var(--lead-display); }
 @keyframes vs-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes vs-fade { from { opacity: 0; } to { opacity: 1; } }
@@ -206,6 +220,9 @@
   .vs :is(button, a.vs-go, .vs-seg label):not(:disabled):active { transform: none; }
 }
 
+@media (max-width: 760px) {
+  .vs-pair { grid-template-columns: minmax(0, 1fr); }
+}
 @media (max-width: 600px) {
   .vs-row { padding: var(--g4); }
   .vs-voice { padding: 0 var(--g4); }
@@ -217,6 +234,9 @@
   .vs-bar .vs-go { width: 100%; margin-left: 0; }
   .vs-result { grid-template-columns: 1fr; justify-items: center; }
   .vs-result video { width: min(100%, 15rem); }
+  .vs-result[data-shape=square] video { width: min(100%, 17rem); }
+  .vs-result[data-shape=wide] video { width: 100%; }
+  .vs-result[data-shape=wide] .vs-result-side { justify-content: center; }
   .vs-result-side { justify-items: center; text-align: center; }
   .vs-inline { flex-wrap: wrap; }
 }

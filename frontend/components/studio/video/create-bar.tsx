@@ -3,20 +3,24 @@
 import { AlertCircle, Download, LoaderCircle } from "lucide-react";
 import type { CSSProperties, Ref } from "react";
 import { useLanguage } from "@/components/language-provider";
-import { STEP_LABEL, STEPS, type VideoJob, videoFileUrl } from "./api";
+import { ASPECTS, type Aspect, STEP_LABEL, STEPS, type VideoJob, videoFileUrl } from "./api";
 
 /**
  * The end of the page and its only primary action. It is one place that changes with the job:
  * the button (with the one reason it cannot work yet), the progress, the failure with its retry, then the video.
  */
-export function CreateBar({ job, starting, problem, reason, onStart, onReset, dockRef }: {
-  job: VideoJob | null; starting: boolean; problem: string; reason: string; onStart: () => void; onReset: () => void; dockRef: Ref<HTMLDivElement>;
+export function CreateBar({ job, starting, problem, reason, onStart, onReset, dockRef, aspect }: {
+  job: VideoJob | null; starting: boolean; problem: string; reason: string; onStart: () => void; onReset: () => void; dockRef: Ref<HTMLDivElement>; aspect: Aspect;
 }) {
   const { t } = useLanguage();
 
   if (job?.status === "ready") {
+    // The finished job knows its own size. If an older job does not say, the shape that was chosen is the best guess.
+    const chosen = ASPECTS.find((a) => a.id === (job.aspect ?? aspect)) ?? ASPECTS[0];
+    const ratio = job.width && job.height ? job.width / job.height : (chosen ? chosen.w / chosen.h : 9 / 16);
+    const shape = ratio > 1.2 ? "wide" : ratio > 0.95 ? "square" : "tall";
     return <div className="vs-dock" data-state="ready" ref={dockRef}>
-      <section className="vs-result" aria-label={t("คลิปพร้อมแล้ว")}>
+      <section className="vs-result" data-shape={shape} style={{ "--ar": ratio } as CSSProperties} aria-label={t("คลิปพร้อมแล้ว")}>
         <video controls playsInline preload="metadata" src={videoFileUrl(job.id)} aria-label={t("พรีวิววิดีโอ")} />
         <div className="vs-result-side">
           <h2>{t("คลิปพร้อมแล้ว")}</h2>

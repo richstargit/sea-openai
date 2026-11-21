@@ -41,6 +41,78 @@ export function sourceRect(
   return { sx, sy, sw, sh }
 }
 
+/** Share of the photo that a cover crop keeps on screen (1 means all of it). */
+export function coverVisibleShare(
+  image: { width: number; height: number },
+  view: { width: number; height: number },
+): number {
+  const cover = Math.max(view.width / image.width, view.height / image.height)
+  return (
+    ((view.width / cover) * (view.height / cover)) /
+    (image.width * image.height)
+  )
+}
+
+/**
+ * Below this share a cover crop throws away too much of the photo, and it
+ * also has to be enlarged much more than showing the whole photo would
+ * (a portrait photo in a 16:9 frame keeps about a third of its height).
+ */
+export const MIN_VISIBLE_SHARE = 0.6
+
+export type Framing = 'cover' | 'contain'
+
+/** `cover` always fills the frame. `auto` falls back to `contain` when cover would lose too much. */
+export function chooseFraming(
+  fit: 'cover' | 'auto',
+  image: { width: number; height: number },
+  view: { width: number; height: number },
+): Framing {
+  if (fit === 'cover') return 'cover'
+  return coverVisibleShare(image, view) < MIN_VISIBLE_SHARE
+    ? 'contain'
+    : 'cover'
+}
+
+/** The camera zoom is softened in contain framing, and never goes past this. */
+export const MAX_CONTAIN_ZOOM = 1.2
+const CONTAIN_ZOOM_SHARE = 0.35
+
+/**
+ * Where to draw the whole photo, at one scale on both axes (never stretched).
+ * The scale starts at "fits entirely" and grows by at most 20 percent with the
+ * camera move, so the enlargement stays modest. Along an axis where the photo
+ * is smaller than the frame it stays centred (the backdrop shows around it);
+ * along an axis where it is larger, it pans toward the focus point but never
+ * leaves a gap. The subject therefore never leaves the frame.
+ */
+export function containRect(
+  focus: Focus,
+  image: { width: number; height: number },
+  view: { width: number; height: number },
+  anchor: { x: number; y: number } = { x: 0.5, y: 0.5 },
+): { dx: number; dy: number; dw: number; dh: number; scale: number } {
+  const fit = Math.min(view.width / image.width, view.height / image.height)
+  const zoom = Math.min(
+    MAX_CONTAIN_ZOOM,
+    1 + (Math.max(1, focus.zoom) - 1) * CONTAIN_ZOOM_SHARE,
+  )
+  const scale = fit * zoom
+  const dw = image.width * scale
+  const dh = image.height * scale
+  const place = (size: number, span: number, f: number, a: number) =>
+    size >= span
+      ? Math.min(0, Math.max(span - size, a * span - f * size))
+      : (span - size) / 2
+  return {
+    dx: place(dw, view.width, focus.x, anchor.x),
+    dy: place(dh, view.height, focus.y, anchor.y),
+    dw,
+    dh,
+    scale,
+  }
+}
+
 const still = (x: number, y: number, a: number, b: number): ShotPlan => ({
   from: { x, y, zoom: a },
   to: { x, y, zoom: b },

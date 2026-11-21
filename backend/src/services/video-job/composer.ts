@@ -3,6 +3,12 @@
  * called. If its signature changes, this adapter is the one place to touch.
  */
 
+import {
+  type Aspect,
+  DEFAULT_ASPECT,
+  frameSize,
+} from '@/services/compose/presets.js'
+
 export type ComposeRequest = {
   /** The spoken lines, already in the voice language, in order. */
   beats: { voiceover: string; imageIndex: number | null }[]
@@ -11,6 +17,10 @@ export type ComposeRequest = {
   audioPath: string
   outPath: string
   title?: string
+  /** The video shape and the exact pixel size to render (the demo size when mock). */
+  aspect: Aspect
+  width: number
+  height: number
   /** Demo mode renders a small, fast clip so nothing heavy runs for free. */
   mock: boolean
   onProgress?: (done: number, total: number) => void
@@ -27,25 +37,31 @@ export function setComposerForTests(composer: Composer | null): void {
   override = composer
 }
 
-// 720x1280 keeps a server render fast. The composer's own default is 1080x1920.
-const REAL = { width: 720, height: 1280, fps: 30 }
-const MOCK = { width: 360, height: 640, fps: 12 }
+const REAL_FPS = 30
+// Demo mode keeps the cheap path: a third of the size and fewer frames.
+const MOCK_FPS = 12
+
+/** The pixel size a job renders at: the real size of the shape, or a third of it in demo mode. */
+export const renderSize = (aspect: Aspect, mock: boolean) =>
+  frameSize(aspect, mock)
+
+export { DEFAULT_ASPECT }
 
 export const composer: Composer = async (request) => {
   if (override) return override(request)
 
   // Loaded on demand so a problem inside the composer cannot stop the server booting.
   const { composeClip } = await import('@/services/compose/index.js')
-  const size = request.mock ? MOCK : REAL
   const result = await composeClip({
     beats: request.beats,
     images: request.images,
     audioPath: request.audioPath,
     outPath: request.outPath,
     title: request.title,
-    width: size.width,
-    height: size.height,
-    fps: size.fps,
+    aspect: request.aspect,
+    width: request.width,
+    height: request.height,
+    fps: request.mock ? MOCK_FPS : REAL_FPS,
     onProgress: request.onProgress,
   })
   return { path: result.path, durationSec: result.durationSec }

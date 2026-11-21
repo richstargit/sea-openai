@@ -1,3 +1,5 @@
+import type { Aspect, SafeArea } from '@/services/compose/presets.js'
+
 export type Beat = {
   /** Planned times from the script writer. Only used as a fallback hint. */
   startSec?: number
@@ -46,14 +48,20 @@ export type ComposeInput = {
   /** Shown near the top during the first shot. */
   title?: string
   shots?: ShotPlan[]
+  /** The video shape. Sets the output size and the caption margins. Default 9:16. */
+  aspect?: Aspect
+  /** Both or neither. Overrides the size of the shape (demo mode renders a third of it). */
   width?: number
   height?: number
+  /** Overrides the caption margins of the shape, in percent of the frame. */
+  safeArea?: SafeArea
   fps?: number
   theme?: Partial<Theme>
   onProgress?: (done: number, total: number) => void
 }
 
 export type ComposeResult = {
+  aspect: Aspect
   path: string
   durationSec: number
   width: number

@@ -775,4 +775,8 @@ export const english: Record<string, string> = {
   "ทำเสียงพากย์": "Making the voiceover",
   "ลองใหม่": "Try again",
   "1 คลิป": "1 clip",
+  "ขนาดวิดีโอ": "Video size",
+  "ฟีด": "Feed",
+  "ฟีด Instagram และ Facebook": "Instagram and Facebook feed",
+  "ฟีดแบบสี่เหลี่ยม": "A square feed post",
 };

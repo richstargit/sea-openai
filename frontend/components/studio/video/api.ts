@@ -5,6 +5,7 @@
 // Next forwards /agent/* to the backend and the browser sends the session cookie on its own.
 const ROOT = "/agent/hook-machine/videos";
 const REMEMBER = "snappromo-video-job";
+const REMEMBER_ASPECT = "snappromo-video-aspect";
 
 export const STEPS = ["brief", "research", "hooks", "script", "voice", "compose"] as const;
 export type VideoStep = (typeof STEPS)[number];
@@ -23,6 +24,16 @@ export const LENGTHS: VideoLength[] = [15, 30, 45, 60];
 
 export type VideoVoice = { language?: string; voice?: string; model?: string };
 
+/** The frame shapes the backend renders. Sizes are the output pixels, `w` and `h` only give the ratio. */
+export type Aspect = "9:16" | "4:5" | "1:1" | "16:9";
+export const DEFAULT_ASPECT: Aspect = "9:16";
+export const ASPECTS: { id: Aspect; w: number; h: number; width: number; height: number; word: string; hint: string }[] = [
+  { id: "9:16", w: 9, h: 16, width: 1080, height: 1920, word: "แนวตั้ง", hint: "TikTok, Reels, Shorts" },
+  { id: "4:5", w: 4, h: 5, width: 1080, height: 1350, word: "ฟีด", hint: "ฟีด Instagram และ Facebook" },
+  { id: "1:1", w: 1, h: 1, width: 1080, height: 1080, word: "จัตุรัส", hint: "ฟีดแบบสี่เหลี่ยม" },
+  { id: "16:9", w: 16, h: 9, width: 1920, height: 1080, word: "แนวนอน", hint: "YouTube" },
+];
+
 export type VideoJob = {
   id: string;
   profileId: string;
@@ -35,6 +46,10 @@ export type VideoJob = {
   createdAt: string;
   durationSec: number;
   voiceLanguage: string;
+  /** Older jobs may not carry the shape, so the page falls back to what was chosen. */
+  aspect?: Aspect;
+  width?: number;
+  height?: number;
   file: { url: string; sizeBytes: number; durationSec: number } | null;
 };
 
@@ -43,6 +58,7 @@ export type CreateVideoInput = {
   brief: string;
   images: string[];
   durationSec: VideoLength;
+  aspect?: Aspect;
   voice?: VideoVoice;
 };
 
@@ -84,4 +100,14 @@ export function rememberJob(id: string) {
 }
 export function forgetJob() {
   try { localStorage.removeItem(REMEMBER); } catch { /* storage is optional */ }
+}
+
+export function recallAspect(): Aspect | null {
+  try {
+    const saved = localStorage.getItem(REMEMBER_ASPECT);
+    return ASPECTS.some((a) => a.id === saved) ? (saved as Aspect) : null;
+  } catch { return null; }
+}
+export function rememberAspect(aspect: Aspect) {
+  try { localStorage.setItem(REMEMBER_ASPECT, aspect); } catch { /* storage is optional */ }
 }

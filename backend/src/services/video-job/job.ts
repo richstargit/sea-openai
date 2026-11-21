@@ -2,6 +2,7 @@ import { mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import { hookMachineConfig } from '@/config/hook-machine.config.js'
+import { type Aspect, DEFAULT_ASPECT } from '@/services/compose/presets.js'
 import { aiIsMocked } from '@/services/hook-machine/ai.js'
 import { runProject } from '@/services/hook-machine/project.js'
 import {
@@ -25,7 +26,11 @@ import {
 import { speechProvider } from '@/services/hook-machine/voice/provider.js'
 import { suggestStyles } from '@/services/hook-machine/voice/suggest.js'
 import { logger } from '@/services/logger.service.js'
-import { composer, placeholderImage } from '@/services/video-job/composer.js'
+import {
+  composer,
+  placeholderImage,
+  renderSize,
+} from '@/services/video-job/composer.js'
 import {
   classifyError,
   VIDEO_ERRORS,
@@ -145,6 +150,8 @@ type StartParams = {
   images: string[]
   productUrl: string | null
   durationSec: number
+  /** Defaults to 9:16. */
+  aspect?: Aspect
   voice: { language: string; model: string; voice: string }
 }
 
@@ -163,6 +170,8 @@ export async function startVideoJob(params: StartParams): Promise<VideoDoc> {
     const styleId =
       suggestStyles(params.profile.insights?.voice)?.styles[0] ?? 'creator'
     const mock = aiIsMocked()
+    const aspect = params.aspect ?? DEFAULT_ASPECT
+    const size = renderSize(aspect, mock)
 
     const project: Project = {
       id: projectId,
@@ -195,6 +204,9 @@ export async function startVideoJob(params: StartParams): Promise<VideoDoc> {
       projectId,
       createdAt: now,
       durationSec: params.durationSec,
+      aspect,
+      width: size.width,
+      height: size.height,
       voiceLanguage: params.voice.language,
       voice: {
         model: params.voice.model,
@@ -385,6 +397,9 @@ async function pipeline(
     audioPath,
     outPath: renderPath,
     title: title || undefined,
+    aspect: video.aspect ?? DEFAULT_ASPECT,
+    width: video.width ?? renderSize(DEFAULT_ASPECT, aiIsMocked()).width,
+    height: video.height ?? renderSize(DEFAULT_ASPECT, aiIsMocked()).height,
     mock: aiIsMocked(),
   })
   checkpoint()

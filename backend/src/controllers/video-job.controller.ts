@@ -5,6 +5,7 @@ import { z } from 'zod'
 
 import { loggedInUser } from '@/controllers/auth.controller.js'
 import { imageUrl } from '@/controllers/hook-machine.controller.js'
+import { ASPECTS, DEFAULT_ASPECT } from '@/services/compose/presets.js'
 import { AppError } from '@/services/error.service.js'
 import { aiConfigured } from '@/services/hook-machine/ai.js'
 import { readDoc } from '@/services/hook-machine/store.js'
@@ -52,6 +53,7 @@ export const createVideoBody = z.object({
     z.literal(VIDEO_DURATIONS[2]),
     z.literal(VIDEO_DURATIONS[3]),
   ]),
+  aspect: z.enum(ASPECTS).default(DEFAULT_ASPECT),
   voice: z
     .object({
       language: z.enum(VOICE_LANGUAGES).default(DEFAULT_LANGUAGE as 'en'),
@@ -121,6 +123,7 @@ export const createVideo: RequestHandler = async (req, res) => {
       images: body.images,
       productUrl,
       durationSec: body.durationSec,
+      aspect: body.aspect,
       voice,
     })
     res.status(202).json({ success: true, video: toVideoJob(video) })
