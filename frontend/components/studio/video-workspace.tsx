@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, ArrowUp, Box, Clapperboard, Download, Film, ImagePlus, Link2, LoaderCircle, Paperclip, Plus, Radio, WandSparkles, X } from "lucide-react";
 import { useLanguage } from "@/components/language-provider";
+import { saleFormatOptions } from "@/lib/sale-formats";
+import { VideoStudio } from "./video/video-studio";
 import { playOverlay, studioPost, studioRequest } from "./studio-api";
 
 type Clip = { id: string; url: string; name: string; aiVoice?: boolean; projectId?:string; title?: string; sceneStarts?: number[] };
@@ -38,13 +40,24 @@ async function upload(file: File) {
   return result.file.id;
 }
 
-const saleFormatOptions = [
-  ["showcase", "แนะนำสินค้า"], ["promotion", "โปรลดราคา"], ["flash_sale", "แฟลชเซลล์"], ["new_launch", "สินค้าใหม่"],
-  ["bundle", "เซ็ตคุ้ม / 1 แถม 1"], ["before_after", "ก่อน–หลัง"], ["how_to", "วิธีใช้ / สาธิต"], ["comparison", "เปรียบเทียบ"],
-  ["review", "รีวิวลูกค้า"], ["unboxing", "แกะกล่อง"], ["ingredients", "ส่วนผสม / สเปก"], ["seasonal", "เทศกาล / ของขวัญ"],
-  ["live_teaser", "โปรโมตไลฟ์"], ["restock", "ของกลับมาแล้ว"], ["voucher", "โค้ดส่วนลด / ส่งฟรี"], ["ugc", "คลิปแนวป้ายยา (UGC)"],
-] as const;
+/**
+ * The video studio opens on our AI director (HyperFrames, sale formats, editor). Yok's flow is the second mode:
+ * a learned speaking style writes the script and voiceover (video/video-studio.tsx). The live studio keeps the composer.
+ */
 export function VideoWorkspace({ live, userId }: { live: boolean; userId: string }) {
+  const { t } = useLanguage();
+  const [mode, setMode] = useState<"director" | "script">("director");
+  if (live) return <StudioWorkspace live userId={userId} />;
+  return <>
+    <div className="studio-mode" role="tablist" aria-label={t("โหมดสร้างวิดีโอ")}>
+      <button type="button" role="tab" aria-selected={mode === "director"} onClick={() => setMode("director")}><Clapperboard size={16} />{t("ผู้กำกับ AI")}</button>
+      <button type="button" role="tab" aria-selected={mode === "script"} onClick={() => setMode("script")}><WandSparkles size={16} />{t("บทพูด + เสียงพากย์จากสไตล์")}</button>
+    </div>
+    {mode === "director" ? <StudioWorkspace live={false} userId={userId} /> : <VideoStudio />}
+  </>;
+}
+
+function StudioWorkspace({ live, userId }: { live: boolean; userId: string }) {
   const { t } = useLanguage();
   const router = useRouter();
   const picker = useRef<HTMLInputElement>(null);
@@ -169,7 +182,7 @@ export function VideoWorkspace({ live, userId }: { live: boolean; userId: string
       })}><Radio size={16} />{t("เล่นคลิปบน overlay")}</button>}</div>
     </section>}
     <section className="studio-examples">
-      <div className="studio-section-head"><h2>{t("ลองเริ่มจากตัวอย่าง")}</h2>{!live && <Link href="/studio/demo">{t("เดโมทีละขั้น")}<ArrowUpRight size={15} /></Link>}</div>
+      <div className="studio-section-head"><h2>{t("ลองเริ่มจากตัวอย่าง")}</h2></div>
       <div className="example-grid">{(live ? liveExamples : examples).map((item) =>
         <button type="button" key={item.image} className={`example-tile example-${item.image}`} disabled={!!busy} onClick={() => void act("example", async () => {
           setPhotos([await sampleFile(item.image, !live && item.image === "cosmetic" ? "/studio/daily-glow.jpg" : `/editor/${item.image}.svg`)]); setBrief(t(item.brief)); requestAnimationFrame(() => prompt.current?.focus());

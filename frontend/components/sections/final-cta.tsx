@@ -1,21 +1,21 @@
 "use client";
 
-import { useLanguage } from "@/components/language-provider";
-
 import Link from "next/link";
+import { useLanguage } from "@/components/language-provider";
 import { Button } from "@/components/ui/button";
 
 /** The one full-bleed orange moment on the page. */
 export function FinalCta() {
   const { t } = useLanguage();
   return (
-    <section className="bg-background px-4 pb-24 sm:px-6 sm:pb-36">
-      <div className="mx-auto max-w-[1080px] rounded-4xl bg-brand px-6 py-20 text-center text-brand-ink sm:py-28">
-        <h2 className="t-h2 mx-auto max-w-[14em]">{t("ถ่ายรูปแรกของคุณ แล้วดูว่าได้คลิปแบบไหน")}</h2>
-        <p className="t-lead mx-auto mt-5 max-w-[30rem] opacity-80">
-          {t(" ใช้มือถือเครื่องเดียว สามถึงห้ามุม ไม่ต้องมีสตูดิโอ ")}</p>
-        <Button asChild variant="dark" size="lg" className="mt-9">
-          <Link href="/studio">{t("เริ่มทำคลิป")}</Link>
+    <section className="px-5 pb-24 sm:px-8 lg:pb-36">
+      <div className="mx-auto max-w-[1280px] rounded-[2rem] bg-brand px-6 py-16 text-brand-ink sm:px-12 sm:py-20">
+        <h2 className="max-w-[12em] text-[clamp(2rem,4.2vw,3.5rem)] leading-[1.2] font-semibold tracking-[-0.02em] text-balance">
+          {t("เริ่มจากสตูดิโอวิดีโอ")}
+        </h2>
+        <p className="mt-4 text-[1.1875rem]">{t("เข้าสู่ระบบก่อนใช้งาน")}</p>
+        <Button asChild variant="dark" size="lg" className="mt-8">
+          <Link href="/studio">{t("เปิดสตูดิโอ")}</Link>
         </Button>
       </div>
     </section>

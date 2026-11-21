@@ -3,7 +3,9 @@ import { cookieName } from '@/controllers/auth.controller.js'
 import { ANNOTATIONS } from '@/docs/annotations.js'
 import { buildDocument } from '@/docs/introspect.js'
 import healthRoutes from '@/routes/health.route.js'
+import hookMachineRoutes from '@/routes/hook-machine.route.js'
 import indexRoutes from '@/routes/index.js'
+import videoJobRoutes from '@/routes/video-job.route.js'
 
 export function serviceSpec() {
   const service = serviceConfig()
@@ -12,6 +14,8 @@ export function serviceSpec() {
     mounts: [
       { prefix: '', router: indexRoutes },
       { prefix: '/health', router: healthRoutes },
+      { prefix: '/agent/hook-machine', router: hookMachineRoutes },
+      { prefix: '/agent/hook-machine', router: videoJobRoutes },
     ],
     title: service.name,
     version: service.version,

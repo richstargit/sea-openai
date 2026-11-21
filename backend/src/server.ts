@@ -5,6 +5,7 @@ import type { Server } from 'node:http'
 import { serverPort } from '@/config/server.config.js'
 import { serviceConfig } from '@/config/service.config.js'
 import { closeMongo } from '@/models/mongo.js'
+import { recoverInterruptedJobs } from '@/services/hook-machine/recover.js'
 import { logger } from '@/services/logger.service.js'
 import { attachOverlay } from '@/services/video/overlay.js'
 
@@ -18,6 +19,7 @@ async function startServer(): Promise<void> {
     const port = serverPort()
     const service = serviceConfig()
     const { default: app } = await import('@/app.js')
+    await recoverInterruptedJobs()
 
     server = app.listen(port, () => {
       logger.info('SERVER_STARTED', {

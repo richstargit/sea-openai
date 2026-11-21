@@ -1,13 +1,17 @@
 .studio-shell { --ink: #242421; --quiet: #5e605b; --tint: #fff1de; --line: #dadad3; --accent: #ff963f; background: #fafaf6; color: var(--ink); min-height: 100svh; }
 .studio-live { --tint: #e4f4ee; --accent: #8bd8b8; }
 .studio-header, .studio-header > div, .studio-nav, .studio-nav a, .studio-toolbar, .studio-tool, .studio-generate, .studio-section-head, .studio-section-head a, .studio-small-button, .live-controls h2, .live-controls h3, .studio-url, .studio-options > span, .studio-options summary, .studio-options p:last-child { display: flex; align-items: center; gap: .55rem; }
-.studio-header { max-width: 1320px; margin: auto; padding: 13px clamp(18px,4vw,58px); justify-content: space-between; border-bottom: 1px solid var(--line); }
+.studio-bar { border-bottom: 1px solid var(--line); }
+/* Same width and side padding as .studio-main, so the wordmark and the page share one left edge. One row at every width. */
+.studio-header { max-width: 990px; min-height: 64px; margin: auto; padding: 8px clamp(16px,4vw,40px); justify-content: space-between; flex-wrap: nowrap; }
+.studio-header > a { display: inline-flex; align-items: center; min-height: 44px; flex-shrink: 0; border-radius: 6px; }
+.studio-header > div { margin-left: auto; min-width: 0; }
+.studio-header > div a, .studio-header > div button { min-height: 44px; }
 .studio-main { max-width: 990px; margin: auto; padding: 24px clamp(16px,4vw,40px) 64px; }
 .studio-nav { gap: 4px; }
 .studio-nav a { border-radius: 9px; padding: 10px 14px; font-size: .89rem; font-weight: 550; color: var(--quiet); }
 .studio-nav svg { width: 17px; height: 17px; }
 .studio-nav a[aria-current=page] { background: var(--ink); color: white; }
-.studio-nav .studio-editor-link { margin-left: auto; }
 .studio-nav a:hover, .studio-tool:hover, .studio-small-button:hover { box-shadow: inset 0 0 0 1px #85857d; }
 .studio-intro { text-align: center; padding: clamp(32px,6vh,80px) 0 25px; }
 .studio-intro h1 { font-size: clamp(2.25rem,5.2vw,4.25rem); font-weight: 620; letter-spacing: -.061em; line-height: 1.14; text-wrap: balance; }
@@ -73,3 +77,8 @@
   .example-tile { min-height: 68px; }
   .studio-result { flex-wrap: wrap; }
 }
+/* video studio modes: our AI director first, Yok's script + voice studio second */
+.studio-mode { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 auto 18px; width: fit-content; padding: 4px; border-radius: 12px; box-shadow: inset 0 0 0 1px #d8d6cf; }
+.studio-mode button { display: flex; align-items: center; gap: .5rem; min-height: 38px; padding: 7px 14px; border-radius: 9px; font-size: .85rem; font-weight: 590; color: var(--quiet); cursor: pointer; }
+.studio-mode button[aria-selected="true"] { background: var(--ink); color: white; }
+.studio-mode button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
