@@ -51,8 +51,8 @@ type Heard = { id: number; time: string; raw: string; corrected: string; product
 const PREVIEW_SRC = "/overlay/index.html?preview=1#" + "a".repeat(43); // index.html: "/overlay/" gets a trailing-slash redirect from Next
 const MODE_KEY = "snappromo-live-mode";
 const NEEDS_PRODUCT = /\{(name|price|code)\}/;
-const BIG_GAP = 6000; // at most one motion per 6 s: viewers must be able to read each one
-const READ_MS = 4500; // every graphic stays up long enough to read
+const BIG_GAP = 3500; // spec: at most one big motion per 3.5 s, the rest queue
+const READ_MS = 2000; // spec: in 0.2–0.3 s, hold 1.5–2 s
 const MOMENT_EVERY = 45000; // the camera gives the same product its card at most this often
 const FRESH_SPEECH = 5000; // AI motion picks only fire right after the host said something
 const GRACE = 2500; // a verified product stays verified this long after its box drops (tracking jitter)
