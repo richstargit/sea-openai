@@ -3,7 +3,7 @@
 import { STAGE_LABEL } from "@/components/studio/live-script/labels";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  BrainCircuit, Camera, Check, ChevronLeft, ChevronRight, CircleAlert, Copy, Crosshair, Eraser, Eye, Film, Link2, Mic,
+  BrainCircuit, Camera, Check, CircleAlert, Copy, Crosshair, Eraser, Eye, Film, Link2, Mic,
   MonitorPlay, PartyPopper, Radio, SlidersHorizontal, Smartphone, Square, Tag, TriangleAlert, Vote, X, ZoomIn,
 } from "lucide-react";
 import { useLanguage } from "@/components/language-provider";
@@ -12,7 +12,9 @@ import { useLiveDetection } from "@/lib/live-detect";
 import { type LiveSentence, useLiveSpeech } from "@/lib/live-speech";
 import { type CustomMotion, type Decision, type LiveProduct, type Segment, productImage, fillMotion, motionOn } from "@/lib/live-plan";
 import { cuesFromSpeech, namesProduct } from "@/lib/live-cues";
+import { COMBO_MAIN, VFX_ACCENTS } from "@/lib/live-vfx";
 import type { StepProps } from "./live-studio";
+import { buildShow } from "./product-shows";
 import { ReplyBox } from "@/components/studio/live-script/reply-box";
 import { type Suggestion, liveApi } from "@/components/studio/live-script/api";
 import "@/components/studio/video/video.css";
@@ -33,13 +35,26 @@ type Tone = "info" | "action" | "warn" | "error";
 type FeedItem = { id: number; time: string; role: Role; text: string; tone: Tone; count: number };
 type Mode = "obs" | "local";
 type Status = "ok" | "warn" | "err" | "off";
-type Queued = { event: OverlayEvent; key: string; role: Role; text: string };
+type Queued = { event: OverlayEvent; key: string; role: Role; text: string; layers?: OverlayEvent[] };
+type Combo = { main: string | null; accent: string | null; caption: string | null };
+/** Captions end on a whole word (Thai has no spaces), never mid-word. */
+function shortCaption(text: string, max = 22): string {
+  if (text.length <= max) return text;
+  let out = "";
+  for (const { segment } of new Intl.Segmenter("th", { granularity: "word" }).segment(text)) { if ((out + segment).length > max) break; out += segment; }
+  return out.trim() || text.slice(0, max);
+}
+const LAYER_STAGGER = 320; // combo layers land one after another, never as one hard cut
+type Heard = { id: number; time: string; raw: string; corrected: string; product: string | null; motion: string | null; ms: number | null };
 
 
 const PREVIEW_SRC = "/overlay/index.html?preview=1#" + "a".repeat(43); // index.html: "/overlay/" gets a trailing-slash redirect from Next
 const MODE_KEY = "snappromo-live-mode";
 const NEEDS_PRODUCT = /\{(name|price|code)\}/;
-const BIG_GAP = 3500; // at most one big motion per 3.5 s
+const BIG_GAP = 6000; // at most one motion per 6 s: viewers must be able to read each one
+const READ_MS = 4500; // every graphic stays up long enough to read
+const MOMENT_EVERY = 45000; // the camera gives the same product its card at most this often
+const FRESH_SPEECH = 5000; // AI motion picks only fire right after the host said something
 const GRACE = 2500; // a verified product stays verified this long after its box drops (tracking jitter)
 const TOPIC = 8000; // a product the host just named is the topic this long (text-only graphics)
 // Presets that show a product's name, price or photo; spotlight/callout/zoom also need its verified box.
@@ -88,19 +103,19 @@ const shortList = (items: string[]) => items.map((x) => x.trim()).filter(Boolean
 
 const pad = (n: number) => String(Math.max(0, Math.floor(n))).padStart(2, "0");
 const timecode = (s: number) => `${pad(s / 3600)}:${pad((s % 3600) / 60)}:${pad(s % 60)}`;
-const mmss = (s: number) => `${s < 0 ? "-" : ""}${pad(Math.abs(s) / 60)}:${pad(Math.abs(s) % 60)}`;
 const baht = (n: number) => "฿" + n.toLocaleString("th-TH");
 const pct = (n: number | null | undefined) => (n == null ? "" : Math.round(n * 100) + "%");
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { overlayOrigin: string }) {
+export function ControlRoom({ plan, setPlan, products, overlayOrigin }: StepProps & { overlayOrigin: string }) {
   const { t } = useLanguage();
   const [mode, setMode] = useState<Mode>("local");
   const [live, setLive] = useState(false);
   const [clock, setClock] = useState(0); // whole seconds, drives every timer on screen
   const [startSec, setStartSec] = useState(0);
-  const [segIndex, setSegIndex] = useState(0);
-  const [segStartSec, setSegStartSec] = useState(0);
+  // the product the host is on: follows the camera and what they say, never a timer
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const [heard, setHeard] = useState<Heard[]>([]); // newest first
   // camera
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [deviceId, setDeviceId] = useState("");
@@ -134,7 +149,8 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   const queue = useRef<Queued[]>([]);
   const lastBig = useRef(0);
   const lastByKey = useRef(new Map<string, number>());
-  const firedCues = useRef(new Set<string>());
+  const focusRef = useRef<string | null>(null);
+  const heardId = useRef(0);
   const lowEnergy = useRef(0);
   const lastConfirmed = useRef<string | null>(null);
   const lastDetectError = useRef<string | null>(null);
@@ -154,20 +170,13 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   // ---------- derived ----------
   const lineup = useMemo(() => plan.lineup.flatMap((item) => products.filter((p) => p.id === item.productId)), [plan.lineup, products]);
   const pool = lineup.length ? lineup : products;
-  // no AI script yet: a plain run-of-show from the lineup so there is always a current product and a timer
-  const segments: Segment[] = plan.script?.segments ?? (pool.length ? [
-    { kind: "intro", productId: null, title: "เปิดไลฟ์", seconds: 30, opening: `สวัสดีค่า ยินดีต้อนรับสู่ไลฟ์${plan.style.shop ? " " + plan.style.shop : ""}`, talkingPoints: [], callToAction: "กดติดตามไว้ได้เลย", cues: [] },
-    ...pool.map((p): Segment => {
-      const item = plan.lineup.find((x) => x.productId === p.id);
-      return { kind: "product", productId: p.id, title: p.name, seconds: Math.round((item?.minutes || 2) * 60), opening: `ตัวต่อไป ${p.name} ราคา ${baht(p.price)}`, talkingPoints: shortList((item?.points || p.distinct || p.description || "").split(/[\n,·•|]/)), callToAction: `พิมพ์ CF ${p.id} ได้เลย`, cues: [] };
-    }),
-    { kind: "outro", productId: null, title: "ปิดไลฟ์", seconds: 30, opening: "ขอบคุณทุกคนที่มาดูไลฟ์วันนี้", talkingPoints: [], callToAction: "เจอกันไลฟ์หน้านะคะ", cues: [] },
-  ] : []);
-  const segment = segments[Math.min(segIndex, segments.length - 1)] ?? null;
-  const current: LiveProduct | null = (segment?.productId && products.find((p) => p.id === segment.productId)) || lineup[0] || null;
+  const current: LiveProduct | null = pool.find((p) => p.id === focusId) ?? lineup[0] ?? null;
+  // what to say about the current product: the AI script's part for it, else its own points
+  const segment: Segment | null = !current ? null : plan.script?.segments.find((x) => x.productId === current.id) ?? (() => {
+    const item = plan.lineup.find((x) => x.productId === current.id);
+    return { kind: "product", productId: current.id, title: current.name, seconds: 0, opening: `${current.name} ราคา ${baht(current.price)}`, talkingPoints: shortList((item?.points || current.distinct || current.description || "").split(/[\n,·•|]/)), callToAction: `พิมพ์ CF ${current.id} ได้เลย`, cues: [] };
+  })();
   const elapsed = live ? clock - startSec : 0;
-  const inSegment = live ? clock - segStartSec : 0;
-  const remaining = segment ? segment.seconds - inSegment : 0;
   const kit = plan.kit;
   const tagStyle = kit?.theme.tagStyle ?? plan.style.tagStyle;
   const motions = useMemo(() => [
@@ -182,9 +191,14 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   const transcript = useCallback(() => finals.current.filter((f) => Date.now() - f.at < 10000).map((f) => f.text).join(" "), []);
   const handleDecision = useCallback((d: Decision) => latest.current?.decision(d), []);
   const detection = useLiveDetection({ video: videoRef, enabled: live, products: pool, transcript, current: current?.name ?? null, motions, onDecision: handleDecision });
+  // what the speech AI may pick for a combo: only motions the shop left on in the motion library
+  const comboMenu = useMemo(() => ({
+    main: COMBO_MAIN.filter(([id]) => motionOn(plan, id)).map(([id, description]) => ({ id, description })),
+    accent: VFX_ACCENTS.filter(([id]) => motionOn(plan, id)).map(([id, description]) => ({ id, description })),
+  }), [plan]);
   const hearing = useLiveSpeech({
     enabled: live, lang: plan.style.language === "en" ? "en" : "th",
-    products: pool.map((p) => ({ id: p.id, name: p.name, price: p.price })), current: current?.name ?? null,
+    products: pool.map((p) => ({ id: p.id, name: p.name, price: p.price })), current: current?.name ?? null, motions: comboMenu,
     onSentence: (sentence) => latest.current?.sentence(sentence),
   });
   const speech = ({ listening: "on", off: "off", unsupported: "unsupported", error: "error" } as const)[hearing.status];
@@ -205,7 +219,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   }
   const customNeedsProduct = (m: CustomMotion) => NEEDS_PRODUCT.test(JSON.stringify(m.layers));
   function customEventFor(m: CustomMotion, p: LiveProduct | null): OverlayEvent {
-    return { type: "graphic", preset: "compose", data: { layers: fillMotion(m, { name: p?.name, price: p?.price, code: p?.id, shop: plan.style.shop }) }, theme: kit?.theme.look, ttl: m.seconds * 1000, aiName: m.name };
+    return { type: "graphic", preset: "compose", data: { layers: fillMotion(m, { name: p?.name, price: p?.price, code: p?.id, shop: plan.style.shop }) }, theme: kit?.theme.look, ttl: Math.max(READ_MS, m.seconds * 1000), aiName: m.name };
   }
   /** The AI-designed motion for a kit moment: the kit's pick, else rotate through the moment's motions (never the same twice). */
   function customForMoment(moment: CustomMotion["moment"], p: LiveProduct | null): OverlayEvent | null {
@@ -307,12 +321,13 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     if (mode === "obs") playOverlay(event).catch((error) => log("โปรดิวเซอร์", t("ส่งไป OBS ไม่สำเร็จ") + ": " + message(error), "error"));
   }
   /** Big motions share one 3.5 s slot; the rest wait in a short queue. cooldown: ignore the same key for that long. */
-  function enqueue(item: Queued, cooldown = 0) {
-    if (cooldown && Date.now() - (lastByKey.current.get(item.key) ?? -1e9) < cooldown) return;
-    if (queue.current.some((q) => q.key === item.key)) return;
+  function enqueue(item: Queued, cooldown = 0): boolean {
+    if (cooldown && Date.now() - (lastByKey.current.get(item.key) ?? -1e9) < cooldown) return false;
+    if (queue.current.some((q) => q.key === item.key)) return false;
     queue.current.push(item);
-    if (queue.current.length > 4) queue.current.shift();
+    if (queue.current.length > 2) queue.current.shift(); // stale motions are dropped, never played late
     pump();
+    return true;
   }
   function pump() {
     if (!queue.current.length || Date.now() - lastBig.current < BIG_GAP) return;
@@ -323,6 +338,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     lastByKey.current.set(item.key, Date.now());
     const { aiName, ...event } = item.event;
     send(event);
+    item.layers?.forEach((layer, i) => setTimeout(() => { if (liveRef.current) send(layer); }, (i + 1) * LAYER_STAGGER));
     log(item.role, aiName ? `Motion · ${aiName} (${t("ออกแบบโดย AI")})` : item.text, "action");
   }
 
@@ -355,8 +371,8 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     const moment = KIT_MOMENT[kind];
     const custom = moment && customForMoment(moment, p);
     if (custom) return custom;
-    if (kit && moment && motionOn(plan, kit.moments[moment])) return { type: "graphic", preset: kit.moments[moment], data, ...at, image: p ? imageUrl(p) : undefined, theme: kit.theme.look, ttl: 2200 };
-    return { type: kind, payload: kind === "product_card" ? { ...data, ...at, image: p ? imageUrl(p) : undefined } : data, ttl: 2200 };
+    if (kit && moment && motionOn(plan, kit.moments[moment])) return { type: "graphic", preset: kit.moments[moment], data, ...at, image: p ? imageUrl(p) : undefined, theme: kit.theme.look, ttl: READ_MS };
+    return { type: kind, payload: kind === "product_card" ? { ...data, ...at, image: p ? imageUrl(p) : undefined } : data, ttl: READ_MS };
   }
   /** spotlight at the tracked box when there is one, else the product card */
   function productEvent(p: LiveProduct): { event: OverlayEvent; label: string } {
@@ -382,17 +398,17 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     send({ type: "clip", fileId: clip.fileId });
     log("คนตัดต่อ", t("เปิดคลิปกันเงียบ") + " · " + clip.name, "action");
   }
-  function goSegment(index: number) {
-    if (!segments.length) return;
-    const i = Math.max(0, Math.min(segments.length - 1, index));
-    setSegIndex(i);
-    setSegStartSec(Math.floor(Date.now() / 1000));
-    log("ผู้กำกับ", t("เข้าช่วง") + ` ${i + 1}: ${segments[i].title}`);
-    const next = products.find((p) => p.id === segments[i].productId) ?? null;
-    if (liveRef.current) enqueue({
-      event: customForMoment("transition", next) ?? { type: "graphic", preset: pickOn(kit?.moments.transition, "iris-swap"), data: { kicker: "ต่อไป", text: segments[i].title, ...productData(next), name: next?.name ?? segments[i].title }, x: 0.5, y: 0.5, theme: kit?.theme.look, ttl: 1800 },
-      key: "transition", role: "Motion", text: t("เปลี่ยนช่วง") + " · " + segments[i].title,
-    });
+  /** Follow the host to a product (camera saw it, they named it, or they tapped it). Its card plays once, no scene cut. */
+  function focusOn(p: LiveProduct | null, why: string) {
+    if (!p || p.id === focusRef.current) return;
+    focusRef.current = p.id;
+    setFocusId(p.id);
+    log("ผู้กำกับ", `${t("ตามคนพูด")} → ${p.name} (${t(why)})`);
+    if (!liveRef.current || Date.now() - (momentFor.current[p.id] ?? 0) < MOMENT_EVERY) return;
+    momentFor.current[p.id] = Date.now();
+    lastMoment.current = Date.now();
+    const { event, label } = productEvent(p);
+    enqueue({ event, key: "product_card", role: "Motion", text: describe(label, p) });
   }
 
   // ---------- speech ----------
@@ -402,31 +418,69 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     if (!text) return;
     finals.current = [...finals.current.filter((f) => Date.now() - f.at < 10000), { text, at: Date.now() }];
     setLines((l) => [...l.slice(-7), text]);
-    if (heard.productId && pool.some((p) => p.id === heard.productId)) spoken.current = { id: heard.productId, at: Date.now() };
+    const said = heard.productId ? pool.find((p) => p.id === heard.productId) ?? null : null;
+    if (said) { spoken.current = { id: said.id, at: Date.now() }; focusOn(said, "พูดถึง"); }
     if (heard.source === "openai" && heard.corrected && heard.corrected !== heard.raw) log("ซับ", `${t("แก้คำที่ได้ยิน")}: ${heard.raw} → ${heard.corrected}`);
-    onSentence(text);
+    const combo = heard.combo;
+    const motion = combo ? playCombo(combo, heard, text) : onSentence(text);
+    const row: Heard = { id: ++heardId.current, time: new Date().toLocaleTimeString("th-TH", { hour12: false }), raw: heard.raw, corrected: heard.corrected,
+      product: (pool.find((p) => p.id === spoken.current?.id) ?? null)?.name ?? null, motion, ms: hearing.lastLatencyMs ?? null };
+    setHeard((h) => [row, ...h].slice(0, 40));
+    console.info("[live] heard", { raw: row.raw, corrected: row.corrected, product: row.product, motion: row.motion, latencyMs: row.ms, source: heard.source });
     const session = scriptSession.current;
     if (session) void liveApi.sendUtterance(session.id, { text, final: true, tsMs: Date.now() - session.t0 })
       .then((next) => { if (next && scriptSession.current === session) setNextLines((l) => [next, ...l].slice(0, 4)); })
       .catch(() => { /* a missed suggestion is fine; the next sentence tries again */ });
   }
-  /** One finished sentence: cut to the motion that fits it, only showing a product that is really there or just named. */
-  function onSentence(text: string) {
+  /** The speech AI's pick for this sentence: one info graphic + one effect + the hook caption, layered. Null picks = nothing fires. */
+  function playCombo(raw: Combo, heard: LiveSentence, text: string): string | null {
+    const c = { ...raw, caption: raw.caption && shortCaption(raw.caption) };
     const named = pool.find((x) => namesProduct(text, x));
-    if (named) spoken.current = { id: named.id, at: Date.now() };
+    if (named) { spoken.current = { id: named.id, at: Date.now() }; focusOn(named, "พูดถึง"); }
+    const p = named ?? verifiedProduct() ?? spokenProduct() ?? current;
+    const layers: OverlayEvent[] = [];
+    const names: string[] = [];
+    if (c.accent && motionOn(plan, c.accent)) {
+      const at = placement(p); // spot effects burst at the product when it is boxed, else upper middle
+      layers.push({ type: "graphic", preset: c.accent, data: { ...productData(p), text: c.caption ?? "" }, ...(at.box ? at : { x: 0.5, y: 0.4 }), theme: kit?.theme.look, ttl: READ_MS });
+      names.push(c.accent);
+    }
+    const main = c.main && motionOn(plan, c.main) ? mainEvent(c.main, p, heard, c.caption) : null;
+    if (main) { layers.push(main); names.push(c.main!); }
+    if (c.caption && !main) { layers.push(buildEvent("caption", null, { text: c.caption })); names.push(`“${c.caption}”`); }
+    if (!layers.length) return null;
+    const [first, ...rest] = layers;
+    return enqueue({ event: first, layers: rest, key: "combo:" + (c.main ?? c.accent ?? "caption"), role: "คนตัดต่อ", text: `${t("ตัดต่อ")} · ${names.join(" + ")}` }, 8000) ? names.join(" + ") : null;
+  }
+  /** The combo's information graphic; product graphics need a product, stock needs a real number. */
+  function mainEvent(id: string, p: LiveProduct | null, heard: LiveSentence, caption: string | null): OverlayEvent | null {
+    if (id === "product_card") return p ? productEvent(p).event : null;
+    if (id === "price_drop") { const from = heard.from ?? p?.price ?? 0, to = heard.to ?? heard.price ?? 0; if (!(from > to && to > 0)) return null; if (p) discount.current = { id: p.id, from, to }; return buildEvent("price_drop", p, { from, to }); }
+    if (id === "price_pop") return p || heard.price ? buildEvent("price_pop", p, heard.price ? { price: heard.price } : {}) : null;
+    if (id === "low_stock") return heard.left ? buildEvent("low_stock", p, { left: heard.left }) : null;
+    if (id === "free_badge" || id === "poll" || id === "fireworks") return buildEvent(id, p, caption ? { text: caption } : {});
+    if (needsProduct(id) && !p) return null;
+    const at = BOX_PRESETS.has(id) ? placement(p) : {};
+    if (BOX_PRESETS.has(id) && !("box" in at && at.box)) return null;
+    return { type: "graphic", preset: id, data: { ...productData(p), text: caption ?? p?.name ?? "", code: p?.id }, ...at, image: p ? imageUrl(p) : undefined, theme: kit?.theme.look, ttl: READ_MS };
+  }
+  /** One finished sentence: cut to the motion that fits it, only showing a product that is really there or just named. */
+  function onSentence(text: string): string | null {
+    const named = pool.find((x) => namesProduct(text, x));
+    if (named) { spoken.current = { id: named.id, at: Date.now() }; focusOn(named, "พูดถึง"); }
     const p = named ?? verifiedProduct() ?? spokenProduct();
     const all = cuesFromSpeech(text, p);
     if (!all.length) return onKeywords(text, p);
     const at = placement(p);
     const cue = all.filter((c) => (!c.needsProduct || p) && (!BOX_PRESETS.has(c.preset) || (c.needsProduct && at.box))).sort((a, b) => b.priority - a.priority)[0];
-    if (!cue) return;
+    if (!cue) return null;
     const event: OverlayEvent = (cue.preset === "cf-keycaps" && customForMoment("callToAction", p)) || (cue.kind === "graphic"
-      ? { type: "graphic", preset: cue.preset, data: { ...productData(cue.needsProduct ? p : null), ...cue.data }, ...(cue.needsProduct ? at : {}), image: cue.needsProduct && p ? imageUrl(p) : undefined, theme: kit?.theme.look, ttl: 2200 }
-      : { type: cue.preset, payload: { ...cue.data, ...(cue.preset === "zoom" && at.box ? { box: at.box } : {}) }, ttl: 2200 });
-    enqueue({ event, key: "cue:" + cue.preset, role: "คนตัดต่อ", text: `${t("ตัดต่อ")} · ${cue.reason} → ${cue.preset}` }, 4000);
+      ? { type: "graphic", preset: cue.preset, data: { ...productData(cue.needsProduct ? p : null), ...cue.data }, ...(cue.needsProduct ? at : {}), image: cue.needsProduct && p ? imageUrl(p) : undefined, theme: kit?.theme.look, ttl: READ_MS }
+      : { type: cue.preset, payload: { ...cue.data, ...(cue.preset === "zoom" && at.box ? { box: at.box } : {}) }, ttl: READ_MS });
+    return enqueue({ event, key: "cue:" + cue.preset, role: "คนตัดต่อ", text: `${t("ตัดต่อ")} · ${cue.reason} → ${cue.preset}` }, 10000) ? `${cue.preset} · ${cue.reason}` : null;
   }
   // fallback when cuesFromSpeech has nothing; p is only a verified or just-named product, never the run-of-show's guess
-  function onKeywords(text: string, p: LiveProduct | null) {
+  function onKeywords(text: string, p: LiveProduct | null): string | null {
     for (const hit of keywordHits(text)) {
       let event: OverlayEvent;
       let label: string = hit.kind;
@@ -442,8 +496,9 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
         event = buildEvent("low_stock", p, { left });
       }
       else { if (!placement(p).box) continue; event = buildEvent("zoom", p); }
-      enqueue({ event, key: label, role: roleFor(label), text: describe(label, p) + ` · "${text.slice(0, 32)}"` }, 4000);
+      if (enqueue({ event, key: label, role: roleFor(label), text: describe(label, p) + ` · "${text.slice(0, 32)}"` }, 10000)) return describe(label, p);
     }
+    return null;
   }
 
   // ---------- Decisions AI (arrives through useLiveDetection) ----------
@@ -467,7 +522,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
       const p = fp ?? current;
       log("ผู้กำกับ", t("ทีมสั่งด้วยเสียง") + " · " + t(LABEL[d.teamCommand as Kind] ?? (d.teamCommand === "dead_air_clip" ? "เปิดคลิปกันเงียบ" : "ช่วงถัดไป")), "action");
       if (d.teamCommand === "dead_air_clip") playClip();
-      else if (d.teamCommand === "next_segment") goSegment(segIndex + 1);
+      else if (d.teamCommand === "next_segment") focusOn(pool[(pool.findIndex((x) => x.id === current?.id) + 1) % pool.length] ?? null, "ทีมสั่ง");
       else if (d.teamCommand === "product_card") showProductNow(p);
       else now(d.teamCommand, p);
       return;
@@ -481,50 +536,47 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
         return;
       }
     }
-    if (d.motion && d.motion !== "none" && (d.motionConfidence ?? 0) >= 0.5) {
+    // a motion must answer what the host just said; a still picture alone never fires one
+    const fresh = Date.now() - (finals.current.at(-1)?.at ?? 0) < FRESH_SPEECH;
+    if (!fresh) return;
+    if (d.motion && d.motion !== "none" && (d.motionConfidence ?? 0) >= 0.7) {
       const cm = d.motion.startsWith("custom:") ? kit?.custom?.find((x) => "custom:" + x.id === d.motion) : undefined;
       if (d.motion.startsWith("custom:") && !cm) return;
       const mp = needsProduct(d.motion) ? (BOX_PRESETS.has(d.motion) ? vp : fp) : null;
       if (needsProduct(d.motion) && !mp) return;
-      if (cm) return enqueue({ event: customEventFor(cm, mp), key: d.motion, role: "Motion", text: "" }, 8000);
+      if (cm) { enqueue({ event: customEventFor(cm, mp), key: d.motion, role: "Motion", text: "" }, 15000); return; }
       const at = placement(mp);
       if (BOX_PRESETS.has(d.motion) && !at.box) return;
       const text = (lines.at(-1) ?? mp?.name ?? "").slice(0, 40);
       enqueue({
-        event: { type: "graphic", preset: d.motion, data: { ...productData(mp), text }, ...at, image: mp ? imageUrl(mp) : undefined, theme: kit?.theme.look, ttl: 2200 },
+        event: { type: "graphic", preset: d.motion, data: { ...productData(mp), text }, ...at, image: mp ? imageUrl(mp) : undefined, theme: kit?.theme.look, ttl: READ_MS },
         key: d.motion, role: "Motion", text: t("เลือก") + ` ${d.motion} (${t("มั่นใจ")} ${pct(d.motionConfidence)})` + (mp ? " · " + mp.name : ""),
-      }, 8000);
+      }, 15000);
       return;
     }
-    if (d.action === "none" || d.action === "product_card" || (d.actionConfidence ?? 1) < 0.5) return; // product_card is the moment above
+    if (d.action === "none" || d.action === "product_card" || (d.actionConfidence ?? 0) < 0.7) return; // product_card is the moment above
     const kind = d.action as Kind;
     if (kind === "low_stock") return; // no real stock data to show
     if (kind === "zoom" ? !vp || !placement(vp).box : ["price_pop", "price_drop"].includes(kind) && !fp) return;
     const p = kind === "zoom" ? vp : fp;
-    enqueue({ event: buildEvent(kind, p), key: kind, role: roleFor(kind), text: describe(kind, p) }, 8000);
+    enqueue({ event: buildEvent(kind, p), key: kind, role: roleFor(kind), text: describe(kind, p) }, 15000);
   }
 
   // ---------- clock ----------
   function tick() {
     pump();
-    const sec = Math.floor(Date.now() / 1000);
-    setClock(sec);
+    setClock(Math.floor(Date.now() / 1000));
     if (warning && Date.now() - warning.at > 8000) setWarning(null);
     if (!liveRef.current) { setAi((a) => (a.status === "idle" ? a : { status: "idle", id: null })); return; }
     const vp = verifiedProduct();
-    const fp = vp ?? spokenProduct();
     if (detection.product) noneSince.current = Date.now();
     const status: AiStatus = !detection.running ? "watching" : vp ? "verified" : detection.product ? "confirming" : Date.now() - noneSince.current >= 3000 ? "none" : "watching";
     const seen = vp?.id ?? detection.product;
     setAi((a) => (a.status === status && a.id === seen ? a : { status, id: seen }));
-    // follow the camera: a product the moment it is verified gets its card/spotlight, once per product per 15 s
-    const at = Date.now();
-    if (vp && at - (momentFor.current[vp.id] ?? 0) > 15000 && at - lastMoment.current > 4000) {
-      momentFor.current[vp.id] = at;
-      lastMoment.current = at;
-      const { event, label } = productEvent(vp);
-      enqueue({ event, key: "product_card", role: "ผู้กำกับ", text: `${t("กล้องยืนยัน")} ${vp.name} (${t("มั่นใจ")} ${pct(detection.confidence)}) → ${label.replace("_", "-")}` });
-    }
+    // follow the camera: the verified product becomes the current one (its card plays once per MOMENT_EVERY)
+    // a confirmed product (≥90% from the Decisions AI) is followed at once; graphics that point at it still wait for the box
+    const seenNow = vp ?? ((detection.confidence ?? 0) >= 0.9 ? pool.find((p) => p.id === detection.product) ?? null : null);
+    if (seenNow) focusOn(seenNow, "กล้องเห็น");
     if (detection.product !== lastConfirmed.current) {
       lastConfirmed.current = detection.product;
       if (detection.product) log("ผู้กำกับ", t("กล้องจับสินค้าได้") + ` · ${detectedName} ${pct(detection.confidence)}`);
@@ -533,25 +585,19 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
       lastDetectError.current = detection.error;
       if (detection.error) log("ผู้กำกับ", t("Decisions AI ผิดพลาด ไลฟ์ยังเดินต่อ") + ": " + detection.error, "error");
     }
-    if (segment) {
-      const at = sec - segStartSec;
-      segment.cues.forEach((cue, i) => {
-        const key = `${segIndex}:${i}`;
-        if (cue.at > at || firedCues.current.has(key)) return;
-        firedCues.current.add(key);
-        // a scripted product graphic waits for the product to be verified or named; the rest are about the show
-        if (cue.event === "low_stock") return; // no real stock data to show
-        const needs = ["product_card", "price_pop", "price_drop", "zoom"].includes(cue.event);
-        if (needs && (!fp || (cue.event === "zoom" && !placement(fp).box))) { log("ผู้กำกับ", t("ข้ามคิวสคริปต์ ยังไม่เห็นสินค้าในภาพ") + " · " + t(LABEL[cue.event]), "warn"); return; }
-        const cp = needs ? fp : null;
-        const event = cue.event === "caption" ? buildEvent("caption", null, { text: cue.note })
-          : cue.event === "product_card" && cp ? productEvent(cp).event : buildEvent(cue.event, cp);
-        enqueue({ event, key: "cue:" + key, role: roleFor(cue.event), text: t("คิวสคริปต์") + " · " + describe(cue.event, cp) + (cue.note ? ` · ${cue.note}` : "") });
-      });
-    }
   }
 
   useEffect(() => { latest.current = { tick, sentence: onHeard, decision: onDecision, log }; });
+
+  // lineup products with no playbook yet get one in the background (the seller may have skipped step 3)
+  const building = useRef(new Set<string>());
+  useEffect(() => {
+    for (const p of lineup) {
+      if (plan.shows?.[p.id] || building.current.has(p.id)) continue;
+      building.current.add(p.id);
+      void buildShow(p, plan.style).then((show) => setPlan((x) => ({ ...x, shows: { ...x.shows, [p.id]: show.id } }))).catch(() => building.current.delete(p.id));
+    }
+  }, [lineup, plan.shows, plan.style, setPlan]);
 
   // One live-script session per current product's show while live; our own transcribed sentences feed it (onHeard).
   const showId = current ? plan.shows?.[current.id] : undefined;
@@ -580,9 +626,8 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     liveRef.current = true;
     setLive(true);
     setStartSec(sec);
-    setSegStartSec(sec);
     setClock(sec);
-    firedCues.current.clear();
+    setHeard([]);
     queue.current = [];
     lowEnergy.current = 0;
     finals.current = [];
@@ -657,7 +702,6 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     }] : []),
   ];
   const statusWord: Record<Status, string> = { ok: t("พร้อม"), warn: t("รอ"), err: t("มีปัญหา"), off: t("ยังไม่เริ่ม") };
-  const nextSegment = segments[segIndex + 1];
   const spotProduct = pool.find((p) => p.id === (spotId || current?.id)) ?? null;
 
   return <section className="cr" data-mode={mode} data-live={live || undefined} aria-label={t("ห้องควบคุมไลฟ์")}>
@@ -676,7 +720,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     </header>
 
     {!products.length && <p className="cr-hint">{t("ยังไม่มีสินค้าในคลัง เพิ่มได้ที่ขั้นตอน 1 คลังสินค้า (แถบขั้นตอนด้านบน)")}</p>}
-    {products.length > 0 && !lineup.length && <p className="cr-hint">{t("ยังไม่ได้เลือกสินค้าเข้าไลฟ์ เลือกได้ที่ขั้นตอน 2 สไตล์และลำดับไลฟ์")}</p>}
+    {products.length > 0 && !lineup.length && <p className="cr-hint">{t("ยังไม่ได้เลือกสินค้าเข้าไลฟ์ เลือกได้ที่ขั้นตอน 2 สไตล์และสินค้าในไลฟ์")}</p>}
 
     <div className="cr-layout">
       <div className="cr-stage">
@@ -704,6 +748,31 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
       </div>
 
       <div className="cr-host">
+        <section className="cr-panel cr-next" aria-label={t("พูดต่อไป")}>
+          <h2>{t("AI โค้ชไลฟ์ · พูดต่อไป")}</h2>
+          {live && nextLines.length ? <>
+              <div className="cr-next-now" data-hesitation={nextLines[0].hesitation || undefined} aria-live="polite">
+                <div className="cr-next-meta">
+                  <span className="cr-next-stage">{t(STAGE_LABEL[nextLines[0].stage] ?? nextLines[0].stage)}</span>
+                  {nextLines[0].topic && <span className="cr-quiet">{nextLines[0].topic}</span>}
+                  {nextLines[0].hesitation && <span className="cr-next-stall">{t("ติดอยู่ ลองพูดบรรทัดนี้")}</span>}
+                </div>
+                {nextLines[0].warning && <p className="cr-next-warn" data-level={nextLines[0].warning.level}><TriangleAlert size={16} aria-hidden />{nextLines[0].warning.text}</p>}
+                <ul>{nextLines[0].next.slice(0, 3).map((line, i) => <li key={i}>{line}</li>)}</ul>
+              </div>
+              {nextLines.slice(1, 4).map((x) => <p key={x.id} className="cr-next-old">{x.next[0]}</p>)}
+            </>
+            // nothing from the coach yet: the current product's own lines, so the seller is never left without words
+            : segment ? <div className="cr-next-now" aria-live="polite">
+                <div className="cr-next-meta"><span className="cr-next-stage">{t("ลองพูด")}</span><span className="cr-quiet">{segment.title}</span></div>
+                <ul>{[segment.opening, ...segment.talkingPoints.slice(0, 1), segment.callToAction].filter(Boolean).slice(0, 3).map((line, i) => <li key={i}>{line}</li>)}</ul>
+              </div>
+            : <p className="cr-quiet cr-small">{t("เลือกสินค้าเข้าไลฟ์ที่ขั้นตอน 2 แล้ว AI จะช่วยคิดบทให้")}</p>}
+          <p className="cr-quiet cr-small" role="status">{!live ? t("กดเริ่มไลฟ์ แล้วพูดได้เลย AI ฟัง ดูกล้อง ขึ้น motion และแนะนำประโยคถัดไปให้เอง")
+            : nextHint ? t(nextHint) : !showId ? t("AI กำลังเตรียมบทของสินค้านี้…") : !nextLines.length ? t("กำลังฟังอยู่ พูดต่อได้เลย") : ""}</p>
+          {showId && <div className="vs cr-next-reply"><ReplyBox showId={showId} /></div>}
+        </section>
+
         <section className="cr-panel cr-ai" data-state={ai.status} aria-label={t("AI กำลังเห็น")}>
           <div className="cr-ai-head">
             <h2><Eye size={15} aria-hidden />{t("AI กำลังเห็น")}</h2>
@@ -734,49 +803,39 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
           <button type="button" className="cr-btn" onClick={() => setSuggestPoll(false)}>{t("ปิด")}</button>
         </div>}
 
-        <section className="cr-panel cr-next" aria-label={t("พูดต่อไป")}>
-          <h2>{t("พูดต่อไป")}</h2>
-          {!showId ? <p className="cr-quiet cr-small">{t("ทำบทพูดละเอียดได้ที่ขั้นตอน 3")}</p>
-            : nextHint ? <p className="cr-quiet cr-small" role="status">{t(nextHint)}</p>
-            : !live ? <p className="cr-quiet cr-small">{t("เริ่มไลฟ์แล้วบทที่ควรพูดต่อจะขึ้นที่นี่")}</p>
-            : !nextLines.length ? <p className="cr-quiet cr-small" role="status">{t("กำลังฟังอยู่ พูดต่อได้เลย")}</p>
-            : <>
-              <div className="cr-next-now" data-hesitation={nextLines[0].hesitation || undefined} aria-live="polite">
-                <div className="cr-next-meta">
-                  <span className="cr-next-stage">{t(STAGE_LABEL[nextLines[0].stage] ?? nextLines[0].stage)}</span>
-                  {nextLines[0].topic && <span className="cr-quiet">{nextLines[0].topic}</span>}
-                  {nextLines[0].hesitation && <span className="cr-next-stall">{t("ติดอยู่ ลองพูดบรรทัดนี้")}</span>}
-                </div>
-                {nextLines[0].warning && <p className="cr-next-warn" data-level={nextLines[0].warning.level}><TriangleAlert size={16} aria-hidden />{nextLines[0].warning.text}</p>}
-                <ul>{nextLines[0].next.slice(0, 3).map((line, i) => <li key={i}>{line}</li>)}</ul>
-              </div>
-              {nextLines.slice(1, 4).map((x) => <p key={x.id} className="cr-next-old">{x.next[0]}</p>)}
-            </>}
-          {showId && <div className="vs cr-next-reply"><ReplyBox showId={showId} /></div>}
-        </section>
 
-        <section className="cr-panel cr-prompter" aria-label={t("สคริปต์ผู้กำกับ")}>
-          {!segment ? <p className="cr-quiet">{t("ยังไม่มีสคริปต์ ให้ AI เขียนได้ที่ขั้นตอน 3 เตรียมคลิปและ motion")}</p> : <>
+        <section className="cr-panel cr-prompter" aria-label={t("สินค้าที่กำลังพูด")}>
+          {!segment ? <p className="cr-quiet">{t("ยังไม่มีสินค้าในไลฟ์ เลือกได้ที่ขั้นตอน 2")}</p> : <>
             <div className="cr-prompter-head">
               <div className="cr-seg">
-                <span className="cr-seg-count">{t("ช่วง")} {segIndex + 1}/{segments.length}</span>
+                <span className="cr-seg-count">{t("กำลังพูดถึง · AI ตามกล้องและเสียงให้เอง")}</span>
                 <h2 className="cr-seg-title">{segment.title}</h2>
               </div>
-              <span className="cr-countdown" data-late={(live && remaining <= 10) || undefined} aria-label={t("เวลาที่เหลือของช่วงนี้")}>{mmss(remaining)}</span>
             </div>
-            <progress className="cr-progress" max={segment.seconds} value={Math.min(segment.seconds, inSegment)} aria-label={t("เวลาของช่วงนี้")} />
             <p className="cr-opening">{segment.opening}</p>
             {segment.talkingPoints.length > 0 && <ul className="cr-points">{segment.talkingPoints.map((point, i) => <li key={i}>{point}</li>)}</ul>}
             {segment.callToAction && <p className="cr-cta">{segment.callToAction}</p>}
-            {segment.cues.length > 0 && <p className="cr-cues">{segment.cues.map((c, i) => <span key={i} data-fired={firedCues.current.has(`${segIndex}:${i}`) || undefined}>{mmss(c.at)} {t(LABEL[c.event])}</span>)}</p>}
-            <div className="cr-prompter-nav">
-              <button type="button" className="cr-btn" onClick={() => goSegment(segIndex - 1)} disabled={segIndex === 0}><ChevronLeft size={16} aria-hidden />{t("ย้อนกลับ")}</button>
-              <button type="button" className="cr-btn cr-next" onClick={() => goSegment(segIndex + 1)} disabled={!nextSegment}>
-                <span>{t("ถัดไป")}{nextSegment && <span className="cr-quiet"> · {nextSegment.title}</span>}</span><ChevronRight size={16} aria-hidden />
-              </button>
-            </div>
-            {!plan.script && <p className="cr-quiet cr-small">{t("ลำดับอัตโนมัติจากรายการสินค้า ให้ AI เขียนสคริปต์เต็มได้ที่ขั้นตอน 3")}</p>}
+            {pool.length > 1 && <div className="cr-focus" role="group" aria-label={t("เปลี่ยนสินค้าเอง")}>
+              {pool.map((p) => <button key={p.id} type="button" className="cr-btn" aria-pressed={p.id === current?.id} onClick={() => focusOn(p, "กดเลือก")}>{p.name}</button>)}
+            </div>}
           </>}
+        </section>
+
+        <section className="cr-panel cr-heard" aria-label={t("ได้ยินอะไร")}>
+          <h2><Mic size={15} aria-hidden />{t("ได้ยินอะไร")}<span className="cr-quiet cr-small"> · {t(speech === "on" ? "กำลังฟัง" : speech === "unsupported" ? "ใช้ได้เฉพาะ Google Chrome" : speech === "error" ? "เปิดไมค์ไม่ได้" : "เริ่มไลฟ์แล้วจะฟัง")}{hearing.level > 0.02 ? " ●" : ""}</span></h2>
+          {interim && <p className="cr-heard-interim" aria-live="polite">{interim}…</p>}
+          {!heard.length && !interim ? <p className="cr-quiet cr-small">{t("ทุกประโยคที่ระบบถอดได้จะขึ้นที่นี่ พร้อมสินค้าและ motion ที่มันเลือก")}</p>
+            : <ol className="cr-heard-list">
+              {heard.map((h) => <li key={h.id}>
+                <span className="cr-heard-time">{h.time}{h.ms != null && ` · ${h.ms} ms`}</span>
+                <p>{h.corrected || h.raw}</p>
+                {h.corrected && h.corrected !== h.raw && <p className="cr-heard-raw">{t("ได้ยินดิบ")}: {h.raw}</p>}
+                <span className="cr-heard-tags">
+                  {h.product && <span>{h.product}</span>}
+                  <span data-none={!h.motion || undefined}>{h.motion ? "→ " + h.motion : t("ไม่ขึ้น motion")}</span>
+                </span>
+              </li>)}
+            </ol>}
         </section>
 
         <section className="cr-panel" aria-label={t("ปุ่มลัดของโฮสต์")}>
@@ -831,17 +890,6 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
         </div>}
       </section>
 
-      {segments.length > 0 && <section className="cr-sheet-sec" aria-labelledby="cr-sec-rundown">
-        <h3 id="cr-sec-rundown">{t("ลำดับไลฟ์")}{plan.script && <span className="cr-quiet"> · {plan.script.title}</span>}</h3>
-        <ol className="cr-rundown">
-          {segments.map((s, i) => <li key={i} aria-current={i === segIndex ? "step" : undefined} data-done={i < segIndex || undefined}>
-            <button type="button" onClick={() => goSegment(i)}>
-              <span className="cr-run-num">{i + 1}</span><span className="cr-run-title">{s.title}</span>
-              <span className="cr-run-time">{i === segIndex ? mmss(remaining) : mmss(s.seconds)}</span>
-            </button>
-          </li>)}
-        </ol>
-      </section>}
 
       <section className="cr-sheet-sec" aria-labelledby="cr-sec-clips">
         <h3 id="cr-sec-clips">{t("คลิปกันเงียบ")}</h3>
@@ -853,13 +901,6 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
         </div>
       </section>
 
-      <section className="cr-sheet-sec" aria-labelledby="cr-sec-transcript">
-        <h3 id="cr-sec-transcript">{t("ถอดเสียงสด")}</h3>
-        <p className="cr-transcript">
-          {lines.length || interim ? <>{lines.slice(-4).join(" ")} <span className="cr-interim">{interim}</span></>
-            : <span className="cr-quiet">{t(speech === "unsupported" ? "การถอดเสียงใช้ได้เฉพาะ Google Chrome" : "ข้อความที่พูดจะขึ้นที่นี่เมื่อเริ่มไลฟ์")}</span>}
-        </p>
-      </section>
 
       <section className="cr-sheet-sec" aria-labelledby="cr-sec-crew">
         <h3 id="cr-sec-crew">{t("ทีมงาน AI")}</h3>

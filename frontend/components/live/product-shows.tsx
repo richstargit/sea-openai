@@ -5,7 +5,7 @@ import { ChevronDown, CircleAlert, LoaderCircle, RefreshCw, WandSparkles } from 
 import { useLanguage } from "@/components/language-provider";
 import { LiveApiError, type Show, cleanOffer, liveApi } from "@/components/studio/live-script/api";
 import { PlanView } from "@/components/studio/live-script/plan-view";
-import { productImage } from "@/lib/live-plan";
+import { type LivePlan, type LiveProduct, productImage } from "@/lib/live-plan";
 import type { StepProps } from "./live-studio";
 import "../studio/live-script/live-script.css";
 
@@ -24,6 +24,16 @@ async function photo(fileId: string): Promise<string | null> {
     const url = canvas.toDataURL("image/jpeg", 0.8);
     return url.length < 600_000 ? url : null;
   } catch { return null; }
+}
+
+/** Start Yok's live-script playbook for one product (brief from the catalog + shop style, up to 2 photos). */
+export async function buildShow(product: LiveProduct, style: LivePlan["style"]): Promise<Show> {
+  const brief = [
+    `สินค้า: ${product.name}`, product.description && `รายละเอียด: ${product.description}`, product.distinct && `จุดเด่น: ${product.distinct}`,
+    style.shop && `ร้าน: ${style.shop}`, style.tone && `น้ำเสียงพิธีกร: ${style.tone}`,
+  ].filter(Boolean).join("\n");
+  const images = (await Promise.all(product.images.slice(0, 2).map(photo))).filter((x): x is string => !!x);
+  return liveApi.create({ brief, images, offer: cleanOffer({ price: `${product.price} บาท` }) });
 }
 
 export function ProductShows({ plan, setPlan, products }: Pick<StepProps, "plan" | "setPlan" | "products">) {
@@ -63,13 +73,7 @@ export function ProductShows({ plan, setPlan, products }: Pick<StepProps, "plan"
     setStarting((s) => new Set(s).add(productId));
     setErrors((e) => { const rest = { ...e }; delete rest[productId]; return rest; });
     try {
-      const { style } = plan;
-      const brief = [
-        `สินค้า: ${product.name}`, product.description && `รายละเอียด: ${product.description}`, product.distinct && `จุดเด่น: ${product.distinct}`,
-        style.shop && `ร้าน: ${style.shop}`, style.tone && `น้ำเสียงพิธีกร: ${style.tone}`,
-      ].filter(Boolean).join("\n");
-      const images = (await Promise.all(product.images.slice(0, 2).map(photo))).filter((x): x is string => !!x);
-      const show = await liveApi.create({ brief, images, offer: cleanOffer({ price: `${product.price} บาท` }) });
+      const show = await buildShow(product, plan.style);
       setShows((s) => ({ ...s, [productId]: show }));
       setPlan((p) => ({ ...p, shows: { ...p.shows, [productId]: show.id } }));
     } catch (error) {
@@ -81,6 +85,13 @@ export function ProductShows({ plan, setPlan, products }: Pick<StepProps, "plan"
 
   const rows = plan.lineup.flatMap((item) => { const product = products.find((p) => p.id === item.productId); return product ? [product] : []; });
   const missing = rows.filter((p) => !shows[p.id] && !ids[p.id] && !starting.has(p.id));
+  // a seller new to lives should not have to know this exists: missing playbooks start on their own, once
+  const auto = useRef(false);
+  useEffect(() => {
+    if (auto.current || !missing.length) return;
+    auto.current = true;
+    missing.forEach((p) => void create(p.id));
+  });
   const busy = starting.size > 0 || Object.values(shows).some((s) => s.status === "running");
 
   return <section className="vs-card" aria-labelledby="ls-shows-title" aria-busy={busy}>

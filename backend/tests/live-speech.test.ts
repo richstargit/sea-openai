@@ -18,7 +18,7 @@ const cookie = `so_session=${'a'.repeat(43)}`
 const transcribe = (query = '') => request(app).post('/agent/live/transcribe' + query).set('Cookie', cookie).set('Content-Type', 'audio/webm')
 const understand = (body: object) => request(app).post('/agent/live/understand').set('Cookie', cookie).send(body)
 const answer = (value: object) => respond.mockResolvedValue({ output: [{ type: 'function_call', name: 'understand_speech', arguments: JSON.stringify(value) }] } as never)
-const base = { corrected: 'ครีมกันแดด 290 บาท', productId: 'p1', price: 290, from: null, to: null, left: null, code: null, intent: 'price' }
+const base = { corrected: 'ครีมกันแดด 290 บาท', productId: 'p1', price: 290, from: null, to: null, left: null, code: null, intent: 'price', combo: { main: null, accent: null, caption: null } }
 const products = [{ id: 'p1', name: 'ครีมกันแดด', price: 290 }]
 
 beforeEach(() => {
@@ -54,6 +54,14 @@ describe('POST /agent/live/understand', () => {
   it('drops a productId the catalog does not have', async () => {
     answer({ ...base, productId: 'ghost' })
     expect((await understand({ text: 'hi', products })).body.productId).toBeNull()
+  })
+  it('keeps combo ids only from the given motions and caps the caption', async () => {
+    answer({ ...base, combo: { main: 'price_pop', accent: 'ghost', caption: 'x'.repeat(40) } })
+    const motions = { main: [{ id: 'price_pop', description: 'price' }], accent: [{ id: 'edge-glow', description: 'hype' }] }
+    const res = await understand({ text: 'hi', products, motions })
+    expect(res.body.combo).toEqual({ main: 'price_pop', accent: null, caption: 'x'.repeat(24) })
+    answer({ ...base, combo: { main: 'price_pop', accent: 'edge-glow', caption: null } })
+    expect((await understand({ text: 'hi', products })).body.combo).toEqual({ main: null, accent: null, caption: null })
   })
   it('rejects bad input', async () => {
     expect((await understand({ text: '' })).status).toBe(422)

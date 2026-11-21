@@ -47,19 +47,20 @@ export const idleDetect: DetectState = { running: false, product: null, confiden
 const TICK_MS = 60; // main loop
 const WATCH_MS = 120; // motion probe on a 32×18 thumbnail
 const TRACK_MS = 100; // tracker step + box update (~10×/s)
-const MIN_GAP_MS = 1000; // between decide calls (one in flight at a time)
+const MIN_GAP_MS = 600; // between decide calls (one in flight at a time)
 const SPEECH_GAP_MS = 2500; // a still picture is re-asked this often only when the transcript moved on
-const SETTLE_MS = 450; // the picture must hold still this long before a "change" call…
+const SETTLE_MS = 300; // the picture must hold still this long before a "change" call…
 const CHANGE_WAIT_MS = 2500; // …or the change is sent anyway after this
 const CUT = 12; // mean grey difference that counts as a hard cut (new scene)
 const CHANGE = 6; // …as a change worth a new decision
 const STILL = 2.5; // …as "not moving"
 const SURE = 0.9; // one result this confident confirms a product
 const SURE_AFTER_CUT = 0.7;
-const LOCATE_GAP_MS = 2500; // never more than one locate per this
+const LOCATE_GAP_MS = 1500; // never more than one locate per this (and never two in flight)
+const SPECULATE = 0.6; // a candidate this likely gets its box fetched before it is confirmed (box stays hidden until then)
 const REANCHOR_MS = 8000; // fresh locate while tracking, even when the track looks fine
 const DECIDE_PX = 512;
-const LOCATE_PX = 1024;
+const LOCATE_PX = 512; // the server downsizes to 512 anyway
 const TW = 240; // tracker image width
 const GOOD = 26; // tracker match cost below this is a hit
 
@@ -219,7 +220,7 @@ function startDetection(get: () => DetectOptions, publish: (patch: Partial<Detec
     lastWatch: 0, stillSince: 0, changed: false, changedAt: 0, cutPending: false, startedAt: performance.now(),
     inflight: false, lastStart: -1e9, nextAllowed: 0, votes: 0, errors: 0, applied: 0, lastTranscript: "",
     stab: freshStabilizer(), confidence: null as number | null, heldUp: null as number | null,
-    locating: false, lastLocate: -1e9, tracker: null as Tracker | null, tracked: null as string | null, everBoxed: null as string | null,
+    locating: false, pending: null as { code: string; box: DetectBox; frame: Frame } | null, lastLocate: -1e9, tracker: null as Tracker | null, tracked: null as string | null, everBoxed: null as string | null,
     anchorFails: 0, trackAt: 0, boxKey: "", error: null as string | null,
   };
 
@@ -269,25 +270,34 @@ function startDetection(get: () => DetectOptions, publish: (patch: Partial<Detec
     if (key !== st.boxKey) { st.boxKey = key; publish({ box }); }
   };
 
+  function adopt(code: string, box: DetectBox, frame: Frame) {
+    const th = thOf(frame.rect);
+    const t = makeTracker(greyOf(frame.fine, { x: 0, y: 0, w: frame.fine.width, h: frame.fine.height }, th), box);
+    const v = video();
+    if (v) catchUp(t, greyOf(v, frame.rect, th));
+    Object.assign(st, { tracker: t, tracked: code, everBoxed: code, anchorFails: 0, pending: null });
+    if (v) publishBox(v);
+  }
+
   async function locate(code: string, frame: Frame) {
     st.locating = true;
     st.lastLocate = performance.now();
     try {
       const { box } = await studioPost<LocateResult>("/agent/live/locate", { image: frame.fine.toDataURL("image/jpeg", 0.88), code });
       // Locate answers seconds later: keep the result only if that product is still the one on screen, in the same layout.
-      if (!alive || st.stab.confirmed !== code || frame.rect !== st.rect) return;
+      if (!alive || frame.rect !== st.rect) return;
+      if (st.stab.confirmed !== code) {
+        // Speculative result: hold it until the product is confirmed; never show it before.
+        if (box && st.stab.candidate === code) st.pending = { code, box, frame };
+        return;
+      }
       if (!box) {
         // A re-anchor miss keeps the tracked box; two misses in a row mean the product really left the frame.
         if (st.tracked === code && ++st.anchorFails < 2) return;
         dropBox();
         return;
       }
-      const th = thOf(frame.rect);
-      const t = makeTracker(greyOf(frame.fine, { x: 0, y: 0, w: frame.fine.width, h: frame.fine.height }, th), box);
-      const v = video();
-      if (v) catchUp(t, greyOf(v, frame.rect, th));
-      Object.assign(st, { tracker: t, tracked: code, everBoxed: code, anchorFails: 0 });
-      if (v) publishBox(v);
+      adopt(code, box, frame);
     } catch (e) {
       fail(e, "locate: ");
     } finally {
@@ -299,12 +309,16 @@ function startDetection(get: () => DetectOptions, publish: (patch: Partial<Detec
     st.stab = stabilize(st.stab, d.product, d.productConfidence, cut, !!st.tracker && st.tracker.lost === 0);
     const { candidate, confirmed } = st.stab;
     if (!confirmed || (candidate && st.tracked && st.tracked !== candidate)) dropBox();
+    if (st.pending && (st.pending.code !== candidate || st.pending.frame.rect !== st.rect)) st.pending = null;
+    if (st.pending && st.pending.code === confirmed && !st.tracker) adopt(confirmed, st.pending.box, st.pending.frame);
     if (candidate && candidate === confirmed) {
       st.confidence = d.productConfidence;
       st.heldUp = d.heldUp;
       if (st.tracked !== confirmed && !st.locating && performance.now() - st.lastLocate >= LOCATE_GAP_MS) locate(confirmed, frame);
     } else if (!confirmed) {
       st.confidence = st.heldUp = null;
+      // Start the box early for a likely candidate, in parallel with the confirming look.
+      if (candidate && (d.productConfidence ?? 0) >= SPECULATE && !st.pending && !st.locating && performance.now() - st.lastLocate >= LOCATE_GAP_MS) locate(candidate, frame);
     }
     st.error = null;
     publish({ product: confirmed, confidence: st.confidence, heldUp: st.heldUp, lastDecision: d, latencyMs: Math.round(latencyMs), error: null });

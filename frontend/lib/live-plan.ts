@@ -21,7 +21,7 @@ export type LiveStyle = {
   mood: string; // free text for the motion kit ("หรูหรา มินิมอล", "สดใส ป๊อป")
   tagStyle: TagStyle;
 };
-export type LineupItem = { productId: string; minutes: number; points: string; saleFormat?: SaleFormat };
+export type LineupItem = { productId: string; minutes?: number; points: string; saleFormat?: SaleFormat };
 /** A dead-air clip made for a product before the live; the host plays it on the overlay when needed. */
 export type PreviewClip = { productId: string; fileId: string; url: string; name: string };
 
@@ -108,7 +108,11 @@ const lineupFor = (plan: LivePlan, products: LiveProduct[]) =>
     const p = products.find((x) => x.id === item.productId);
     return p ? [{ id: p.id, name: p.name, description: p.description, distinct: p.distinct, price: p.price, minutes: item.minutes, points: item.points, saleFormat: item.saleFormat }] : [];
   });
+export type StyleSuggestion = Pick<LiveStyle, "tone" | "accent" | "accent2" | "font" | "mood" | "tagStyle">;
 export const director = {
+  /** AI fills tone, colours, font, mood and tag style from the catalog. */
+  style: (shop: string, products: LiveProduct[]) =>
+    studioPost<StyleSuggestion>("/agent/live/style", { shop, products: products.slice(0, 30).map(({ name, description, price }) => ({ name, description, price })) }),
   plan: (plan: LivePlan, products: LiveProduct[]) =>
     studioPost<ShowScript>("/agent/live/plan", { shop: plan.style.shop, tone: plan.style.tone, language: plan.style.language, lineup: lineupFor(plan, products) }),
   kit: (plan: LivePlan, products: LiveProduct[]) =>

@@ -14,6 +14,7 @@ export type LiveSentence = {
   left: number | null;
   code: string | null;
   intent: string;
+  combo: { main: string | null; accent: string | null; caption: string | null } | null;
   source: "openai" | "browser";
 };
 export type LiveSpeechOptions = {
@@ -21,6 +22,7 @@ export type LiveSpeechOptions = {
   lang: "th" | "en";
   products: SpeechProduct[];
   current: string | null;
+  motions?: { main: { id: string; description: string }[]; accent: { id: string; description: string }[] };
   onSentence: (s: LiveSentence) => void;
 };
 export type LiveSpeechStatus = "off" | "listening" | "error" | "unsupported";
@@ -115,6 +117,7 @@ export function useLiveSpeech(options: LiveSpeechOptions) {
       try {
         return await studioPost<Understood>("/agent/live/understand", {
           text, products: o.products.map(({ id, name, price }) => ({ id, name, price })), current: o.current, lang: o.lang,
+          ...(o.motions ? { motions: o.motions } : {}),
         });
       } catch { return {} as Understood; }
     };
@@ -125,7 +128,7 @@ export function useLiveSpeech(options: LiveSpeechOptions) {
       setInterim("");
       opt.current.onSentence({
         raw, corrected: u.corrected || raw, productId: u.productId ?? null, price: u.price ?? null,
-        from: u.from ?? null, to: u.to ?? null, left: u.left ?? null, code: u.code ?? null, intent: u.intent || "none", source,
+        from: u.from ?? null, to: u.to ?? null, left: u.left ?? null, code: u.code ?? null, intent: u.intent || "none", combo: u.combo ?? null, source,
       });
     };
 

@@ -21,7 +21,7 @@ export type StepProps = {
 
 const STEPS = [
   { id: "catalog", label: "คลังสินค้า", icon: Boxes },
-  { id: "setup", label: "สไตล์และลำดับไลฟ์", icon: Sparkles },
+  { id: "setup", label: "สไตล์และสินค้าในไลฟ์", icon: Sparkles },
   { id: "prepare", label: "เตรียมคลิปและ motion", icon: Clapperboard },
   { id: "control", label: "ห้องควบคุมไลฟ์", icon: MonitorPlay },
 ] as const;

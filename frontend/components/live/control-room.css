@@ -234,3 +234,19 @@
 .cr-next-now li { font-size: 1.3rem; font-weight: 600; line-height: 1.5; }
 .cr-next-old { margin: 0; color: var(--cr-quiet); opacity: .6; font-size: .9rem; }
 .cr-next-reply { border-radius: 14px; padding: 12px; background: #fcfcf8; color: #1c1c1a; }
+
+/* product the host is on: follows camera and speech, tap to override */
+.cr-focus { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.cr-focus .cr-btn[aria-pressed="true"] { background: var(--cr-ink, #f5f4ee); color: var(--cr-bg, #161614); }
+
+/* what the mic heard, newest first */
+.cr-heard h2 { display: flex; align-items: center; gap: 6px; }
+.cr-heard-interim { margin: 8px 0 0; font-style: italic; opacity: .7; }
+.cr-heard-list { list-style: none; margin: 8px 0 0; padding: 0; max-height: 320px; overflow-y: auto; display: grid; gap: 8px; }
+.cr-heard-list li { padding: 8px 10px; border-radius: 10px; background: rgb(255 255 255 / .05); }
+.cr-heard-list p { margin: 2px 0 0; line-height: 1.5; }
+.cr-heard-time { font-size: .75rem; opacity: .6; font-variant-numeric: tabular-nums; }
+.cr-heard-raw { font-size: .8rem; opacity: .6; }
+.cr-heard-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; font-size: .78rem; }
+.cr-heard-tags span { padding: 1px 8px; border-radius: 99px; background: rgb(255 255 255 / .1); }
+.cr-heard-tags span[data-none] { opacity: .55; }

@@ -420,6 +420,11 @@ export const ANNOTATIONS: Annotations = {
     secured: true,
     summary: 'AI Motion Designer: { shop, mood, accent?, accent2?, products[{name,price}], count 1-12, moments? } -> { motions: [{ id, name, moment, description, seconds, layers (compose layers) }], latencyMs }',
   },
+  'POST /agent/live/style': {
+    tags: ['Live'],
+    secured: true,
+    summary: 'AI fills the live style from the catalog: { shop?, products[{name,description?,price?}] <= 30 } -> { tone, accent, accent2, font, mood, tagStyle }',
+  },
   'GET /agent/live/products': { tags: ['Live'], secured: true, summary: "List the account's live catalog" },
   'POST /agent/live/products': { tags: ['Live'], secured: true, summary: 'Add a product with 1-3 photos (mirrored to the detection service)' },
   'PATCH /agent/live/products/:code': { tags: ['Live'], secured: true, summary: 'Edit a product; new photos replace the old ones' },
@@ -443,7 +448,7 @@ export const ANNOTATIONS: Annotations = {
   'POST /agent/live/understand': {
     tags: ['Live'],
     secured: true,
-    summary: 'Correct a Thai live-selling sentence and extract product, numbers and intent: { text, products, current?, lang? } -> { corrected, productId, price, from, to, left, code, intent, latencyMs }',
+    summary: 'Correct a Thai live-selling sentence and extract product, numbers and intent: { text, products, current?, lang?, motions?: { main, accent }[{id, description}] } -> { corrected, productId, price, from, to, left, code, intent, combo: { main, accent, caption }, latencyMs }; combo ids are always from the given motions or null',
   },
   'GET /agent/overlay/status': {
     tags: ['Overlay'],
