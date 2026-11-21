@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { loggedInUser } from '@/controllers/auth.controller.js'
 import { createProduct, deleteProduct, listProducts, productBody, productPatch, productPhoto, syncProducts, updateProduct } from '@/services/live/catalog.js'
 import { decide, decideBody, kitBody, motionKit, planBody, planLive } from '@/services/live/director.js'
+import { transcribeLive, transcribeQuery, understand, understandBody } from '@/services/live/speech.js'
 import { locateBody, locateProduct } from '@/services/live/locate.js'
 
 const timeout = (ms: number) => AbortSignal.timeout(ms)
@@ -18,6 +19,12 @@ export const liveDecide: RequestHandler = async (request, response) => {
 }
 export const liveLocate: RequestHandler = async (request, response) => {
   response.json(await locateProduct(loggedInUser(response).id, locateBody.parse(request.body), timeout(20_000)))
+}
+export const liveTranscribe: RequestHandler = async (request, response) => {
+  response.json(await transcribeLive(request.body, request.header('content-type') ?? '', transcribeQuery.parse(request.query), timeout(15_000)))
+}
+export const liveUnderstand: RequestHandler = async (request, response) => {
+  response.json(await understand(understandBody.parse(request.body), timeout(10_000)))
 }
 
 const codeParam = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/)

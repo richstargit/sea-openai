@@ -347,6 +347,16 @@ export const ANNOTATIONS: Annotations = {
     secured: true,
     summary: 'Find a catalog product in a live frame: { image, code } -> { box: {x,y,w,h} in 0-1 fractions or null, evidence, latencyMs }',
   },
+  'POST /agent/live/transcribe': {
+    tags: ['Live'],
+    secured: true,
+    summary: 'Transcribe one short raw audio clip (audio/webm|ogg|mp4|wav, <= 2 MB; query lang=th|en, hint<=400): -> { text, latencyMs }',
+  },
+  'POST /agent/live/understand': {
+    tags: ['Live'],
+    secured: true,
+    summary: 'Correct a Thai live-selling sentence and extract product, numbers and intent: { text, products, current?, lang? } -> { corrected, productId, price, from, to, left, code, intent, latencyMs }',
+  },
   'GET /agent/overlay/status': {
     tags: ['Overlay'],
     secured: true,
