@@ -4,6 +4,7 @@ import {
   ACTIVITY_LOG_METHODS,
   ACTIVITY_LOG_SKIPPED_PATHS,
 } from '@/constants/activity-log.js'
+import { isPrivateAgentPath } from '@/constants/agent.js'
 import { recordActivity } from '@/services/activity-log.service.js'
 import { logger } from '@/services/logger.service.js'
 import { pathWithoutQuery } from '@/utils/request-path.js'
@@ -23,6 +24,7 @@ export const activityLogger: RequestHandler = (request, response, next) => {
   }
 
   const startedAt = process.hrtime.bigint()
+  const logBodies = !isPrivateAgentPath(path)
   const sendJson = response.json.bind(response)
   let payload: unknown
 
@@ -33,7 +35,7 @@ export const activityLogger: RequestHandler = (request, response, next) => {
 
   response.on('finish', () => {
     void recordActivity({
-      userId: null,
+      userId: response.locals.user?.id ?? null,
       requestId: String(response.locals.requestId ?? ''),
       method: request.method,
       path,
@@ -41,8 +43,8 @@ export const activityLogger: RequestHandler = (request, response, next) => {
       durationMs: Number(
         (process.hrtime.bigint() - startedAt) / NANOSECONDS_PER_MILLISECOND,
       ),
-      requestBody: request.body,
-      responseBody: payload,
+      requestBody: logBodies ? request.body : undefined,
+      responseBody: logBodies ? payload : undefined,
       ip: request.ip ?? null,
       userAgent: request.get('user-agent') ?? null,
     }).catch((error) => {

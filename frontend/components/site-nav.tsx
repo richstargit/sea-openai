@@ -2,6 +2,7 @@
 
 import { LanguageSwitcher, useLanguage } from "@/components/language-provider";
 
+import { AccountButton } from "@/components/account-button";
 import Link from "next/link";
 import { useState } from "react";
 import { Menu } from "lucide-react";
@@ -43,7 +44,7 @@ export function Wordmark({ className }: { className?: string }) {
  * Translucent global nav: content scrolls underneath it, the material carries
  * the hierarchy. Give the controls breathing room on every screen size.
  */
-export function SiteNav() {
+export function SiteNav({ signedIn = false }: { signedIn?: boolean }) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
 
@@ -71,6 +72,7 @@ export function SiteNav() {
         </ul>
 
         <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3 lg:ml-0">
+          <AccountButton initialSignedIn={signedIn} />
           <LanguageSwitcher />
           <Button asChild size="xs" className="hidden sm:inline-flex">
             <Link href="/studio">{t("ลองทำคลิป")}</Link>

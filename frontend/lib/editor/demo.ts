@@ -1,5 +1,4 @@
 import { FPS, newClip, newProject, uid, type Asset } from "./model";
-import { saveProject } from "./storage";
 import type { VideoSize } from "@/lib/video-formats";
 
 export async function createDemoProject(options?: { image?: string; title?: string; caption?: string; size?: VideoSize; name?: string }) {
@@ -19,6 +18,5 @@ export async function createDemoProject(options?: { image?: string; title?: stri
     { ...newClip(asset, options?.caption || "Freshly roasted. Every batch."), subtitle: "Made for your everyday meals", fit: "cover" as const, transition: "fade" as const },
     { ...newClip(asset, "Bring flavor to your table"), subtitle: "Order today · ฿89", textPosition: "center" as const, transition: "fade" as const },
   ];
-  await saveProject(project, [asset]);
   return { project, assets: [asset] };
 }

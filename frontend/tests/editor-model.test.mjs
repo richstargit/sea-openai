@@ -1,8 +1,8 @@
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
-const ts = require('typescript');
-const fs = require('node:fs');
-const code = ts.transpileModule(fs.readFileSync(require.resolve('../lib/editor/model.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import ts from 'typescript';
+import fs from 'node:fs';
+const code = ts.transpileModule(fs.readFileSync(new URL('../lib/editor/model.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 const exported = {};
 new Function('exports', code)(exported);
 const { newClip, newProject, editProject, framesOf, totalFrames, locate, commit, undo, redo } = exported;

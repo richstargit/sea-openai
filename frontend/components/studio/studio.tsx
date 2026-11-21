@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { createEditorStorage } from "@/lib/editor/storage";
 import { createDemoProject } from "@/lib/editor/demo";
 import { useLanguage } from "@/components/language-provider";
 
@@ -40,7 +41,7 @@ const stages = [
 ];
 const STAGE_MS = 1300;
 
-export function Studio() {
+export function Studio({ userId }: { userId: string }) {
   const { t } = useLanguage();
   const reduce = useReducedMotion();
   const router = useRouter();
@@ -404,8 +405,9 @@ export function Studio() {
                 try {
                   const version = versions.find((item) => item.id === activeVersion) || versions[0];
                   const result = await createDemoProject({ image: cover || `/editor/${kind}.svg`, title: t(version.line), caption: t(theme.selling), size, name: `${t(theme.name)} · ${version.id}` });
+                  await createEditorStorage(userId).saveProject(result.project, result.assets);
                   router.push(`/editor?project=${result.project.id}`);
-                } catch { setEditorError(t("เปิดห้องตัดต่อไม่สำเร็จ กรุณาตรวจพื้นที่จัดเก็บของเบราว์เซอร์แล้วลองอีกครั้ง")); setOpeningEditor(false); }
+                } catch { setEditorError(t("เปิดห้องตัดต่อไม่สำเร็จ ตรวจการเชื่อมต่อแล้วลองอีกครั้ง")); setOpeningEditor(false); }
               }}>
                 <Scissors /> {t(openingEditor ? "กำลังเปิดห้องตัดต่อ" : "เปิดในห้องตัดต่อ")}</Button>
               {editorError && <p role="alert" className="text-sm text-destructive">{editorError}</p>}

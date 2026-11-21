@@ -6,6 +6,7 @@ import timezone from 'dayjs/plugin/timezone.js'
 import utc from 'dayjs/plugin/utc.js'
 import type { Request, RequestHandler } from 'express'
 
+import { isPrivateAgentPath } from '@/constants/agent.js'
 import { pathWithoutQuery } from '@/utils/request-path.js'
 
 dayjs.extend(utc)
@@ -122,7 +123,7 @@ export class LoggerService {
           path,
           query: request.query,
           params: request.params,
-          body: request.body,
+          ...(isPrivateAgentPath(path) ? {} : { body: request.body }),
         })
       }
 

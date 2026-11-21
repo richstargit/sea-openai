@@ -1,4 +1,5 @@
 import { serviceConfig } from '@/config/service.config.js'
+import { cookieName } from '@/controllers/auth.controller.js'
 import { ANNOTATIONS } from '@/docs/annotations.js'
 import { buildDocument } from '@/docs/introspect.js'
 import healthRoutes from '@/routes/health.route.js'
@@ -18,5 +19,9 @@ export function serviceSpec() {
     version: service.version,
     description: service.description,
     annotations: ANNOTATIONS,
+    securityScheme: 'sessionCookie',
+    securitySchemes: {
+      sessionCookie: { type: 'apiKey', in: 'cookie', name: cookieName },
+    },
   })
 }

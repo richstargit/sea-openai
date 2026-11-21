@@ -11,7 +11,7 @@ import { IconButton } from "./icon-button";
 import { Timeline } from "./timeline";
 import { FPS, clipStart, commit, editProject, framesOf, locate, newClip, newProject, redo, timecode, totalFrames, uid, undo, type Asset, type Clip, type Edit, type History, type Project } from "@/lib/editor/model";
 import { importMedia } from "@/lib/editor/media";
-import { listProjects, loadProject, saveProject } from "@/lib/editor/storage";
+import { createEditorStorage } from "@/lib/editor/storage";
 import { createDemoProject } from "@/lib/editor/demo";
 import { exportMp4 } from "@/lib/editor/export";
 import "./editor.css";
@@ -20,14 +20,20 @@ type Tool = "media" | "text" | "audio" | "adjust" | "crop" | "format";
 const tools = [ { id: "media", icon: Film, label: "ไฟล์" }, { id: "text", icon: Type, label: "ข้อความ" }, { id: "audio", icon: Music2, label: "เสียง" }, { id: "adjust", icon: SlidersHorizontal, label: "ปรับภาพ" }, { id: "crop", icon: Maximize, label: "จัดเฟรม" }, { id: "format", icon: Ratio, label: "ขนาด" } ] as const;
 
 function Thumbnail({ asset }: { asset: Asset }) {
-  const [url, setUrl] = useState("");
-  useEffect(() => { const next = URL.createObjectURL(asset.file); setUrl(next); return () => URL.revokeObjectURL(next); }, [asset]);
+  const attach = useCallback((element: HTMLSpanElement | HTMLVideoElement | null) => {
+    if (!element) return;
+    const url = URL.createObjectURL(asset.file);
+    if (element instanceof HTMLVideoElement) element.src = url;
+    else element.style.backgroundImage = `url("${url}")`;
+    return () => URL.revokeObjectURL(url);
+  }, [asset.file]);
   if (asset.kind === "audio") return <Music2 size={24} />;
-  if (!url) return <Film size={24} />;
-  return asset.kind === "image" ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={url} alt="" /> : <video src={url} muted playsInline preload="metadata" />;
+  return asset.kind === "image" ? <span aria-hidden ref={attach} className="block size-full bg-cover bg-center" /> : <video ref={attach} muted playsInline preload="metadata" />;
 }
 
-export function Editor() {
+export function Editor({ userId }: { userId: string }) {
+  const [{ listProjects, loadProject, saveProject }] = useState(() => createEditorStorage(userId));
+  const [legacyProjects, setLegacyProjects] = useState<Project[] | null>(null);
   const { t } = useLanguage();
   const reduce = useReducedMotion();
   const [history, setHistory] = useState<History | null>(null);
@@ -70,7 +76,7 @@ export function Editor() {
       const requested = new URLSearchParams(window.location.search).get("project");
       if (requested) {
         const saved = await loadProject(requested);
-        if (!saved) throw new Error("This project was not found on this device.");
+        if (!saved) throw new Error("This project was not found in your account.");
         return saved;
       }
       const latest = (await listProjects())[0];
@@ -80,14 +86,14 @@ export function Editor() {
     initialLoad.current.then((result) => { if (!active) return; setAssets(result.assets); setHistory({ past: [], present: result.project, future: [] }); setSelectedId(result.project.clips[0]?.id); })
       .catch((error: unknown) => { if (active) setFatal(error instanceof Error ? error.message : "Could not open the editor."); });
     return () => { active = false; };
-  }, []);
+  }, [loadProject, listProjects]);
 
   useEffect(() => {
     if (!project) return;
     setStatus("saving"); let active = true;
-    const timer = setTimeout(() => { saveProject(project, assets).then(() => { if (active) setStatus("saved"); }).catch(() => { if (active) { setStatus("error"); setNotice("บันทึกไม่สำเร็จ พื้นที่เบราว์เซอร์อาจเต็ม กรุณาดาวน์โหลดก่อนปิดหน้านี้"); } }); }, 400);
+    const timer = setTimeout(() => { saveProject(project, assets).then(() => { if (active) setStatus("saved"); }).catch((error: Error) => { if (active) { setStatus("error"); setNotice(error.message); } }); }, 400);
     return () => { active = false; clearTimeout(timer); };
-  }, [project, assets]);
+  }, [project, assets, saveProject]);
   useEffect(() => { if (frameRef.current >= total) { const next = Math.max(0, total - 1); frameRef.current = next; setFrame(next); if (!total) setPlaying(false); } }, [total]);
   useEffect(() => {
     if (!playing || !total) return;
@@ -152,6 +158,27 @@ export function Editor() {
   async function switchProject(id: string) {
     try { if (project) await saveProject(project, assets); const result = await loadProject(id); if (!result) throw new Error("Project not found."); setPlaying(false); setAssets(result.assets); setHistory({ past: [], present: result.project, future: [] }); setSelectedId(result.project.clips[0]?.id); seek(0); setShowProjects(false); setValidSize(true); window.history.replaceState(null, "", `/editor?project=${id}`); } catch (error) { onError(error instanceof Error ? error.message : "Could not open project."); }
   }
+  async function listLegacy() {
+    try {
+      const legacy = await import("@/lib/editor/legacy-storage");
+      const local = await legacy.listProjects();
+      setLegacyProjects(local.filter((item) => !localStorage.getItem("editor-imported-" + item.id)));
+    } catch { onError(t("เปิดรายการโปรเจกต์ไม่สำเร็จ")); }
+  }
+
+  async function importLegacy(id: string) {
+    try {
+      await navigator.locks.request("editor-import-" + id, async () => {
+        if (localStorage.getItem("editor-imported-" + id)) throw new Error(t("นำเข้าโปรเจกต์นี้แล้ว"));
+        const legacy = await import("@/lib/editor/legacy-storage");
+        const saved = await legacy.loadProject(id);
+        if (!saved) throw new Error("Project not found.");
+        if (!(await loadProject(id))) await saveProject(saved.project, saved.assets);
+        localStorage.setItem("editor-imported-" + id, userId);
+      });
+      await switchProject(id);
+    } catch (error) { onError(error instanceof Error ? error.message : "Could not import project."); }
+  }
   async function startNew() {
     try { if (project) await saveProject(project, assets); const next = newProject(project?.size); await saveProject(next); setPlaying(false); setHistory({ past: [], present: next, future: [] }); setAssets([]); setSelectedId(undefined); seek(0); setShowProjects(false); setTool("media"); setValidSize(true); window.history.replaceState(null, "", `/editor?project=${next.id}`); } catch (error) { onError(error instanceof Error ? error.message : "Could not create project."); }
   }
@@ -177,8 +204,8 @@ export function Editor() {
       <header className="editor-header">
         <Link href="/studio" className="editor-back" aria-label={t("กลับไป Studio")} title={t("กลับไป Studio")}><ArrowLeft size={18} /></Link>
         <div className="editor-brand"><Clapperboard size={21} /><span>SnapPromo <span className="editor-brand-light">Edit</span></span></div>
-        <div className="editor-project-name"><input aria-label={t("ชื่อโปรเจกต์")} value={project.name} onChange={(event) => apply({ type: "project", patch: { name: event.target.value } }, "project-name")} /><span className="editor-save-state" role="status">{status === "saved" ? <Check size={12} /> : status === "saving" ? <LoaderCircle size={12} className="animate-spin" /> : null}{t(status === "saved" ? "บันทึกบนเครื่องแล้ว" : status === "saving" ? "กำลังบันทึก" : "ยังไม่ได้บันทึก")}</span></div>
-        <div className="editor-header-actions"><LanguageSwitcher /><IconButton label={t("โปรเจกต์ของฉัน")} onClick={async () => { try { await saveProject(project, assets); setProjects(await listProjects()); setShowProjects(true); } catch { onError(t("เปิดรายการโปรเจกต์ไม่สำเร็จ")); } }}><FolderOpen size={18} /></IconButton><button type="button" className="editor-primary" onClick={() => void doExport()} disabled={!total || !validSize || importing}><Download size={16} /><span>{t("ส่งออก MP4")}</span></button></div>
+        <div className="editor-project-name"><input aria-label={t("ชื่อโปรเจกต์")} value={project.name} onChange={(event) => apply({ type: "project", patch: { name: event.target.value } }, "project-name")} /><span className="editor-save-state" role="status">{status === "saved" ? <Check size={12} /> : status === "saving" ? <LoaderCircle size={12} className="animate-spin" /> : null}{t(status === "saved" ? "บันทึกในบัญชีแล้ว" : status === "saving" ? "กำลังบันทึก" : "ยังไม่ได้บันทึก")}</span></div>
+        <div className="editor-header-actions"><LanguageSwitcher /><IconButton label={t("โปรเจกต์ของฉัน")} onClick={async () => { try { await saveProject(project, assets); setProjects(await listProjects()); setLegacyProjects(null); setShowProjects(true); } catch { onError(t("เปิดรายการโปรเจกต์ไม่สำเร็จ")); } }}><FolderOpen size={18} /></IconButton><button type="button" className="editor-primary" onClick={() => void doExport()} disabled={!total || !validSize || importing}><Download size={16} /><span>{t("ส่งออก MP4")}</span></button></div>
       </header>
 
       <div className="editor-workspace">
@@ -189,7 +216,7 @@ export function Editor() {
           <div className="editor-panel-title"><h1>{t(tools.find((item) => item.id === tool)!.label)}</h1>{tool === "media" && <IconButton label={t("เพิ่มไฟล์")} onClick={() => input.current?.click()} disabled={importing}><Plus size={18} /></IconButton>}</div>
           {tool === "media" ? <>
             <button type="button" className="editor-import" onClick={() => input.current?.click()} disabled={importing}>{importing ? <LoaderCircle className="animate-spin" size={25} /> : <ImagePlus size={25} />}<strong>{t(importing ? "กำลังเพิ่มไฟล์" : "เพิ่มวิดีโอ รูป หรือเสียง")}</strong><span>{t("ลากไฟล์มาวางได้เลย")}</span></button>
-            <p className="editor-caption">{t("ไฟล์อยู่ในเบราว์เซอร์นี้เท่านั้น")}</p>
+            <p className="editor-caption">{t("ไฟล์สื่อบันทึกไว้ในบัญชีของคุณ")}</p>
             <div className="editor-library">{assets.map((asset) => <button type="button" key={asset.id} title={t("เพิ่มลงไทม์ไลน์")} onClick={() => { if (asset.kind === "audio") { apply({ type: "project", patch: { music: { assetId: asset.id, volume: 0.35 } } }); setTool("audio"); } else { const clip = newClip(asset); apply({ type: "append", clip }); setSelectedId(clip.id); seek(total); } }} className="editor-media-card"><span className="editor-thumbnail"><Thumbnail asset={asset} /><span className="editor-media-add"><Plus size={16} /></span></span><span className="editor-media-name">{asset.name}</span><span className="editor-caption">{asset.kind === "image" ? t("รูปภาพ") : `${(asset.frames / FPS).toFixed(1)}s`}</span></button>)}</div>
           </> : tool === "format" ? <VideoFormatPicker value={project.size} onChange={(size) => apply({ type: "project", patch: { size } })} onValidityChange={setValidSize} /> : tool === "audio" ? <>
             <p className="editor-section-label">{t("เสียงต้นฉบับ")}</p>
@@ -231,7 +258,9 @@ export function Editor() {
       </section>
       <input ref={input} type="file" accept="video/*,image/*,audio/*" multiple className="sr-only" aria-label={t("เลือกไฟล์สื่อ")} onChange={(event) => void addFiles(Array.from(event.target.files || []))} />
       {notice && <div className="editor-notice" role="status"><span>{t(notice)}</span><button type="button" aria-label={t("ปิดข้อความ")} onClick={() => setNotice("")}><X size={16} /></button></div>}
-      {showProjects && <div className="editor-modal-backdrop" onKeyDown={(event) => { if (event.key === "Escape") setShowProjects(false); }}><motion.section role="dialog" aria-modal="true" aria-labelledby="projects-title" className="editor-modal" initial={reduce ? false : { opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", bounce: 0, duration: 0.3 }}><div className="editor-panel-title"><h2 id="projects-title">{t("โปรเจกต์ของฉัน")}</h2><IconButton label={t("ปิด")} onClick={() => setShowProjects(false)}><X size={18} /></IconButton></div><button type="button" autoFocus className="editor-primary" onClick={() => void startNew()}><Plus size={16} />{t("โปรเจกต์ใหม่")}</button><div className="editor-project-list">{projects.map((item) => <button type="button" key={item.id} onClick={() => void switchProject(item.id)}><Clapperboard size={20} /><span><strong>{item.name}</strong><small>{item.size.width} × {item.size.height} · {timecode(totalFrames(item))}</small></span>{item.id === project.id && <Check size={16} />}</button>)}</div></motion.section></div>}
+      {showProjects && <div className="editor-modal-backdrop" onKeyDown={(event) => { if (event.key === "Escape") setShowProjects(false); }}><motion.section role="dialog" aria-modal="true" aria-labelledby="projects-title" className="editor-modal" initial={reduce ? false : { opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", bounce: 0, duration: 0.3 }}><div className="editor-panel-title"><h2 id="projects-title">{t("โปรเจกต์ของฉัน")}</h2><IconButton label={t("ปิด")} onClick={() => setShowProjects(false)}><X size={18} /></IconButton></div><button type="button" autoFocus className="editor-primary" onClick={() => void startNew()}><Plus size={16} />{t("โปรเจกต์ใหม่")}</button><div className="editor-project-list">{projects.map((item) => <button type="button" key={item.id} onClick={() => void switchProject(item.id)}><Clapperboard size={20} /><span><strong>{item.name}</strong><small>{item.size.width} × {item.size.height} · {timecode(totalFrames(item))}</small></span>{item.id === project.id && <Check size={16} />}</button>)}</div>
+        <button type="button" className="editor-secondary" onClick={() => void listLegacy()}>{t("นำเข้าจากเบราว์เซอร์นี้")}</button>
+        {legacyProjects && <div className="editor-project-list">{legacyProjects.length ? legacyProjects.map((item) => <button type="button" key={item.id} onClick={() => void importLegacy(item.id)}><Plus size={16} />{item.name}</button>) : <p>{t("ไม่มีโปรเจกต์เก่าให้นำเข้า")}</p>}</div>}</motion.section></div>}
       {exporting && <div className="editor-modal-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="export-title" className="editor-modal editor-export-modal"><span className="editor-export-icon">{download ? <Check size={30} /> : <Download size={30} />}</span><h2 id="export-title">{t(download ? "คลิปพร้อมดาวน์โหลด" : "กำลังสร้างไฟล์ MP4")}</h2><p>{project.size.width} × {project.size.height} · H.264 · {FPS} fps</p><progress max={100} value={progress} aria-label={t("ความคืบหน้าการส่งออก")} /><span className="editor-caption">{Math.round(progress)}%</span>{download ? <><a className="editor-primary" href={download} download={`${project.name.replace(/[^\p{L}\p{N} _-]/gu, "").trim() || "SnapPromo"}.mp4`}><Download size={16} />{t("ดาวน์โหลด MP4")}</a><button type="button" className="editor-secondary" autoFocus onClick={() => setExporting(false)}>{t("กลับไปตัดต่อ")}</button></> : <button type="button" className="editor-secondary" autoFocus onClick={() => exportController.current?.abort()}>{t("ยกเลิก")}</button>}</section></div>}
     </main>
   );

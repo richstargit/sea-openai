@@ -26,7 +26,7 @@ export function Timeline({ project, assets, frame, selectedId, zoom, onSeek, onS
     const startX = event.clientX, original = edge === "in" ? clip.sourceIn : clip.sourceOut;
     const asset = assets.find((item) => item.id === clip.assetId);
     if (!asset) return;
-    const key = `trim-${clip.id}-${Date.now()}`;
+    const key = `trim-${clip.id}-${event.timeStamp}`;
     element.onpointermove = (move) => onEdit({ type: "trim", id: clip.id, edge, frame: original + Math.round((move.clientX - startX) / px * clip.speed), maxFrames: asset.frames }, key);
     element.onpointerup = element.onpointercancel = () => { element.onpointermove = null; element.onpointerup = null; element.onpointercancel = null; };
   }

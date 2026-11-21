@@ -15,3 +15,5 @@ Thumbs.db
 
 # Hook Machine local data (profiles, projects, uploaded product images)
 data/
+integrations/agent-reach/.venv/
+__pycache__/

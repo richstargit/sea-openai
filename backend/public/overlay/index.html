@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Live overlay</title>
+  <link rel="stylesheet" href="overlay.css">
+  <link rel="preload" href="gsap.js" as="script">
+  <script defer src="gsap.js"></script>
+  <script defer src="overlay.js"></script>
+</head>
+<body>
+  <main id="stage"></main>
+  <template id="slot">
+    <section class="slot">
+      <div class="scene" data-start="0" data-duration="4" data-width="768" data-height="216"
+        data-composition-variables='[{"id":"label","type":"string","label":"Label","default":"LIVE"},{"id":"value","type":"string","label":"Value","default":"กำลังไลฟ์"}]'>
+        <div class="clip" data-start="0" data-duration="4" data-track-index="1">
+          <article><img alt="" hidden><div><small data-var-text="label"></small><strong data-var-text="value"></strong></div></article>
+        </div>
+      </div>
+      <video playsinline muted hidden></video>
+    </section>
+  </template>
+</body>
+</html>
