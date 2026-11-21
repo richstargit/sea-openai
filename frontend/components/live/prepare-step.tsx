@@ -16,10 +16,6 @@ import "../studio/video/video.css";
 import "./steps.css";
 
 const KIND: Record<Segment["kind"], string> = { intro: "เปิดไลฟ์", product: "ขายสินค้า", interlude: "ช่วงคั่น", outro: "ปิดไลฟ์" };
-const CUE: Record<string, string> = {
-  product_card: "การ์ดสินค้า", price_pop: "ป้ายราคา", price_drop: "ราคาลด", free_badge: "ป้ายของแถม", low_stock: "ใกล้หมด",
-  poll: "โหวต", fireworks: "พลุ", zoom: "ซูม", caption: "ข้อความบนจอ",
-};
 const LOOK: Record<MotionKit["theme"]["look"], string> = { paper: "กระดาษ อบอุ่น", ink: "หมึกเข้ม หรู", pop: "ป๊อป สดใส" };
 const MOMENTS: [keyof MotionKit["moments"], string][] = [
   ["intro", "เปิดไลฟ์"], ["productIn", "สินค้าเข้าจอ"], ["price", "โชว์ราคา"], ["deal", "ดีลพิเศษ"], ["callToAction", "ชวนกดสั่ง"],
@@ -147,7 +143,6 @@ export function PrepareStep(props: StepProps) {
   }
   const elapsed = (key: string) => clock((now - (making[key] ?? now)) / 1000);
 
-  const starts = (script?.segments ?? []).reduce<number[]>((acc, seg, i) => [...acc, i ? acc[i - 1] + (script!.segments[i - 1].seconds || 0) : 0], []);
   const kitColorsOk = !!kit && HEX.test(kit.theme.accent) && HEX.test(kit.theme.accent2);
   const kitColorsApplied = !!kit && kit.theme.accent.toLowerCase() === style.accent.toLowerCase() && kit.theme.accent2.toLowerCase() === style.accent2.toLowerCase();
   const noLineup = items.length === 0;
@@ -167,7 +162,7 @@ export function PrepareStep(props: StepProps) {
     {/* (a) The director's script */}
     <section className="vs-card" aria-labelledby="ls-script-title" aria-busy={scriptBusy}>
       <div className="ls-card-head">
-        <div><h3 id="ls-script-title">{t("สคริปต์ผู้กำกับ AI")}</h3><p>{t("ลำดับช่วงในไลฟ์ ประโยคเปิด ประเด็นที่ควรพูด และคิวกราฟิก")}</p></div>
+        <div><h3 id="ls-script-title">{t("บทพูดของแต่ละสินค้า (AI)")}</h3><p>{t("ประโยคเปิด จุดที่ควรพูด และคำชวนซื้อของสินค้าแต่ละตัว ไม่มีลำดับ ไม่จับเวลา ตอนไลฟ์ AI ดึงบทของสินค้าที่คุณกำลังพูดถึงขึ้นมาเอง")}</p></div>
         <button type="button" className="vs-btn" disabled={scriptBusy || noLineup} onClick={() => void makeScript()}>
           {scriptBusy ? <LoaderCircle className="animate-spin" size={16} aria-hidden /> : script ? <RefreshCw size={16} aria-hidden /> : <Sparkles size={16} aria-hidden />}
           {t(scriptBusy ? "กำลังเขียนสคริปต์…" : script ? "เขียนใหม่" : "ให้ AI เขียนสคริปต์")}
@@ -177,20 +172,16 @@ export function PrepareStep(props: StepProps) {
       {scriptError && <div className="vs-row"><div className="vs-notice" data-tone="error" role="alert"><span className="vs-notice-icon" aria-hidden><CircleAlert size={18} /></span><p>{t(scriptError)}</p></div></div>}
       {script && script.segments?.length > 0 && <div className="vs-row">
         <h4 className="ls-script-title">{script.title}</h4>
-        <ol className="ls-script">
-          {script.segments.map((seg, i) => <li key={i} className="ls-segment">
-            <div className="ls-seg-time"><span>{clock(starts[i])}</span><small aria-label={t("ความยาว") + " " + clock(seg.seconds)}>{clock(seg.seconds)}</small></div>
+        <ul className="ls-script">
+          {script.segments.map((seg, i) => <li key={i} className="ls-segment ls-segment-untimed">
             <div className="ls-seg-body">
               <div className="ls-seg-top"><span className="vs-chip" data-kind={seg.kind}>{t(KIND[seg.kind] ?? seg.kind)}</span><h5>{seg.title}</h5></div>
               {seg.opening && <p className="ls-opening">“{seg.opening}”</p>}
               {(seg.talkingPoints ?? []).length > 0 && <ul className="ls-points">{seg.talkingPoints.map((point, n) => <li key={n}>{point}</li>)}</ul>}
               {seg.callToAction && <p className="ls-cta"><b>{t("ชวนซื้อ")}</b> {seg.callToAction}</p>}
-              {(seg.cues ?? []).length > 0 && <ul className="ls-cues" aria-label={t("คิวกราฟิก")}>
-                {seg.cues.map((cue, n) => <li key={n} className="vs-chip" title={cue.note}>{clock(cue.at)} · {t(CUE[cue.event] ?? cue.event)}</li>)}
-              </ul>}
             </div>
           </li>)}
-        </ol>
+        </ul>
       </div>}
     </section>
 
