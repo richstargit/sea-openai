@@ -105,6 +105,7 @@ export const english: Record<string, string> = {
   "ป้ายพลิก": "Split-flap",
   "เจน motion ใหม่ (รอได้)": "Generate fresh motion (queued)",
   "กำลังเจน motion…": "Generating motion…",
+  "motion ใหม่ใช้เวลาสักครู่ แล้วจะขึ้นจอเอง": "A new motion takes a moment, then plays on the overlay by itself",
   "กำลังออกแบบ motion ใหม่ จะขึ้นจอเองเมื่อเสร็จ": "Designing a fresh motion. It plays on the overlay when ready.",
   "ส่งไปยังหน้าจอที่เชื่อมต่อแล้ว": "Sent to connected overlays",
   "ยังไม่มีหน้าจอเชื่อมต่อ เปิดลิงก์ใน OBS ก่อน": "No overlay connected. Open the link in OBS first.",
