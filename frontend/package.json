@@ -14,6 +14,7 @@
     "test:editor:browser": "playwright test"
   },
   "dependencies": {
+    "@hyperframes/player": "0.9.75",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.77.0",

@@ -1,12 +1,15 @@
 import { z } from 'zod'
 
 import { skillName } from '@/services/skill.service.js'
+import { saleFormatIds } from '@/services/video/sale-formats.js'
 
 const message = z.string().trim().min(1).max(12_000)
 
 export const agentMessageSchema = z.strictObject({
   message,
+  projectId: z.uuid().optional(),
   outputFormat: z.enum(['portrait', 'overlay']).optional(),
+  saleFormat: z.enum(saleFormatIds).optional(),
   skill: skillName.optional(),
   referenceUrl: z
     .url({ protocol: /^https$/ })

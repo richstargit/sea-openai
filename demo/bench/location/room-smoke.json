@@ -1,0 +1,44 @@
+{
+  "models": {
+    "match": "gpt-6-luna",
+    "location": "gpt-6.2-sol"
+  },
+  "sample": "/examples/room-photo.jpg",
+  "route": "/api/detect/frame",
+  "http_status": 200,
+  "auto_requests": 0,
+  "manual_requests": 1,
+  "request_fields": [
+    "image"
+  ],
+  "image_sha256": "7ab710416850cd4c0e191ca23c3991ca8330dc0dab6e74d85f3763576610fa4e",
+  "equals_visible_example": true,
+  "events": [
+    "match",
+    "location"
+  ],
+  "product_id": "kit-electric-cooktop",
+  "product_name": "เตาไฟฟ้าหน้าเรียบ",
+  "confidence": 0.81,
+  "held_up": false,
+  "match_ms": 989,
+  "total_ms": 3474,
+  "localization_status": "found",
+  "bbox": {
+    "x": 0.037,
+    "y": 0.526,
+    "width": 0.3,
+    "height": 0.138
+  },
+  "dom": {
+    "match": {
+      "after_ms": 1141,
+      "bbox_hidden": true,
+      "product": "เตาไฟฟ้าหน้าเรียบ"
+    },
+    "box": {
+      "after_ms": 3617
+    }
+  },
+  "browser_errors": []
+}

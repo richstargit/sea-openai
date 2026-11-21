@@ -4,8 +4,43 @@ import { z } from 'zod'
 import { loggedInUser } from '@/controllers/auth.controller.js'
 import { EditorChunk, EditorProject } from '@/models/editor.model.js'
 import { mongo } from '@/models/mongo.js'
-import { chunkHash, editorSave } from '@/schemas/editor.schema.js'
+import {
+  chunkHash,
+  editorEditRequest,
+  editorSave,
+} from '@/schemas/editor.schema.js'
 import { AppError } from '@/services/error.service.js'
+import { planEditorEdit } from '@/services/video/editor-edits.js'
+
+export const proposeEditorEdit: RequestHandler = async (req, res) => {
+  const userId = loggedInUser(res).id
+  const key = { _id: `${userId}:${z.uuid().parse(req.params.id)}`, userId }
+  const request = editorEditRequest.parse(req.body)
+  const record = await mongo(() =>
+    EditorProject.findOne(key, 'project assets revision').lean(),
+  )
+  if (!record) throw new AppError('NOT_FOUND', { key: 'so-editor-project' })
+  const conflict = () =>
+    new AppError('CONFLICT', {
+      key: 'so-editor-revision',
+      message: 'This project changed. Reopen it and try the edit again.',
+    })
+  if (record.revision !== request.revision) throw conflict()
+  const controller = new AbortController()
+  res.once('close', () => controller.abort())
+  const result = await planEditorEdit(
+    record,
+    request,
+    AbortSignal.any([controller.signal, AbortSignal.timeout(120000)]),
+  )
+  if (
+    !(await mongo(() =>
+      EditorProject.exists({ ...key, revision: request.revision }),
+    ))
+  )
+    throw conflict()
+  res.set('Cache-Control', 'private, no-store').json(result)
+}
 
 export const editorSession: RequestHandler = (req, res, next) => {
   if (req.get('x-editor-account') !== loggedInUser(res).id)

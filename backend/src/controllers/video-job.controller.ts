@@ -2,6 +2,7 @@ import path from 'node:path'
 
 import type { RequestHandler, Response } from 'express'
 import { z } from 'zod'
+import { saleFormatIds } from '@/services/video/sale-formats.js'
 
 import { loggedInUser } from '@/controllers/auth.controller.js'
 import { imageUrl } from '@/controllers/hook-machine.controller.js'
@@ -54,6 +55,7 @@ export const createVideoBody = z.object({
     z.literal(VIDEO_DURATIONS[3]),
   ]),
   aspect: z.enum(ASPECTS).default(DEFAULT_ASPECT),
+  saleFormat: z.enum(saleFormatIds).optional(),
   voice: z
     .object({
       language: z.enum(VOICE_LANGUAGES).default(DEFAULT_LANGUAGE as 'en'),
@@ -124,6 +126,7 @@ export const createVideo: RequestHandler = async (req, res) => {
       productUrl,
       durationSec: body.durationSec,
       aspect: body.aspect,
+      saleFormat: body.saleFormat,
       voice,
     })
     res.status(202).json({ success: true, video: toVideoJob(video) })

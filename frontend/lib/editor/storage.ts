@@ -40,6 +40,10 @@ export function createEditorStorage(userId: string) {
     return { ...asset, mime: file.type, chunks };
   }
 
+  async function hasProject(id: string) {
+    return (await request("projects/" + encodeURIComponent(id), { method: "HEAD" })).ok;
+  }
+
   async function loadProject(id: string) {
     const response = await request("projects/" + encodeURIComponent(id));
     if (response.status === 404) return null;
@@ -62,7 +66,7 @@ export function createEditorStorage(userId: string) {
   function saveProject(project: Project, assets: Asset[] = []) {
     const save = pending.then(async () => {
       const previous = versions.get(project.id);
-      if (previous?.project === project) return;
+      if (previous?.project === project) return previous.revision;
       const records = await Promise.all(assets.map(uploadAsset));
       const response = await request("projects/" + project.id, {
         method: "PUT",
@@ -70,10 +74,11 @@ export function createEditorStorage(userId: string) {
         body: JSON.stringify({ project, assets: records, revision: previous?.revision ?? 0 }),
       });
       if (!response.ok) throw new Error("Could not save this project.");
-      const { revision } = await response.json();
+      const { revision }: { revision: number } = await response.json();
       versions.set(project.id, { project, revision });
+      return revision;
     });
-    pending = save.catch(() => {});
+    pending = save.then(() => {}, () => {});
     return save;
   }
 
@@ -83,5 +88,43 @@ export function createEditorStorage(userId: string) {
     return response.json();
   }
 
-  return { saveProject, listProjects, loadProject };
+  async function exportProject(project: Project, assets: Asset[], signal: AbortSignal) {
+    const revision = await saveProject(project, assets);
+    signal.throwIfAborted();
+    const response = await request(`projects/${project.id}/export`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ revision }),
+      signal,
+    });
+    if (!response.ok) throw new Error("Project no longer exists.");
+    return response.blob();
+  }
+
+  async function proposeEdit(project: Project, assets: Asset[], instruction: {
+    prompt: string; clipId: string | null; playhead: number; language: "th" | "en";
+    previousExchange?: { prompt: string; summary: string };
+  }, signal: AbortSignal): Promise<{ summary: string; project: Project | null }> {
+    const revision = await saveProject(project, assets);
+    signal.throwIfAborted();
+    const response = await request(`projects/${project.id}/edits`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ revision, ...instruction }), signal,
+    });
+    if (!response.ok) throw new Error("Project no longer exists.");
+    return response.json();
+  }
+
+  async function previewProject(project: Project, assets: Asset[], signal: AbortSignal): Promise<string> {
+    const response = await request("preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project, assets: assets.map(({ id, kind, frames }) => ({ id, kind, frames })) }),
+      signal,
+    });
+    if (!response.ok) throw new Error("Could not load preview.");
+    return (await response.json()).html;
+  }
+
+  return { saveProject, listProjects, loadProject, hasProject, exportProject, previewProject, proposeEdit };
 }

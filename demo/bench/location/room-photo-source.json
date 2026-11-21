@@ -1,0 +1,83 @@
+{
+  "case": "cooktop-in-interior",
+  "target": "kit-electric-cooktop",
+  "shop": "live-demo-catalog",
+  "frame": "public/examples/room-photo.jpg",
+  "negative_frame": "bench/location/room-photo-background.jpg",
+  "background": {
+    "title": "Kitchen Cabinets - Sink.jpg",
+    "author": "amslerPIX",
+    "license": "CC BY 2.0",
+    "license_url": "https://creativecommons.org/licenses/by/2.0/",
+    "page": "https://commons.wikimedia.org/wiki/File:Kitchen_Cabinets_-_Sink.jpg",
+    "original_page": "https://www.flickr.com/photos/amslerpix/40807841763/",
+    "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b9/Kitchen_Cabinets_-_Sink.jpg/960px-Kitchen_Cabinets_-_Sink.jpg"
+  },
+  "product": {
+    "title": "Electric Stove, fourth view",
+    "source": "https://dummyjson.com/products/56",
+    "url": "https://cdn.dummyjson.com/product-images/kitchen-accessories/electric-stove/4.webp",
+    "file": "bench/shops/kitchen/frames/cooktop-4.jpg"
+  },
+  "changes": "The original public kitchen photograph is resized and re-encoded. The stove is isolated from the held-out product photo, perspective-warped to align with the left countertop, slightly color-matched and given a localized contact shadow. This is a synthetic placement, not a real installed appliance. No label, grid or box is embedded.",
+  "source_surface_corners_px": [
+    [
+      24.0,
+      333.0
+    ],
+    [
+      343.0,
+      192.0
+    ],
+    [
+      612.0,
+      306.0
+    ],
+    [
+      292.0,
+      540.0
+    ]
+  ],
+  "destination_surface_corners_px": [
+    [
+      35.0,
+      382.0
+    ],
+    [
+      252.0,
+      337.0
+    ],
+    [
+      324.0,
+      362.0
+    ],
+    [
+      94.0,
+      421.0
+    ]
+  ],
+  "frame_size": {
+    "width": 960,
+    "height": 641
+  },
+  "bounds_definition": "Half-open pixel bounds of transformed visible cutout at 50% opacity, excluding the synthetic contact shadow. Coordinates refer to the entire displayed frame. Recorded before model calls.",
+  "bounds_px": {
+    "left": 35,
+    "top": 337,
+    "right": 324,
+    "bottom": 424
+  },
+  "box": {
+    "x": 0.036458333333333336,
+    "y": 0.5257410296411856,
+    "width": 0.30104166666666665,
+    "height": 0.1357254290171607
+  },
+  "background_target_box": null,
+  "held_up": false,
+  "visible_other_target": "No other catalog product verified in the empty control. Installed sink, faucet and cabinets belong to the background.",
+  "sha256": {
+    "composite": "7ab710416850cd4c0e191ca23c3991ca8330dc0dab6e74d85f3763576610fa4e",
+    "background": "5629c8bc89f31f21e2c765693fadc25a61160ef6eb1b3d3ed4386d4f387ee1bf"
+  }
+}

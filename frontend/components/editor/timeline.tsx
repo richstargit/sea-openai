@@ -1,17 +1,29 @@
 "use client";
 
-import { useRef, type PointerEvent } from "react";
-import { Film, Type, Music2, GripVertical } from "lucide-react";
+import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { Film, Type, Music2 } from "lucide-react";
 import { FPS, clipStart, framesOf, timecode, totalFrames, type Asset, type Clip, type Edit, type Project } from "@/lib/editor/model";
 import { useLanguage } from "@/components/language-provider";
+
+import { ClipFilmstrip } from "./clip-filmstrip";
 
 type Props = { project: Project; assets: Asset[]; frame: number; selectedId?: string; zoom: number; onSeek: (frame: number) => void; onSelect: (id: string) => void; onEdit: (edit: Edit, merge?: string) => void };
 export function Timeline({ project, assets, frame, selectedId, zoom, onSeek, onSelect, onEdit }: Props) {
   const { t } = useLanguage();
   const scroll = useRef<HTMLDivElement>(null);
   const dragged = useRef<string | null>(null);
-  const px = zoom / FPS, frames = totalFrames(project);
-  const width = Math.max(760, frames * px + 100);
+  const [viewport, setViewport] = useState(760);
+  useEffect(() => {
+    const element = scroll.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => setViewport(entry.contentRect.width));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  const frames = totalFrames(project);
+  const px = (zoom / 50) * Math.max(1, viewport - 20) / Math.max(frames, FPS);
+  const width = Math.max(viewport, frames * px + 20);
+  const step = Math.max(1, Math.ceil(58 / (px * FPS)));
   function scrub(event: PointerEvent<HTMLElement>) {
     const element = event.currentTarget; element.setPointerCapture(event.pointerId);
     const bounds = element.getBoundingClientRect();
@@ -37,19 +49,20 @@ export function Timeline({ project, assets, frame, selectedId, zoom, onSeek, onS
         <div className="editor-timeline-content" style={{ width }}>
           <div role="slider" tabIndex={0} aria-label={t("ตำแหน่งเล่น")} aria-valuemin={0} aria-valuemax={Math.max(0, frames - 1)} aria-valuenow={frame} aria-valuetext={timecode(frame)}
             onPointerDown={scrub} onKeyDown={(event) => { if (event.key === "ArrowLeft" || event.key === "ArrowRight") { event.preventDefault(); event.stopPropagation(); onSeek(Math.max(0, Math.min(frames - 1, frame + (event.key === "ArrowRight" ? 1 : -1)))); } }} className="editor-ruler">
-            {Array.from({ length: Math.ceil(width / zoom) + 1 }, (_, second) => <span key={second} style={{ left: second * zoom }}>{timecode(second * FPS).slice(0, 5)}</span>)}
+            {Array.from({ length: Math.ceil((width - 25) / (step * px * FPS)) }, (_, index) => <span key={index} style={{ left: index * step * px * FPS }}>{timecode(index * step * FPS).slice(0, 5)}</span>)}
           </div>
           <div className="editor-video-track">
             {project.clips.map((clip, index) => {
               const asset = assets.find((item) => item.id === clip.assetId);
               const start = clipStart(project, clip.id);
+              const clipWidth = Math.max(4, framesOf(clip) * px - 3);
               return (
                 <button key={clip.id} type="button" draggable data-testid="timeline-clip" aria-label={`${t("คลิป")} ${index + 1}: ${asset?.name || ""}`} aria-pressed={selectedId === clip.id}
                   onDragStart={() => { dragged.current = clip.id; }} onDragEnd={() => { dragged.current = null; }}
                   onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); if (dragged.current) onEdit({ type: "move", id: dragged.current, index }); dragged.current = null; }}
-                  onClick={() => { onSelect(clip.id); onSeek(start); }} className={`editor-clip ${selectedId === clip.id ? "is-selected" : ""}`} style={{ left: start * px, width: Math.max(4, framesOf(clip) * px - 3) }}>
-                  <span aria-hidden className="editor-clip-pattern"><Film size={20} /></span>
-                  <span className="editor-clip-name"><GripVertical size={12} />{asset?.name}</span><span className="editor-clip-duration">{(framesOf(clip) / FPS).toFixed(1)}s</span>
+                  onClick={() => { onSelect(clip.id); onSeek(start); }} className={`editor-clip ${selectedId === clip.id ? "is-selected" : ""}`} style={{ left: start * px, width: clipWidth }}>
+                  {asset && <ClipFilmstrip asset={asset} sourceIn={clip.sourceIn} sourceOut={clip.sourceOut} samples={Math.max(1, Math.min(8, Math.round(clipWidth / 90)))} />}
+                  <span className="editor-clip-caption"><span className="editor-clip-name">{clip.title || asset?.name}</span><span className="editor-clip-duration">{(framesOf(clip) / FPS).toFixed(1)}s</span></span>
                   <span role="slider" tabIndex={selectedId === clip.id ? 0 : -1} aria-label={t("ตัดหัวคลิป")} aria-valuemin={0} aria-valuemax={clip.sourceOut - 1} aria-valuenow={clip.sourceIn}
                     onPointerDown={(event) => trim(event, clip, "in")} onKeyDown={(event) => { if (["ArrowLeft", "ArrowRight"].includes(event.key) && asset) { event.preventDefault(); event.stopPropagation(); onEdit({ type: "trim", id: clip.id, edge: "in", frame: clip.sourceIn + (event.key === "ArrowRight" ? 1 : -1), maxFrames: asset.frames }); } }} className="editor-trim-handle start" />
                   <span role="slider" tabIndex={selectedId === clip.id ? 0 : -1} aria-label={t("ตัดท้ายคลิป")} aria-valuemin={clip.sourceIn + 1} aria-valuemax={asset?.frames || clip.sourceOut} aria-valuenow={clip.sourceOut}

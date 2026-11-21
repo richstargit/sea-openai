@@ -1,4 +1,24 @@
+import { createRequire } from 'node:module'
+import { resolve } from 'node:path'
 import { z } from 'zod'
+import type { MediaPlan } from '@/services/agent-tools/video-media.js'
+import type { SaleFormat } from '@/services/video/sale-formats.js'
+
+const projectRequire = createRequire(resolve('package.json'))
+const soundBank = createRequire(
+  projectRequire.resolve('hyperframes/package.json'),
+)('./dist/skills/media-use/audio/assets/sfx/manifest.json') as Record<
+  string,
+  { duration: number; description: string }
+>
+export const soundCueSchema = z.strictObject({
+  sound: z.enum(Object.keys(soundBank)),
+  position: z.number().min(0).max(0.99),
+  volume: z.number().min(0.05).max(0.65),
+})
+export const soundGuide = Object.entries(soundBank)
+  .map(([name, cue]) => `${name} (${cue.duration}s): ${cue.description}`)
+  .join('\n')
 export const briefSchema = z.strictObject({
   title: z.string().trim().min(1).max(56),
   subtitle: z.string().trim().max(72),
@@ -7,8 +27,6 @@ export const briefSchema = z.strictObject({
   subject: z.enum(['none', 'box', 'cylinder', 'torus']),
   format: z.enum(['overlay', 'portrait']),
 })
-export type VideoBrief = z.infer<typeof briefSchema> &
-  Partial<Pick<z.infer<typeof portraitBriefSchema>, 'typeface' | 'shots'>>
 export const colors = {
   mint: '#8DF7C0',
   coral: '#FF846C',
@@ -16,16 +34,41 @@ export const colors = {
   violet: '#B7A5FF',
 }
 
-const shotSchema = z.strictObject({
-  framing: z.enum(['detail', 'medium', 'full']),
-  camera: z.enum(['push', 'pull', 'pan']),
-  focusX: z.number().min(0).max(1),
-  focusY: z.number().min(0).max(1),
-  copy: z.enum(['title', 'subtitle', 'lockup', 'none']),
-  placement: z.enum(['top', 'bottom']),
+const beatSchema = z.strictObject({
+  seconds: z.number().min(1).max(3),
+  show: z.string().trim().min(1).max(440),
+  say: z.string().trim().max(180),
 })
-export const portraitBriefSchema = briefSchema.extend({
+export const storyboardSchema = briefSchema.extend({
+  visualMode: z.enum(['hyperframes', 'photographic']),
+  look: z.string().trim().min(1).max(700),
   typeface: z.enum(['editorial', 'modern']),
-  shots: z.array(shotSchema).length(3),
+  beats: z.array(beatSchema).min(3).max(8),
 })
-export type PortraitShot = z.infer<typeof shotSchema>
+export type PortraitShot = {
+  framing: 'detail' | 'medium' | 'full'
+  camera: 'push' | 'pull' | 'pan'
+  focusX: number
+  focusY: number
+  copy: 'none' | 'title' | 'subtitle' | 'lockup'
+  placement: 'top' | 'bottom'
+  seconds?: number
+}
+export type VideoBrief = z.infer<typeof briefSchema> & {
+  production?: {
+    seconds: number
+    music?: boolean
+    soundEffects?: z.infer<typeof soundCueSchema>[] | null
+    voiceover: boolean
+    continuous?: boolean
+    guidance: string
+    shots?: number
+  }
+  saleFormat?: SaleFormat
+  typeface?: 'editorial' | 'modern'
+  visualMode?: 'hyperframes' | 'photographic'
+  look?: string
+  beats?: z.infer<typeof beatSchema>[]
+  media?: MediaPlan
+  shots?: PortraitShot[]
+}

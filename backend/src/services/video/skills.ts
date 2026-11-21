@@ -10,6 +10,22 @@ import { skillName } from '@/services/skill.service.js'
 
 const central = [
   {
+    name: 'onetake',
+    description:
+      'One continuous camera following a subject through several beats. Uses the installed OneTake guide when available.',
+    reference: 'onetake/SKILL.md',
+    guidance:
+      'Keep the hero on screen in one world. Plan successive poses, the camera path and the velocity into and out of each pose. The state at the end of each beat starts the next.',
+  },
+  {
+    name: 'lemo-opuscar',
+    description:
+      'Film art direction covering materials, light, framing and camera motion; choose one visual style for the whole production.',
+    reference: 'lemo-styles/SKILL.md',
+    guidance:
+      'Choose a single film style suited to the brief; carry its material, light and spatial scale through the whole film.',
+  },
+  {
     name: 'motion-graphics',
     description:
       'Motion graphics, kinetic titles and animated promotional overlays',
@@ -154,7 +170,11 @@ export async function styleInstructions(userId: string, name: string) {
     const folder =
       process.env.VIDEO_SKILLS_DIR || join(homedir(), '.agents', 'skills')
     const text = await readFile(join(folder, item.reference), 'utf8').catch(
-      () => '',
+      () =>
+        readFile(
+          join('integrations/video-skills', item.reference),
+          'utf8',
+        ).catch(() => ''),
     )
     return `${item.guidance}\n${text.slice(0, 12000)}`
   }

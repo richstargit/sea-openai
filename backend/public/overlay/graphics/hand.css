@@ -1,0 +1,102 @@
+/* hand graphics: fingertip / product-box annotations (place 'spot', px positions set in hand.js) */
+
+/* 1 spotlight-dim */
+.g-spotlight-dim-veil {--x:50%;--y:50%;--r:0px;position:absolute;inset:0;background:radial-gradient(circle at var(--x) var(--y),transparent calc(var(--r) * .78),color-mix(in srgb,var(--ink) 58%,transparent) var(--r))}
+
+/* 2 callout-ring */
+.g-callout-ring-stroke {stroke:var(--hi);stroke-width:.55vh;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 .2vh .4vh #0005)}
+.g-callout-ring-label {position:absolute;white-space:nowrap;font-size:4vh;font-weight:700;line-height:1.35;padding:.3vh 1.8vh .5vh;border-radius:1vh;background:var(--surface);color:var(--text);box-shadow:0 .8vh 1.8vh #0004}
+
+/* 3 leader-callouts */
+.g-leader-callouts-line {stroke:var(--hi);stroke-width:.3vh;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 .15vh .3vh #0006)}
+.g-leader-callouts-dot {position:absolute;width:1.5vh;height:1.5vh;border-radius:50%;background:var(--hi);box-shadow:0 0 0 .35vh var(--surface),0 .3vh .8vh #0005}
+.g-leader-callouts-label {white-space:nowrap;font-size:3vh;font-weight:600;line-height:1.35;padding:.7vh 1.6vh;border-radius:1vh;background:var(--surface);color:var(--text);box-shadow:0 .6vh 1.4vh #0004}
+
+/* 4 scent-pyramid */
+.g-scent-pyramid-wrap {display:flex;flex-direction:column;align-items:center;gap:.5vh;filter:drop-shadow(0 1vh 2vh #00000059)}
+.g-scent-pyramid-head {font-size:2.2vh;font-weight:600;line-height:1.35;color:var(--text);background:var(--surface);padding:.3vh 1.4vh;border-radius:99px;margin-bottom:.6vh}
+.g-scent-pyramid-tier {height:8.6vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--surface);color:var(--text);clip-path:polygon(4.5vh 0,calc(100% - 4.5vh) 0,100% 100%,0 100%);line-height:1.35}
+.g-scent-pyramid-tier.is-top {clip-path:polygon(9vh 0,calc(100% - 9vh) 0,100% 100%,0 100%);justify-content:flex-end;padding-bottom:1vh}
+.g-scent-pyramid-k {font-size:1.6vh;font-weight:600;letter-spacing:.02em;color:var(--hi)}
+.g-scent-pyramid-v {font-size:2.4vh;font-weight:600;white-space:nowrap}
+.g-scent-pyramid[data-theme=pop] .g-scent-pyramid-k {color:var(--sub)}
+
+/* 5 scent-wisp */
+.g-scent-wisp-line {stroke:var(--surface);stroke-width:.4vh;stroke-linecap:round;opacity:.9;filter:drop-shadow(0 .15vh .4vh #0007)}
+.g-scent-wisp-word {position:absolute;left:0;top:0;white-space:nowrap;font-size:2.6vh;font-weight:600;line-height:1.35;padding:.3vh 1.4vh;border-radius:99px;background:var(--surface);color:var(--text);box-shadow:0 .5vh 1.2vh #0004}
+
+/* 6 loupe */
+.g-loupe-lens {position:absolute;border-radius:50%;overflow:hidden;background:color-mix(in srgb,var(--text) 10%,var(--surface))}
+.g-loupe-img {width:100%;height:100%;object-fit:contain;display:block}
+.g-loupe-ring {stroke:var(--hi);stroke-width:.5vh;filter:drop-shadow(0 .4vh 1vh #0006)}
+.g-loupe-link {stroke:var(--hi);stroke-width:.3vh;stroke-linecap:round}
+.g-loupe-dot {position:absolute;width:3.2vh;height:3.2vh;border-radius:50%;border:.35vh solid var(--hi);box-sizing:border-box}
+.g-loupe-cap {white-space:nowrap;font-size:2.6vh;font-weight:600;line-height:1.35;padding:.6vh 1.8vh;border-radius:99px;background:var(--surface);color:var(--text);box-shadow:0 .6vh 1.4vh #0004}
+
+/* 7 size-ruler */
+.g-size-ruler-rule {position:absolute;filter:drop-shadow(0 0 .15vh #0009) drop-shadow(0 .2vh .4vh #0006)}
+.g-size-ruler-rule svg {display:block;overflow:visible}
+.g-size-ruler-ticks {fill:none;stroke:var(--hi);stroke-width:.4vh;stroke-linecap:round}
+.g-size-ruler-chip {white-space:nowrap;display:flex;align-items:baseline;gap:.8vh;font-size:3vh;line-height:1.35;padding:.5vh 1.4vh;border-radius:.9vh;background:var(--surface);color:var(--text);box-shadow:0 .5vh 1.2vh #0004}
+.g-size-ruler-chip b {font-weight:700}
+.g-size-ruler-k {font-size:2vh;font-weight:500;color:var(--sub)}
+
+/* 8 magnet-snap */
+.g-magnet-snap-mover {white-space:nowrap}
+.g-magnet-snap-card {display:grid;gap:.2vh;padding:1.4vh 2.4vh 1.6vh}
+.g-magnet-snap-price {font-size:4.6vh;font-weight:700;line-height:1.2;letter-spacing:-.01em;color:var(--hi)}
+.g-magnet-snap[data-theme=pop] .g-magnet-snap-price {color:var(--text)}
+.g-magnet-snap-lead {position:absolute;height:.3vh;margin-top:-.15vh;border-radius:99px;background:var(--hi);box-shadow:0 .15vh .3vh #0006}
+.g-magnet-snap-dot {position:absolute;width:1.6vh;height:1.6vh;border-radius:50%;background:var(--hi);box-shadow:0 0 0 .35vh var(--surface)}
+
+/* 9 palm-materialize */
+.g-palm-materialize-wrap {position:absolute;filter:drop-shadow(0 1.4vh 2vh #0006)}
+.g-palm-materialize-slice {position:absolute;left:0;right:0;overflow:hidden}
+.g-palm-materialize-inner {position:absolute;left:0}
+.g-palm-materialize-inner img {width:100%;height:100%;object-fit:contain;display:block}
+.g-palm-materialize-name {position:absolute;inset:auto 0 30% 0;text-align:center;font-size:3.4vh;font-weight:700;line-height:1.35;padding:1.4vh;border-radius:1.4vh;background:var(--surface);color:var(--text)}
+.g-palm-materialize-scan {position:absolute;left:-2vh;right:-2vh;top:0;height:.25vh;border-radius:99px;background:var(--hi)}
+.g-palm-materialize-pad {position:absolute;width:11vh;height:2.6vh;border-radius:50%;border:.3vh solid var(--hi);box-sizing:border-box}
+
+/* 10 orbit-chips */
+.g-orbit-chips-arc {stroke:var(--hi);stroke-width:.25vh;stroke-linecap:round;opacity:.75;filter:drop-shadow(0 .15vh .3vh #0005)}
+.g-orbit-chips-arm, .g-orbit-chips-holder {position:absolute;width:0;height:0;top:0}
+.g-orbit-chips-arm {transform-origin:0 0}
+.g-orbit-chips-chip {position:absolute;left:0;top:0;white-space:nowrap;display:flex;align-items:center;gap:1vh;font-size:2.6vh;font-weight:600;line-height:1.35;padding:.6vh 1.6vh .6vh 1.2vh;border-radius:99px;background:var(--surface);color:var(--text);box-shadow:0 .6vh 1.4vh #0004}
+.g-orbit-chips-chip i {width:1.1vh;height:1.1vh;border-radius:50%;background:var(--hi);flex:none}
+.g-orbit-chips[data-theme=pop] .g-orbit-chips-chip i {background:var(--text)}
+
+/* 11 swatch-drop */
+.g-swatch-drop-row {display:flex;gap:2.4vh;padding:1.6vh 2.4vh 1.2vh}
+.g-swatch-drop-item {display:flex;flex-direction:column;align-items:center;gap:.6vh}
+.g-swatch-drop-chip {width:6vh;height:6vh;border-radius:50%;box-shadow:inset 0 0 0 .2vh var(--line)}
+.g-swatch-drop-name {font-size:1.9vh;font-weight:600;line-height:1.35;white-space:nowrap}
+.g-swatch-drop-drop {position:absolute;width:2.6vh;height:2.6vh;border-radius:50% 50% 50% 0;box-shadow:0 .3vh .6vh #0005}
+
+/* 12 price-pin */
+.g-price-pin-wrap {position:absolute;filter:drop-shadow(0 .8vh 1.4vh #0006)}
+.g-price-pin-body {position:absolute;inset:0;border-radius:50% 50% 50% 0;background:var(--hi);transform:rotate(-45deg)}
+.g-price-pin-face {position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--on-hi);line-height:1.3}
+.g-price-pin-label {font-size:1.7vh;font-weight:600;opacity:.9}
+.g-price-pin-price {font-size:3.6vh;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
+.g-price-pin-shadow {position:absolute;width:6vh;height:1.4vh;border-radius:50%;background:color-mix(in srgb,var(--ink) 45%,transparent);filter:blur(.3vh)}
+
+/* 13 polaroid-drop */
+.g-polaroid-drop-card {width:30vh;padding:2vh 2vh 1vh;background:var(--surface);border-radius:.4vh;box-shadow:0 1.2vh 2.4vh #0006}
+.g-polaroid-drop-photo {position:relative;width:26vh;height:26vh;overflow:hidden;background:color-mix(in srgb,var(--text) 10%,var(--surface))}
+.g-polaroid-drop-photo img {width:100%;height:100%;object-fit:cover;display:block}
+.g-polaroid-drop-veil {position:absolute;inset:0;background:var(--surface)}
+.g-polaroid-drop-cap {min-height:4.4vh;padding-top:.8vh;text-align:center;font-size:2.3vh;font-weight:600;line-height:1.35;color:var(--text)}
+
+/* 14 tap-ripple */
+.g-tap-ripple-dot {position:absolute;width:1.8vh;height:1.8vh;border-radius:50%;background:var(--hi);box-shadow:0 0 0 .3vh var(--surface)}
+.g-tap-ripple-ring {position:absolute;border-radius:50%;border:.45vh solid var(--hi);box-sizing:border-box;box-shadow:0 0 0 .2vh var(--surface),inset 0 0 0 .2vh var(--surface)}
+
+/* 15 hologram-card */
+.g-hologram-card-cone {position:absolute;background:linear-gradient(to top,color-mix(in srgb,var(--hi) 60%,transparent),color-mix(in srgb,var(--hi) 16%,transparent))}
+.g-hologram-card-card {position:relative;overflow:hidden;min-width:26vh;max-width:44vh;padding:1.6vh 2.6vh 1.8vh;border-radius:1.2vh;text-align:center;background:color-mix(in srgb,var(--surface) 74%,transparent);border:.15vh solid color-mix(in srgb,var(--hi) 55%,transparent);color:var(--text);line-height:1.35;transform-origin:50% 100%;backdrop-filter:blur(.6vh)}
+.g-hologram-card-scan {position:absolute;inset:0;background:repeating-linear-gradient(to bottom,var(--line) 0 .14vh,transparent .14vh .5vh);pointer-events:none}
+.g-hologram-card-label {font-size:1.8vh;font-weight:600;color:var(--sub)}
+.g-hologram-card-name {font-size:2.6vh;font-weight:600}
+.g-hologram-card-price {font-size:5vh;font-weight:700;letter-spacing:-.01em;line-height:1.25}
+.g-hologram-card-dot {position:absolute;width:1.4vh;height:1.4vh;border-radius:50%;background:var(--hi);box-shadow:0 0 0 .3vh var(--surface)}

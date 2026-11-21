@@ -1,5 +1,7 @@
 "use client";
 
+import type { SaleFormat } from "@/lib/sale-formats";
+
 // The backend runs the whole video as one job: script, voice, picture, mixing.
 // One POST starts it, then the job is read until it is ready. Same origin like the rest of the studio:
 // Next forwards /agent/* to the backend and the browser sends the session cookie on its own.
@@ -55,6 +57,7 @@ export type VideoJob = {
 
 export type CreateVideoInput = {
   profileId: string;
+  saleFormat?: SaleFormat;
   brief: string;
   images: string[];
   durationSec: VideoLength;

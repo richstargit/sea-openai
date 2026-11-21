@@ -42,12 +42,16 @@ export async function checkOverlayBrowser({ origin, api, alice, bob, clip }) {
       () => window.__timelines['live-card-0'].time() > 0.15,
     )
     await publish(alice, { type: 'promo' })
-    await page.waitForFunction(() =>
-      [...document.querySelectorAll('video')].some(
-        (v) => !v.paused && v.currentTime > 0.1,
-      ),
+    await page.getByText('โปรพิเศษ', { exact: true }).waitFor()
+    assert.equal(
+      (
+        await api('/agent/overlay/events', 'POST', alice.cookie, {
+          type: 'unknown',
+        })
+      ).status,
+      400,
     )
-    await publish(alice, { type: 'unknown' })
+    await publish(alice, { type: 'default' })
     await page.getByText('กำลังไลฟ์', { exact: true }).waitFor()
     assert.equal(await page.locator('.slot.playing').count(), 2)
     await publish(alice, { type: 'clip', fileId: clip.id })

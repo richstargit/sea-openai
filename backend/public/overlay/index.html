@@ -5,18 +5,55 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Live overlay</title>
   <link rel="stylesheet" href="overlay.css">
+  <link rel="stylesheet" href="graphics/core.css">
+  <link rel="stylesheet" href="graphics/livecut.css">
+  <link rel="stylesheet" href="graphics/hand.css">
+  <link rel="stylesheet" href="graphics/deals.css">
+  <link rel="stylesheet" href="graphics/shop.css">
+  <link rel="stylesheet" href="graphics/broadcast.css">
+  <link rel="stylesheet" href="graphics/stream.css">
+  <link rel="stylesheet" href="graphics/info.css">
+  <link rel="stylesheet" href="graphics/life.css">
+  <link rel="stylesheet" href="graphics/game.css">
+  <link rel="stylesheet" href="graphics/fx.css">
+  <link rel="stylesheet" href="graphics/festive.css">
+  <link rel="stylesheet" href="graphics/compose.css">
   <link rel="preload" href="gsap.js" as="script">
   <script defer src="gsap.js"></script>
+  <script defer src="graphics/sound.js"></script>
+  <script defer src="graphics/core.js"></script>
+  <script defer src="graphics/livecut.js"></script>
+  <script defer src="graphics/hand.js"></script>
+  <script defer src="graphics/deals.js"></script>
+  <script defer src="graphics/shop.js"></script>
+  <script defer src="graphics/broadcast.js"></script>
+  <script defer src="graphics/stream.js"></script>
+  <script defer src="graphics/info.js"></script>
+  <script defer src="graphics/life.js"></script>
+  <script defer src="graphics/game.js"></script>
+  <script defer src="graphics/fx.js"></script>
+  <script defer src="graphics/festive.js"></script>
+  <script defer src="graphics/compose.js"></script>
+  <script defer src="graphics/sound-cues.js"></script>
+  <script defer src="obs.js"></script>
   <script defer src="overlay.js"></script>
 </head>
 <body>
   <main id="stage"></main>
+  <div id="fx"></div>
+  <section id="spot" hidden aria-live="polite">
+    <i class="spot-box"></i><i class="spot-ring"></i><i class="spot-ring"></i><i class="spot-dot"></i><i class="spot-line"></i>
+    <div class="spot-card"><figure>
+      <div class="spot-media"><i class="spot-shadow"></i><img alt=""></div>
+      <figcaption><strong><span class="spot-name"></span></strong><b class="spot-price"><i class="mark"></i><span class="text"></span></b></figcaption>
+    </figure></div>
+  </section>
   <template id="slot">
     <section class="slot">
       <div class="scene" data-start="0" data-duration="4" data-width="768" data-height="216"
         data-composition-variables='[{"id":"label","type":"string","label":"Label","default":"LIVE"},{"id":"value","type":"string","label":"Value","default":"กำลังไลฟ์"}]'>
         <div class="clip" data-start="0" data-duration="4" data-track-index="1">
-          <article><img alt="" hidden><div><small data-var-text="label"></small><strong data-var-text="value"></strong></div></article>
+          <article><img alt="" hidden><div><small><span data-var-text="label"></span></small><strong><i class="mark"></i><span class="text" data-var-text="value"></span></strong></div></article>
         </div>
       </div>
       <video playsinline muted hidden></video>

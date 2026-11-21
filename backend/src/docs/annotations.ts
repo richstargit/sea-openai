@@ -15,6 +15,11 @@ import {
 import { createVideoBody } from '@/controllers/video-job.controller.js'
 import type { Annotations } from '@/docs/introspect.js'
 import { agentChatSchema, agentMessageSchema } from '@/schemas/agent.schema.js'
+import {
+  editorComposition,
+  editorEditRequest,
+  editorExportRevision,
+} from '@/schemas/editor.schema.js'
 import { filename } from '@/services/agent-tools/files.js'
 
 const agentStream = {
@@ -28,6 +33,43 @@ const HM = '/agent/hook-machine'
 const TAG = ['Hook Machine']
 
 export const ANNOTATIONS: Annotations = {
+  'GET /agent/hyperframes/runtime.js': {
+    tags: ['Editor'],
+    secured: true,
+    summary: 'Load the HyperFrames runtime for the editor',
+  },
+  'GET /agent/hyperframes/gsap.js': {
+    tags: ['Editor'],
+    secured: true,
+    summary: 'Load the timeline animation library',
+  },
+  'POST /agent/editor/projects/:id/edits': {
+    tags: ['Editor'],
+    secured: true,
+    summary: 'Propose edits to the current account’s video timeline',
+    bodySchema: editorEditRequest,
+  },
+  'POST /agent/editor/preview': {
+    tags: ['Editor'],
+    secured: true,
+    summary: 'Compile the editor timeline for preview',
+    bodySchema: editorComposition,
+  },
+  'POST /agent/editor/projects/:id/export': {
+    tags: ['Editor'],
+    secured: true,
+    summary: 'Render a saved HyperFrames timeline to MP4',
+    bodySchema: editorExportRevision,
+    errors: [404, 409, 503],
+    responses: {
+      200: {
+        description: 'H.264 video with optional AAC audio',
+        content: {
+          'video/mp4': { schema: { type: 'string', format: 'binary' } },
+        },
+      },
+    },
+  },
   'GET /agent/editor/projects': {
     tags: ['Editor'],
     secured: true,
@@ -294,6 +336,12 @@ export const ANNOTATIONS: Annotations = {
     secured: true,
     summary: 'Publish a graphic to this account’s connected overlays',
   },
+  'POST /agent/overlay/motion': {
+    tags: ['Overlay'],
+    secured: true,
+    summary:
+      'Queue a freshly designed HyperFrames motion; it plays on connected overlays when rendered',
+  },
   'GET /overlay/media/:id': {
     tags: ['Overlay'],
     summary: 'Read a generated clip with an overlay bearer token',
@@ -306,14 +354,15 @@ export const ANNOTATIONS: Annotations = {
     tags: ['Agent'],
     secured: true,
     summary: 'List available skills',
-    description: 'Returns skill names, descriptions, and invocation flags.',
+    description:
+      'Returns video skills, Blender availability, enabled video tools and optional provider requirements.',
   },
   [`POST ${AGENT_CHAT_PATH}`]: {
     tags: ['Agent'],
     secured: true,
     summary: 'Run an agent turn',
     description:
-      'Returns a reply and the names of any skills loaded. Send prior messages to continue the conversation.',
+      'Returns the generated file, skills and tools used. A standalone production also returns projectId. Send that ID with a new brief to revise the same production.',
     bodySchema: agentChatSchema,
     errors: [400, 404, 429, 503],
     examples: {

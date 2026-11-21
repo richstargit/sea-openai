@@ -3,17 +3,18 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { ArrowLeft, ArrowLeftToLine, ArrowRightToLine, Check, ChevronLeft, ChevronRight, Clapperboard, Copy, Download, Expand, Film, FolderOpen, ImagePlus, LoaderCircle, Maximize, Music2, Pause, Play, Plus, Ratio, Redo2, Scissors, SkipBack, SkipForward, SlidersHorizontal, Trash2, Type, Undo2, Volume2, VolumeX, X, ZoomIn, ZoomOut } from "lucide-react";
+import { ArrowLeft, ArrowLeftToLine, ArrowRightToLine, Check, ChevronLeft, ChevronRight, Clapperboard, Copy, Download, Expand, Film, FolderOpen, ImagePlus, LoaderCircle, Maximize, Music2, Pause, Play, Plus, Ratio, Redo2, Scissors, SkipBack, SkipForward, SlidersHorizontal, Trash2, Type, Undo2, WandSparkles, Volume2, VolumeX, X, ZoomIn, ZoomOut } from "lucide-react";
 import { LanguageSwitcher, useLanguage } from "@/components/language-provider";
+import { Wordmark } from "@/components/site-nav";
 import { VideoFormatPicker } from "@/components/video-format-picker";
 import { EditorPreview } from "./preview";
+import { PromptEditor } from "./prompt-editor";
 import { IconButton } from "./icon-button";
 import { Timeline } from "./timeline";
 import { FPS, clipStart, commit, editProject, framesOf, locate, newClip, newProject, redo, timecode, totalFrames, uid, undo, type Asset, type Clip, type Edit, type History, type Project } from "@/lib/editor/model";
 import { importMedia } from "@/lib/editor/media";
 import { createEditorStorage } from "@/lib/editor/storage";
 import { createDemoProject } from "@/lib/editor/demo";
-import { exportMp4 } from "@/lib/editor/export";
 import "./editor.css";
 
 type Tool = "media" | "text" | "audio" | "adjust" | "crop" | "format";
@@ -32,7 +33,7 @@ function Thumbnail({ asset }: { asset: Asset }) {
 }
 
 export function Editor({ userId }: { userId: string }) {
-  const [{ listProjects, loadProject, saveProject }] = useState(() => createEditorStorage(userId));
+  const [{ listProjects, loadProject, saveProject, exportProject, previewProject, proposeEdit }] = useState(() => createEditorStorage(userId));
   const [legacyProjects, setLegacyProjects] = useState<Project[] | null>(null);
   const { t } = useLanguage();
   const reduce = useReducedMotion();
@@ -42,6 +43,7 @@ export function Editor({ userId }: { userId: string }) {
   const [frame, setFrame] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [tool, setTool] = useState<Tool>("media");
+  const [assistantOpen, setAssistantOpen] = useState(true);
   const [zoom, setZoom] = useState(50);
   const [status, setStatus] = useState<"saving" | "saved" | "error">("saving");
   const [notice, setNotice] = useState("");
@@ -50,7 +52,6 @@ export function Editor({ userId }: { userId: string }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [showProjects, setShowProjects] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [download, setDownload] = useState<string | null>(null);
   const [validSize, setValidSize] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
@@ -67,6 +68,10 @@ export function Editor({ userId }: { userId: string }) {
   const onError = useCallback((message: string) => { setNotice(message); setPlaying(false); }, []);
   const seek = useCallback((next: number) => { setPlaying(false); frameRef.current = next; setFrame(next); }, []);
   const apply = useCallback((edit: Edit, mergeKey?: string) => { setHistory((state) => state ? commit(state, editProject(state.present, edit), mergeKey) : state); }, []);
+  const applyPrompt = useCallback((original: Project, next: Project) => {
+    setPlaying(false);
+    setHistory((state) => state?.present === original ? commit(state, next) : state);
+  }, []);
   const goUndo = useCallback(() => { setPlaying(false); setHistory((state) => state ? undo(state) : state); }, []);
   const goRedo = useCallback(() => { setPlaying(false); setHistory((state) => state ? redo(state) : state); }, []);
 
@@ -95,12 +100,12 @@ export function Editor({ userId }: { userId: string }) {
     return () => { active = false; clearTimeout(timer); };
   }, [project, assets, saveProject]);
   useEffect(() => { if (frameRef.current >= total) { const next = Math.max(0, total - 1); frameRef.current = next; setFrame(next); if (!total) setPlaying(false); } }, [total]);
-  useEffect(() => {
-    if (!playing || !total) return;
-    const start = performance.now(), from = frameRef.current; let request = 0;
-    const tick = (now: number) => { const next = Math.min(total - 1, from + Math.floor((now - start) / 1000 * FPS)); frameRef.current = next; setFrame(next); if (next >= total - 1) setPlaying(false); else request = requestAnimationFrame(tick); };
-    request = requestAnimationFrame(tick); return () => cancelAnimationFrame(request);
-  }, [playing, total]);
+  const onPreviewTime = useCallback((seconds: number) => {
+    const next = Math.max(0, Math.min(total - 1, Math.floor(seconds * FPS + 0.0001)));
+    frameRef.current = next;
+    setFrame(next);
+  }, [total]);
+  const onEnded = useCallback(() => seek(Math.max(0, total - 1)), [seek, total]);
   useEffect(() => () => { exportController.current?.abort(); if (exportUrl.current) URL.revokeObjectURL(exportUrl.current); }, []);
 
   useEffect(() => {
@@ -184,9 +189,9 @@ export function Editor({ userId }: { userId: string }) {
   }
   async function doExport() {
     if (!project || !total) return;
-    setPlaying(false); setExporting(true); setProgress(0); setNotice(""); setDownload(null);
+    setPlaying(false); setExporting(true); setNotice(""); setDownload(null);
     const controller = new AbortController(); exportController.current = controller;
-    try { const blob = await exportMp4(project, assets, setProgress, controller.signal); if (exportUrl.current) URL.revokeObjectURL(exportUrl.current); const url = URL.createObjectURL(blob); exportUrl.current = url; setDownload(url); }
+    try { const blob = await exportProject(project, assets, controller.signal); if (exportUrl.current) URL.revokeObjectURL(exportUrl.current); const url = URL.createObjectURL(blob); exportUrl.current = url; setDownload(url); }
     catch (error) { if (!(error instanceof DOMException && error.name === "AbortError")) setNotice(error instanceof Error ? error.message : t("ส่งออกไม่สำเร็จ")); setExporting(false); }
   }
   function patch(patch: Partial<Clip>, key?: string) { if (selected) apply({ type: "update", id: selected.id, patch }, key); }
@@ -203,20 +208,26 @@ export function Editor({ userId }: { userId: string }) {
     <main className="editor-app" onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }} onDrop={(event) => { if (event.dataTransfer.files.length) { event.preventDefault(); void addFiles(Array.from(event.dataTransfer.files)); } }}>
       <header className="editor-header">
         <Link href="/studio" className="editor-back" aria-label={t("กลับไป Studio")} title={t("กลับไป Studio")}><ArrowLeft size={18} /></Link>
-        <div className="editor-brand"><Clapperboard size={21} /><span>SnapPromo <span className="editor-brand-light">Edit</span></span></div>
+        <Link href="/studio" className="editor-brand" aria-label={t("กลับไป Studio")}><Wordmark /></Link>
         <div className="editor-project-name"><input aria-label={t("ชื่อโปรเจกต์")} value={project.name} onChange={(event) => apply({ type: "project", patch: { name: event.target.value } }, "project-name")} /><span className="editor-save-state" role="status">{status === "saved" ? <Check size={12} /> : status === "saving" ? <LoaderCircle size={12} className="animate-spin" /> : null}{t(status === "saved" ? "บันทึกในบัญชีแล้ว" : status === "saving" ? "กำลังบันทึก" : "ยังไม่ได้บันทึก")}</span></div>
-        <div className="editor-header-actions"><LanguageSwitcher /><IconButton label={t("โปรเจกต์ของฉัน")} onClick={async () => { try { await saveProject(project, assets); setProjects(await listProjects()); setLegacyProjects(null); setShowProjects(true); } catch { onError(t("เปิดรายการโปรเจกต์ไม่สำเร็จ")); } }}><FolderOpen size={18} /></IconButton><button type="button" className="editor-primary" onClick={() => void doExport()} disabled={!total || !validSize || importing}><Download size={16} /><span>{t("ส่งออก MP4")}</span></button></div>
+        <div className="editor-header-actions"><Link href="/studio" className="editor-create"><Plus size={15} /><span>{t("สร้างวิดีโอ")}</span></Link><LanguageSwitcher /><IconButton label={t("โปรเจกต์ของฉัน")} onClick={async () => { try { await saveProject(project, assets); setProjects(await listProjects()); setLegacyProjects(null); setShowProjects(true); } catch { onError(t("เปิดรายการโปรเจกต์ไม่สำเร็จ")); } }}><FolderOpen size={18} /></IconButton><button type="button" className="editor-primary" aria-label={t("ส่งออก MP4")} onClick={() => void doExport()} disabled={!total || !validSize || importing}><Download size={16} /><span>{t("ส่งออก MP4")}</span></button></div>
       </header>
 
-      <div className="editor-workspace">
+      <div className="editor-workspace" data-assistant-open={assistantOpen}>
         <nav className="editor-tool-rail" aria-label={t("เครื่องมือตัดต่อ")}>
-          {tools.map((item) => <button key={item.id} type="button" aria-pressed={tool === item.id} onClick={() => setTool(item.id)} className={`editor-tool ${tool === item.id ? "is-active" : ""}`}><item.icon size={21} strokeWidth={1.7} /><span>{t(item.label)}</span></button>)}
+          {tools.map((item) => <button key={item.id} type="button" aria-pressed={tool === item.id} onClick={() => {
+            setTool(item.id);
+            if (window.matchMedia("(max-width: 1099px)").matches) setAssistantOpen(false);
+          }} className={`editor-tool ${tool === item.id ? "is-active" : ""}`}><item.icon size={21} strokeWidth={1.7} /><span>{t(item.label)}</span></button>)}
+          <button type="button" className="editor-tool editor-ai-tool" aria-pressed={assistantOpen} aria-controls="editor-assistant" onClick={() => setAssistantOpen((open) => !open)}><WandSparkles size={20} /><span>{t("ผู้ช่วย AI")}</span></button>
         </nav>
-        <aside className="editor-panel" aria-label={t(tools.find((item) => item.id === tool)!.label)}>
+        <aside hidden={!assistantOpen} id="editor-assistant" className="editor-panel editor-assistant" aria-label={t("ผู้ช่วย AI")}>
+          <PromptEditor key={project.id} project={project} assets={assets} selectedId={selected?.id} frame={frame} proposeEdit={proposeEdit} onApply={applyPrompt} onImport={() => input.current?.click()} />
+        </aside>
+        <aside className="editor-panel editor-inspector" aria-label={t(tools.find((item) => item.id === tool)!.label)}>
           <div className="editor-panel-title"><h1>{t(tools.find((item) => item.id === tool)!.label)}</h1>{tool === "media" && <IconButton label={t("เพิ่มไฟล์")} onClick={() => input.current?.click()} disabled={importing}><Plus size={18} /></IconButton>}</div>
           {tool === "media" ? <>
             <button type="button" className="editor-import" onClick={() => input.current?.click()} disabled={importing}>{importing ? <LoaderCircle className="animate-spin" size={25} /> : <ImagePlus size={25} />}<strong>{t(importing ? "กำลังเพิ่มไฟล์" : "เพิ่มวิดีโอ รูป หรือเสียง")}</strong><span>{t("ลากไฟล์มาวางได้เลย")}</span></button>
-            <p className="editor-caption">{t("ไฟล์สื่อบันทึกไว้ในบัญชีของคุณ")}</p>
             <div className="editor-library">{assets.map((asset) => <button type="button" key={asset.id} title={t("เพิ่มลงไทม์ไลน์")} onClick={() => { if (asset.kind === "audio") { apply({ type: "project", patch: { music: { assetId: asset.id, volume: 0.35 } } }); setTool("audio"); } else { const clip = newClip(asset); apply({ type: "append", clip }); setSelectedId(clip.id); seek(total); } }} className="editor-media-card"><span className="editor-thumbnail"><Thumbnail asset={asset} /><span className="editor-media-add"><Plus size={16} /></span></span><span className="editor-media-name">{asset.name}</span><span className="editor-caption">{asset.kind === "image" ? t("รูปภาพ") : `${(asset.frames / FPS).toFixed(1)}s`}</span></button>)}</div>
           </> : tool === "format" ? <VideoFormatPicker value={project.size} onChange={(size) => apply({ type: "project", patch: { size } })} onValidityChange={setValidSize} /> : tool === "audio" ? <>
             <p className="editor-section-label">{t("เสียงต้นฉบับ")}</p>
@@ -245,14 +256,14 @@ export function Editor({ userId }: { userId: string }) {
         </aside>
 
         <section className={`editor-preview-area ${fullscreen ? "is-expanded" : ""}`} aria-label={t("พรีวิว")}>
-          <div className="editor-preview-caption"><span>{t("พรีวิว")}</span><span>{project.size.width} × {project.size.height} · {FPS} fps</span><IconButton label={t(fullscreen ? "ย่อพรีวิว" : "ขยายพรีวิว")} onClick={() => setFullscreen((value) => !value)}>{fullscreen ? <X size={17} /> : <Expand size={17} />}</IconButton></div>
-          <div className="editor-canvas-stage">{total ? <EditorPreview project={project} assets={assets} frame={frame} playing={playing} onError={onError} /> : <button type="button" className="editor-empty" onClick={() => input.current?.click()}><Clapperboard size={40} strokeWidth={1.3} /><strong>{t("เริ่มเรื่องราวของคุณ")}</strong><span>{t("เพิ่มวิดีโอหรือรูปแรกเพื่อเริ่มตัดต่อ")}</span><span className="editor-primary"><Plus size={16} />{t("เพิ่มไฟล์")}</span></button>}</div>
-          <div className="editor-playback"><span className="editor-timecode" data-testid="playhead-time">{timecode(frame)}</span><div className="editor-row"><IconButton label={t("กลับต้นคลิป")} disabled={!total} onClick={() => seek(0)}><SkipBack size={17} /></IconButton><button type="button" className="editor-play" aria-label={t(playing ? "หยุดเล่น" : "เล่นคลิป")} onClick={togglePlay} disabled={!total}>{playing ? <Pause size={19} fill="currentColor" /> : <Play size={19} fill="currentColor" />}</button><IconButton label={t("ไปท้ายคลิป")} disabled={!total} onClick={() => seek(Math.max(0, total - 1))}><SkipForward size={17} /></IconButton></div><span className="editor-timecode">{timecode(total)}</span></div>
+          <div className="editor-preview-caption"><span><Film size={15} />{t("พรีวิว")}</span><span>{project.size.width} × {project.size.height} · {FPS} fps</span><IconButton label={t(fullscreen ? "ย่อพรีวิว" : "ขยายพรีวิว")} onClick={() => setFullscreen((value) => !value)}>{fullscreen ? <X size={17} /> : <Expand size={17} />}</IconButton></div>
+          <div className="editor-canvas-stage">{total ? <EditorPreview project={project} assets={assets} frame={frame} playing={playing} compile={previewProject} onTime={onPreviewTime} onEnded={onEnded} onError={onError} /> : <button type="button" className="editor-empty" onClick={() => input.current?.click()}><Clapperboard size={40} strokeWidth={1.3} /><strong>{t("เริ่มเรื่องราวของคุณ")}</strong><span>{t("เพิ่มวิดีโอหรือรูปแรกเพื่อเริ่มตัดต่อ")}</span><span className="editor-primary"><Plus size={16} />{t("เพิ่มไฟล์")}</span></button>}</div>
+          <div className="editor-playback"><div className="editor-clock"><span className="editor-timecode" data-testid="playhead-time">{timecode(frame)}</span><span aria-hidden>/</span><span>{timecode(total)}</span></div><div className="editor-row"><IconButton label={t("กลับต้นคลิป")} disabled={!total} onClick={() => seek(0)}><SkipBack size={17} /></IconButton><button type="button" className="editor-play" aria-label={t(playing ? "หยุดเล่น" : "เล่นคลิป")} onClick={togglePlay} disabled={!total}>{playing ? <Pause size={19} fill="currentColor" /> : <Play size={19} fill="currentColor" />}</button><IconButton label={t("ไปท้ายคลิป")} disabled={!total} onClick={() => seek(Math.max(0, total - 1))}><SkipForward size={17} /></IconButton></div><span className="editor-shot-count">{current ? `${t("ช็อต")} ${project.clips.findIndex((clip) => clip.id === current.clip.id) + 1} / ${project.clips.length}` : ""}</span></div>
         </section>
       </div>
 
       <section className="editor-timeline" aria-label={t("ไทม์ไลน์")}>
-        <div className="editor-timeline-toolbar"><div className="editor-row"><IconButton label={t("ย้อนกลับ (⌘Z)")} onClick={goUndo} disabled={!history?.past.length}><Undo2 size={17} /></IconButton><IconButton label={t("ทำซ้ำ (⇧⌘Z)")} onClick={goRedo} disabled={!history?.future.length}><Redo2 size={17} /></IconButton><span className="editor-divider" /><IconButton label={t("แบ่งคลิป (S)")} onClick={split} disabled={!canSplit}><Scissors size={17} /></IconButton><IconButton label={t("ทำสำเนาคลิป")} disabled={!selected} onClick={() => selected && apply({ type: "duplicate", id: selected.id, newId: uid() })}><Copy size={17} /></IconButton><IconButton label={t("ลบคลิปและปิดช่องว่าง")} disabled={!selected} onClick={() => selected && apply({ type: "delete", id: selected.id })}><Trash2 size={17} /></IconButton><span className="editor-divider" /><IconButton label={t("ตัดหัวถึงตำแหน่งเล่น")} disabled={!selected || !selectedAsset || frame <= clipStart(project, selected.id) || frame >= clipStart(project, selected.id) + framesOf(selected)} onClick={() => selected && selectedAsset && apply({ type: "trim", id: selected.id, edge: "in", frame: selected.sourceIn + (frame - clipStart(project, selected.id)) * selected.speed, maxFrames: selectedAsset.frames })}><ArrowLeftToLine size={17} /></IconButton><IconButton label={t("ตัดท้ายถึงตำแหน่งเล่น")} disabled={!selected || !selectedAsset || frame <= clipStart(project, selected.id) || frame >= clipStart(project, selected.id) + framesOf(selected)} onClick={() => selected && selectedAsset && apply({ type: "trim", id: selected.id, edge: "out", frame: selected.sourceIn + (frame - clipStart(project, selected.id)) * selected.speed, maxFrames: selectedAsset.frames })}><ArrowRightToLine size={17} /></IconButton></div><div className="editor-row"><IconButton label={t("ย่อไทม์ไลน์")} disabled={zoom <= 15} onClick={() => setZoom((value) => Math.max(15, value - 15))}><ZoomOut size={16} /></IconButton><input type="range" aria-label={t("ซูมไทม์ไลน์")} min={15} max={150} value={zoom} onChange={(event) => setZoom(Number(event.target.value))} /><IconButton label={t("ขยายไทม์ไลน์")} disabled={zoom >= 150} onClick={() => setZoom((value) => Math.min(150, value + 15))}><ZoomIn size={16} /></IconButton></div></div>
+        <div className="editor-timeline-toolbar"><h2>{t("ไทม์ไลน์")}</h2><div className="editor-row"><IconButton label={t("ย้อนกลับ (⌘Z)")} onClick={goUndo} disabled={!history?.past.length}><Undo2 size={17} /></IconButton><IconButton label={t("ทำซ้ำ (⇧⌘Z)")} onClick={goRedo} disabled={!history?.future.length}><Redo2 size={17} /></IconButton><span className="editor-divider" /><IconButton label={t("แบ่งคลิป (S)")} onClick={split} disabled={!canSplit}><Scissors size={17} /></IconButton><IconButton label={t("ทำสำเนาคลิป")} disabled={!selected} onClick={() => selected && apply({ type: "duplicate", id: selected.id, newId: uid() })}><Copy size={17} /></IconButton><IconButton label={t("ลบคลิปและปิดช่องว่าง")} disabled={!selected} onClick={() => selected && apply({ type: "delete", id: selected.id })}><Trash2 size={17} /></IconButton><span className="editor-divider" /><IconButton label={t("ตัดหัวถึงตำแหน่งเล่น")} disabled={!selected || !selectedAsset || frame <= clipStart(project, selected.id) || frame >= clipStart(project, selected.id) + framesOf(selected)} onClick={() => selected && selectedAsset && apply({ type: "trim", id: selected.id, edge: "in", frame: selected.sourceIn + (frame - clipStart(project, selected.id)) * selected.speed, maxFrames: selectedAsset.frames })}><ArrowLeftToLine size={17} /></IconButton><IconButton label={t("ตัดท้ายถึงตำแหน่งเล่น")} disabled={!selected || !selectedAsset || frame <= clipStart(project, selected.id) || frame >= clipStart(project, selected.id) + framesOf(selected)} onClick={() => selected && selectedAsset && apply({ type: "trim", id: selected.id, edge: "out", frame: selected.sourceIn + (frame - clipStart(project, selected.id)) * selected.speed, maxFrames: selectedAsset.frames })}><ArrowRightToLine size={17} /></IconButton></div><div className="editor-row"><IconButton label={t("ย่อไทม์ไลน์")} disabled={zoom <= 15} onClick={() => setZoom((value) => Math.max(15, value - 15))}><ZoomOut size={16} /></IconButton><input type="range" aria-label={t("ซูมไทม์ไลน์")} min={15} max={150} value={zoom} onChange={(event) => setZoom(Number(event.target.value))} /><IconButton label={t("ขยายไทม์ไลน์")} disabled={zoom >= 150} onClick={() => setZoom((value) => Math.min(150, value + 15))}><ZoomIn size={16} /></IconButton></div></div>
         <Timeline project={project} assets={assets} frame={frame} selectedId={selected?.id} zoom={zoom} onSeek={seek} onSelect={(id) => { setSelectedId(id); setPlaying(false); }} onEdit={apply} />
         <div className="editor-bottom-bar"><span>{t("ลากคลิปเพื่อเรียงใหม่ · ลากขอบเพื่อตัด · Space เล่น/หยุด")}</span><span>{project.clips.length} {t("คลิป")} · {timecode(total)}</span></div>
       </section>
@@ -261,7 +272,7 @@ export function Editor({ userId }: { userId: string }) {
       {showProjects && <div className="editor-modal-backdrop" onKeyDown={(event) => { if (event.key === "Escape") setShowProjects(false); }}><motion.section role="dialog" aria-modal="true" aria-labelledby="projects-title" className="editor-modal" initial={reduce ? false : { opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", bounce: 0, duration: 0.3 }}><div className="editor-panel-title"><h2 id="projects-title">{t("โปรเจกต์ของฉัน")}</h2><IconButton label={t("ปิด")} onClick={() => setShowProjects(false)}><X size={18} /></IconButton></div><button type="button" autoFocus className="editor-primary" onClick={() => void startNew()}><Plus size={16} />{t("โปรเจกต์ใหม่")}</button><div className="editor-project-list">{projects.map((item) => <button type="button" key={item.id} onClick={() => void switchProject(item.id)}><Clapperboard size={20} /><span><strong>{item.name}</strong><small>{item.size.width} × {item.size.height} · {timecode(totalFrames(item))}</small></span>{item.id === project.id && <Check size={16} />}</button>)}</div>
         <button type="button" className="editor-secondary" onClick={() => void listLegacy()}>{t("นำเข้าจากเบราว์เซอร์นี้")}</button>
         {legacyProjects && <div className="editor-project-list">{legacyProjects.length ? legacyProjects.map((item) => <button type="button" key={item.id} onClick={() => void importLegacy(item.id)}><Plus size={16} />{item.name}</button>) : <p>{t("ไม่มีโปรเจกต์เก่าให้นำเข้า")}</p>}</div>}</motion.section></div>}
-      {exporting && <div className="editor-modal-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="export-title" className="editor-modal editor-export-modal"><span className="editor-export-icon">{download ? <Check size={30} /> : <Download size={30} />}</span><h2 id="export-title">{t(download ? "คลิปพร้อมดาวน์โหลด" : "กำลังสร้างไฟล์ MP4")}</h2><p>{project.size.width} × {project.size.height} · H.264 · {FPS} fps</p><progress max={100} value={progress} aria-label={t("ความคืบหน้าการส่งออก")} /><span className="editor-caption">{Math.round(progress)}%</span>{download ? <><a className="editor-primary" href={download} download={`${project.name.replace(/[^\p{L}\p{N} _-]/gu, "").trim() || "SnapPromo"}.mp4`}><Download size={16} />{t("ดาวน์โหลด MP4")}</a><button type="button" className="editor-secondary" autoFocus onClick={() => setExporting(false)}>{t("กลับไปตัดต่อ")}</button></> : <button type="button" className="editor-secondary" autoFocus onClick={() => exportController.current?.abort()}>{t("ยกเลิก")}</button>}</section></div>}
+      {exporting && <div className="editor-modal-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="export-title" className="editor-modal editor-export-modal"><span className="editor-export-icon">{download ? <Check size={30} /> : <Download size={30} />}</span><h2 id="export-title">{t(download ? "คลิปพร้อมดาวน์โหลด" : "กำลังสร้างไฟล์ MP4")}</h2><p>{project.size.width} × {project.size.height} · H.264 · {FPS} fps</p><progress max={100} value={download ? 100 : undefined} aria-label={t("ความคืบหน้าการส่งออก")} />{download ? <><a className="editor-primary" href={download} download={`${project.name.replace(/[^\p{L}\p{N} _-]/gu, "").trim() || "SnapPromo"}.mp4`}><Download size={16} />{t("ดาวน์โหลด MP4")}</a><button type="button" className="editor-secondary" autoFocus onClick={() => setExporting(false)}>{t("กลับไปตัดต่อ")}</button></> : <button type="button" className="editor-secondary" autoFocus onClick={() => exportController.current?.abort()}>{t("ยกเลิก")}</button>}</section></div>}
     </main>
   );
 }

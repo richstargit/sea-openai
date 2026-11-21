@@ -1,5 +1,6 @@
 import { readdir, rename, rm, stat } from 'node:fs/promises'
 import path from 'node:path'
+import { type SaleFormat, saleFormatGuide } from '@/services/video/sale-formats.js'
 
 import { hookMachineConfig } from '@/config/hook-machine.config.js'
 import { type Aspect, DEFAULT_ASPECT } from '@/services/compose/presets.js'
@@ -151,6 +152,8 @@ type StartParams = {
   durationSec: number
   /** Defaults to 9:16. */
   aspect?: Aspect
+  /** Our selling-format catalog; its beat skeleton rides along with the notes. */
+  saleFormat?: SaleFormat
   voice: { language: string; model: string; voice: string }
 }
 
@@ -184,7 +187,7 @@ export async function startVideoJob(params: StartParams): Promise<VideoDoc> {
       mock,
       language: params.profile.language,
       input: {
-        notes: params.brief,
+        notes: [params.brief, saleFormatGuide(params.saleFormat)].filter(Boolean).join('\n\n'),
         productUrl: params.productUrl,
         durationSec: params.durationSec,
         images: params.images,

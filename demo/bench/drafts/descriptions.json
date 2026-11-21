@@ -1,0 +1,38 @@
+[
+  {
+    "shopId": "kitchen",
+    "productId": "counter-blender",
+    "existingName": "เครื่องปั่นแบบตั้งโต๊ะ",
+    "sourceImages": [
+      "refs/counter-blender-1.jpg",
+      "refs/counter-blender-2.jpg"
+    ],
+    "descriptionDraft": "เครื่องปั่นตั้งโต๊ะตัวฐานสีเงินจตุรัสท้องพระโรงมีปุ่มหมุนสีน้ำเงินอยู่ด้านหน้า พร้อมฝาปิดสีดำและโถปั่นใสมีหูจับสีขาวด้านข้าง",
+    "model": "gpt-4.1-mini-2025-04-14",
+    "reviewedByMerchant": false
+  },
+  {
+    "shopId": "kitchen",
+    "productId": "cooktop",
+    "existingName": "เตาไฟฟ้าหน้าเรียบ",
+    "sourceImages": [
+      "refs/cooktop-1.jpg",
+      "refs/cooktop-2.jpg"
+    ],
+    "descriptionDraft": "เตาไฟฟ้าสีดำหน้าเรียบสี่วงเตาพร้อมปุ่มควบคุมสี่ปุ่มเรียงแนวนอนด้านหน้า",
+    "model": "gpt-4.1-mini-2025-04-14",
+    "reviewedByMerchant": false
+  },
+  {
+    "shopId": "electronics",
+    "productId": "iphone-13-pro",
+    "existingName": "iPhone 13 Pro สีฟ้า",
+    "sourceImages": [
+      "refs/iphone-13-pro-1.jpg",
+      "refs/iphone-13-pro-2.jpg"
+    ],
+    "descriptionDraft": "โทรศัพท์มือถือสีฟ้าด้านหลังมีกล้องสามเลนส์จัดเรียงในกรอบสี่เหลี่ยมมุมโค้งพร้อมไฟแฟลชและรูไมโครโฟนอยู่มุมซ้ายบน",
+    "model": "gpt-4.1-mini-2025-04-14",
+    "reviewedByMerchant": false
+  }
+]

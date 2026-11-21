@@ -1,0 +1,52 @@
+[
+  {
+    "id": "bookcase",
+    "file": "bookcase.jpg",
+    "held": true,
+    "caption": "เล่มนี้เป็นฉบับปกแข็งค่ะ",
+    "source": "https://commons.wikimedia.org/wiki/File:J_A_Jance_9_February_2021.jpg",
+    "license": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "credit": "DrMel",
+    "changes": "Full-frame thumbnail resized and re-encoded as JPEG. Thai caption is invented simulation context."
+  },
+  {
+    "id": "book-fair",
+    "file": "book-fair.jpg",
+    "held": true,
+    "caption": "ช่วงนี้มีหนังสือเข้ามาใหม่ค่ะ",
+    "source": "https://commons.wikimedia.org/wiki/File:Nicole_D._Collier_holding_The_Best_Friend_Bracelet.jpg",
+    "license": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "credit": "WikiBuddha52",
+    "changes": "Full-frame thumbnail resized and re-encoded as JPEG. Thai caption is invented simulation context."
+  },
+  {
+    "id": "medal",
+    "file": "medal.jpg",
+    "held": true,
+    "caption": "ตรงนี้ดูรายละเอียดใกล้ ๆ ได้ค่ะ",
+    "source": "https://commons.wikimedia.org/wiki/File:Ketleyn_Quadros.jpg",
+    "license": "https://creativecommons.org/licenses/by/3.0/br/",
+    "credit": "Antonio Cruz / Agência Brasil",
+    "changes": "Full-frame thumbnail resized and re-encoded as JPEG. Thai caption is invented simulation context."
+  },
+  {
+    "id": "phone-use",
+    "file": "phone-use.jpg",
+    "held": false,
+    "caption": "ขอตอบข้อความสักครู่นะคะ",
+    "source": "https://commons.wikimedia.org/wiki/File:Woman_texting_on_a_smartphone.jpg",
+    "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "credit": "Kristin Hardwick",
+    "changes": "Full-frame thumbnail resized and re-encoded as JPEG. Thai caption is invented simulation context."
+  },
+  {
+    "id": "reading",
+    "file": "reading.jpg",
+    "held": false,
+    "caption": "เดี๋ยวดูก่อนว่าเขียนว่าอะไรค่ะ",
+    "source": "https://commons.wikimedia.org/wiki/File:Woman_Reading_a_Book.jpg",
+    "license": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "credit": "Nefrit Lazurit",
+    "changes": "Full-frame thumbnail resized and re-encoded as JPEG. Thai caption is invented simulation context."
+  }
+]

@@ -7,6 +7,13 @@ import path from 'node:path'
 import request from 'supertest'
 
 // Three throwaway accounts, told apart by the first character of the session cookie.
+// One file makes more jobs than the 30-per-window limit allows, so the limiter is lifted here.
+jest.mock('@/middlewares/rate-limit.middleware.js', () => ({
+  ...jest.requireActual('@/middlewares/rate-limit.middleware.js'),
+  createRateLimiter:
+    () => (_request: unknown, _response: unknown, next: () => void) =>
+      next(),
+}))
 jest.mock('@/services/auth.service.js', () => {
   const { AppError } = jest.requireActual('@/services/error.service.js')
   const users: Record<string, { id: string; email: string }> = {

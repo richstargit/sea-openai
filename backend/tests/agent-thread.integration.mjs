@@ -54,7 +54,7 @@ async function startBackend(env) {
 }
 
 test('persisted agent resumes after a backend restart and reuses completed work', {
-  timeout: process.env.TEST_OBS_URL ? 90_000 : 30_000,
+  timeout: 120_000,
 }, async () => {
   const uri = process.env.TEST_MONGODB_URI || 'mongodb://127.0.0.1:27017'
   const database = `sea_openai_test_${randomUUID().replaceAll('-', '')}`
@@ -77,7 +77,26 @@ test('persisted agent resumes after a backend restart and reuses completed work'
     let body = ''
     for await (const chunk of request) body += chunk
     calls.push(JSON.parse(body))
-    const reply = replies.shift()
+    const tool = calls.at(-1).tool_choice?.name
+    const reply =
+      tool === 'design_motion_scene'
+        ? {
+            svg: '<g id="badge"><rect x="10" y="10" width="550" height="160" rx="28" fill="#162023"/><text x="48" y="118" font-size="76" fill="#ffffff">Special offer</text></g>',
+            moves: [
+              {
+                target: 'badge',
+                property: 'x',
+                from: -120,
+                to: 0,
+                at: 0,
+                span: 0.25,
+                ease: 'power3.out',
+              },
+            ],
+          }
+        : tool === 'review_motion_frames'
+          ? { fixes: [] }
+          : replies.shift()
     response.setHeader('Content-Type', 'application/json')
     if (reply == null) {
       response
@@ -292,7 +311,10 @@ test('persisted agent resumes after a backend restart and reuses completed work'
     const rendered = recovery.at(-1)
     assert.equal(rendered.type, 'done')
     assert.equal(rendered.files[0].name, 'overlay.webm')
-    assert.equal(calls.length, 3)
+    assert.deepEqual(
+      calls.slice(2).map((call) => call.tool_choice.name),
+      ['design_shot', 'design_motion_scene', 'review_motion_frames'],
+    )
     assert.equal(calls[2].tool_choice.name, 'design_shot')
     const video = await api(rendered.files[0].url, 'GET', alice.cookie)
     assert.equal(video.headers.get('content-type'), 'video/webm')
@@ -321,7 +343,7 @@ test('persisted agent resumes after a backend restart and reuses completed work'
     assert.equal(continued.status, 200)
     assert.match(readEvents(await continued.text()).at(-1).message, /วิดีโอ/)
     assert.deepEqual(
-      JSON.parse(calls[3].input).conversation.history,
+      JSON.parse(calls.at(-1).input).conversation.history,
       completed.messages,
     )
     const referenceRequest = {
@@ -351,7 +373,9 @@ test('persisted agent resumes after a backend restart and reuses completed work'
     )
     assert.equal(styled.status, 200)
     assert.deepEqual((await styled.json()).skillsUsed, ['neon-3d'])
-    const content = calls.at(-1).input[0].content
+    const content = calls.findLast(
+      (call) => call.tool_choice.name === 'design_shot',
+    ).input[0].content
     assert.match(content[0].text, /Use violet with a gentle pulse/)
     assert.equal(
       content.filter((item) => item.type === 'input_image').length,

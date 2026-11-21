@@ -17,3 +17,5 @@ Thumbs.db
 data/
 integrations/agent-reach/.venv/
 __pycache__/
+
+.video-skills/

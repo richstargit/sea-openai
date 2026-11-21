@@ -10,9 +10,19 @@ test.beforeEach(async ({ page }) => {
 test("edit, split, undo, save, switch size and export a playable MP4", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
+  await page.route("https://cdn.jsdelivr.net/**", (route) => route.abort());
   await page.goto("/editor");
   await expect(page.getByTestId("timeline-clip")).toHaveCount(3);
   await expect(page.getByText("Saved to your account")).toBeVisible();
+  const preview = page.locator("hyperframes-player");
+  await expect.poll(() => preview.evaluate((node) => (node as import("@hyperframes/player").HyperframesPlayer).ready)).toBe(true);
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await expect(page.getByTestId("playhead-time")).not.toHaveText("00:00:00");
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  await page.getByRole("button", { name: "Go to end", exact: true }).click();
+  await expect.poll(() => preview.evaluate((node) => (node as import("@hyperframes/player").HyperframesPlayer).currentTime)).toBeGreaterThan(14.9);
+  await expect(preview.locator("iframe").contentFrame().getByText("Bring flavor to your table")).toBeVisible();
+  await page.getByRole("button", { name: "Go to start", exact: true }).click();
   await page.screenshot({ path: "/tmp/sea-editor-desktop.png", fullPage: true });
   await page.getByRole("button", { name: "Text", exact: true }).click();
   await page.getByRole("textbox", { name: "Headline", exact: true }).fill("Fresh from our kitchen");
@@ -125,6 +135,22 @@ test("imports real video with audio and exports an edited MP4 with an AAC audio 
     expect(await input.computeDuration()).toBeGreaterThan(1.3);
     expect(await audio!.getCodec()).toBe("aac");
   } finally { input.dispose(); }
+
+  const upload = await page.request.post("/agent/files?name=handoff.webm", {
+    headers: { "Content-Type": "application/octet-stream" }, data: Buffer.from(source, "base64"),
+  });
+  expect(upload.ok()).toBe(true);
+  const { file: film } = await upload.json();
+  await page.route("**/agent/chat", (route) => route.fulfill({ json: {
+    message: "Ready", files: [{ ...film, title: "Generated film", sceneStarts: [0, 0.5, 1] }],
+  } }));
+  await page.goto("/studio");
+  await page.getByRole("textbox", { name: "Video brief" }).fill("A three-shot motion graphic");
+  await page.getByRole("button", { name: "Generate video", exact: true }).click();
+  await page.getByRole("button", { name: "Open in editor", exact: true }).click();
+  await expect(page).toHaveURL((url) => url.pathname === "/editor" && url.searchParams.get("project") === film.id);
+  await expect(page.getByTestId("timeline-clip")).toHaveCount(3);
+  await expect(page.getByRole("textbox", { name: "Project name" })).toHaveValue("Generated film");
 });
 
 test("Studio hands the selected version into the editor", async ({ page }) => {
@@ -155,7 +181,11 @@ test("the video and live studios accept references and request distinct output f
     formats.push(body.outputFormat);
     await route.fulfill({ json: { message: "Brief received" } });
   });
+  const upload = page.waitForResponse((response) =>
+    response.request().method() === "POST" && new URL(response.url()).pathname === "/agent/files"
+  );
   await page.getByRole("button", { name: "Generate video", exact: true }).click();
+  expect((await upload).status()).toBe(201);
   await expect(page.getByRole("main").getByText("Brief received")).toBeVisible();
   await page.getByRole("link", { name: "Live studio", exact: true }).click();
   await expect(page.getByRole("heading", { name: "OBS Browser Source" })).toBeVisible();

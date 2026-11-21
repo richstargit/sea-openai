@@ -22,6 +22,8 @@ type StepResult = {
   task: string
   result: string
   skillsUsed: string[]
+  projectId?: string
+  toolsUsed?: string[]
   files?: AgentFile[]
 }
 type Worker = Awaited<ReturnType<typeof prepareAgent>>
@@ -35,7 +37,14 @@ export type AgentEvent =
       status: 'running' | 'completed'
     }
   | { type: 'verify' }
-  | { type: 'done'; message: string; skillsUsed: string[]; files?: AgentFile[] }
+  | {
+      type: 'done'
+      message: string
+      skillsUsed: string[]
+      projectId?: string
+      toolsUsed?: string[]
+      files?: AgentFile[]
+    }
   | { type: 'error'; key: string; message: string }
 
 type Publish = (event: AgentEvent) => void
@@ -94,6 +103,8 @@ async function executeStep(
         task,
         result: result.message,
         files: result.files,
+        toolsUsed: result.toolsUsed,
+        projectId: result.projectId,
         skillsUsed: [state.skill],
       },
     ],
@@ -163,9 +174,11 @@ function progressOf(state: Partial<typeof AgentState.State>) {
   const steps = state.steps ?? []
   return {
     plan: state.plan ?? null,
+    ...(steps.at(-1)?.projectId ? { projectId: steps.at(-1)?.projectId } : {}),
     completedSteps: steps.length,
     files: steps.flatMap((step) => step.files ?? []),
     skillsUsed: [...new Set(steps.flatMap((step) => step.skillsUsed))],
+    toolsUsed: [...new Set(steps.flatMap((step) => step.toolsUsed ?? []))],
   }
 }
 
@@ -240,6 +253,8 @@ async function executeTurn(
     type: 'done',
     message: reply,
     skillsUsed: progress.skillsUsed,
+    ...(progress.projectId ? { projectId: progress.projectId } : {}),
+    ...(progress.toolsUsed.length ? { toolsUsed: progress.toolsUsed } : {}),
     ...(progress.files.length ? { files: progress.files } : {}),
   })
 }
@@ -260,7 +275,7 @@ export async function runThread(
   heartbeat.unref()
   const signal = AbortSignal.any([
     ownership.signal,
-    AbortSignal.timeout(180_000),
+    AbortSignal.timeout(540_000),
   ])
 
   try {

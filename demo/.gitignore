@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+/node_modules/
+/data/images/*.jpg
+/data/*.tmp
+/data/*.lock/
+/data/seed/*/*
+!/data/seed/*/.gitkeep
+/eval/frames/*/*
+!/eval/frames/*/.gitkeep
+/data-cups/
+/samples/*.zip
