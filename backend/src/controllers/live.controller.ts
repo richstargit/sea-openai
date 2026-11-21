@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { loggedInUser } from '@/controllers/auth.controller.js'
 import { createProduct, deleteProduct, listProducts, productBody, productPatch, productPhoto, syncProducts, updateProduct } from '@/services/live/catalog.js'
 import { decide, decideBody, kitBody, motionKit, planBody, planLive } from '@/services/live/director.js'
+import { locateBody, locateProduct } from '@/services/live/locate.js'
 
 const timeout = (ms: number) => AbortSignal.timeout(ms)
 
@@ -14,6 +15,9 @@ export const liveMotionKit: RequestHandler = async (request, response) => {
 }
 export const liveDecide: RequestHandler = async (request, response) => {
   response.json(await decide(decideBody.parse(request.body), timeout(15_000)))
+}
+export const liveLocate: RequestHandler = async (request, response) => {
+  response.json(await locateProduct(loggedInUser(response).id, locateBody.parse(request.body), timeout(20_000)))
 }
 
 const codeParam = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/)

@@ -342,6 +342,11 @@ export const ANNOTATIONS: Annotations = {
     secured: true,
     summary: 'Realtime director decision from a frame and recent speech (Decisions API)',
   },
+  'POST /agent/live/locate': {
+    tags: ['Live'],
+    secured: true,
+    summary: 'Find a catalog product in a live frame: { image, code } -> { box: {x,y,w,h} in 0-1 fractions or null, evidence, latencyMs }',
+  },
   'GET /agent/overlay/status': {
     tags: ['Overlay'],
     secured: true,
