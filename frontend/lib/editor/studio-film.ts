@@ -4,13 +4,14 @@ import { createEditorStorage } from "./storage";
 
 type Film = { id: string; name: string; title?: string; sceneStarts?: number[] };
 
-export async function openStudioFilm(userId: string, film: Film) {
+// size: the frame the user picked in the studio; the clip is placed into it (defaults to the clip's own size)
+export async function openStudioFilm(userId: string, film: Film, size?: { width: number; height: number }) {
   const storage = createEditorStorage(userId);
   if (await storage.hasProject(film.id)) return film.id;
   const response = await fetch(`/agent/files/${encodeURIComponent(film.id)}`);
   if (!response.ok) throw new Error("Could not open the generated film.");
   const asset = await importMedia(new File([await response.blob()], film.name, { type: "video/webm" }));
-  const project = newProject({ width: asset.width, height: asset.height });
+  const project = newProject(size ?? { width: asset.width, height: asset.height });
   project.id = film.id;
   project.name = film.title || film.name;
   project.assetIds = [asset.id];

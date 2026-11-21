@@ -10,7 +10,7 @@ export type VoiceChoice = { language: string; voice: string };
 // Used when the options endpoint cannot be reached. English first and marin preselected, the best voice OpenAI lists.
 const FALLBACK_LANGUAGES = ["en", "th", "ja", "zh", "es", "id", "vi"];
 const FALLBACK_VOICES = ["marin", "cedar", "alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer", "verse"];
-const LANGUAGE_NAME: Record<string, string> = {
+export const LANGUAGE_NAME: Record<string, string> = {
   en: "อังกฤษ", th: "ไทย", ja: "ญี่ปุ่น", zh: "จีน", es: "สเปน", id: "อินโดนีเซีย", vi: "เวียดนาม",
 };
 const BEST_VOICE = "marin";
