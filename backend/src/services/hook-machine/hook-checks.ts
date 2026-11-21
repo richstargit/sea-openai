@@ -117,6 +117,7 @@ export type HookIssue =
   | 'tooLong'
   | 'unsupportedNumber'
   | 'competitorBrand'
+  | 'bareName'
   | 'notNamed'
 
 const HARD: HookIssue[] = [
@@ -125,6 +126,7 @@ const HARD: HookIssue[] = [
   'tooLong',
   'unsupportedNumber',
   'competitorBrand',
+  'bareName',
 ]
 
 const digitsOf = (text: string): string[] =>
@@ -151,6 +153,31 @@ function mentions(lowerText: string, brand: string): boolean {
   return lowerText.includes(name)
 }
 
+/** Thai has no spaces, so a payoff is found by a shared run of characters instead of a shared word. */
+function sharesRun(text: string, terms: string[], size = 5): boolean {
+  const flat = text.replace(/\s+/g, '').toLowerCase()
+  for (const term of terms) {
+    const t = term.replace(/\s+/g, '').toLowerCase()
+    for (let i = 0; i + size <= t.length; i++) {
+      if (flat.includes(t.slice(i, i + size))) return true
+    }
+  }
+  return false
+}
+
+/** What is left of a hook once the product name, its model code and sizes are taken out. */
+function withoutName(text: string, productName: string | null): string {
+  let rest = text.toLowerCase()
+  for (const token of tokens(productName ?? ''))
+    rest = rest.split(token).join(' ')
+  return rest
+    .replace(/\d+(?:[.,]\d+)?\s*(?:มล|ml|g|กรัม|มม|mm|w|วัตต์)?\.?/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+const names = (context: HookContext) => tokens(context.productName ?? '')
+
 export function checkHook(
   text: string,
   context: HookContext,
@@ -172,12 +199,22 @@ export function checkHook(
     issues.push('competitorBrand')
   }
 
-  const names = tokens(context.productName ?? '')
-  const payoff = (context.payoffTerms ?? []).flatMap(tokens)
+  // A hook that is only the product name and its size is a label, not a hook.
+  const own = names(context)
+  const rest = withoutName(text, context.productName)
+  const minRest = context.languageCode === 'th' ? 10 : 12
+  if (own.length > 0 && rest.replace(/\s/g, '').length < minRest) {
+    issues.push('bareName')
+  }
+
+  const payoffTerms = context.payoffTerms ?? []
   const named =
-    names.some((t) => lower.includes(t)) ||
-    payoff.some((t) => lower.includes(t))
-  if (!named && (names.length > 0 || payoff.length > 0)) issues.push('notNamed')
+    own.some((t) => lower.includes(t)) ||
+    payoffTerms.flatMap(tokens).some((t) => lower.includes(t)) ||
+    sharesRun(text, payoffTerms)
+  if (!named && (own.length > 0 || payoffTerms.length > 0)) {
+    issues.push('notNamed')
+  }
 
   return { issues, hard: issues.some((i) => HARD.includes(i)) }
 }
@@ -206,11 +243,13 @@ export function pickBestHook(
     null
   for (const candidate of candidates) {
     const { issues, hard } = checkHook(candidate.text, context)
-    let score = (9 - gradeRank(candidate.grade)) * 3
-    if (/\d/.test(candidate.text)) score += 2
-    if (!issues.includes('notNamed')) score += 2
-    if (CONTRAST.test(candidate.text)) score += 1
-    if (candidate.source === 'format') score += 1.5
+    // The grade leads: the bonuses together are worth less than one grade step.
+    let score = (9 - gradeRank(candidate.grade)) * 4
+    const ownDigits = new Set(digitsOf(context.productName ?? ''))
+    if (digitsOf(candidate.text).some((n) => !ownDigits.has(n))) score += 1
+    if (!issues.includes('notNamed')) score += 1
+    if (CONTRAST.test(candidate.text)) score += 1.5
+    if (candidate.source === 'format') score += 1
     if (hard) score -= 100
     if (!best || score > best.score) best = { candidate, score, hard }
   }

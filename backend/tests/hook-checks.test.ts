@@ -148,6 +148,58 @@ describe('picking the best hook', () => {
   })
 })
 
+describe('bare names and Thai payoffs', () => {
+  const serum: HookContext = {
+    languageCode: 'th',
+    productName: 'Daily Glow Serum 30 มล.',
+    supportText: 'Daily Glow Serum 30 มล. หัวหยด ราคา 259 บาท',
+    payoffTerms: ['เลือกปริมาณเซรั่มที่ต้องการใช้ในแต่ละครั้งได้โดยนับทีละหยด'],
+  }
+
+  it('fails a hook that is only the name and the size', () => {
+    expect(checkHook('Daily Glow Serum 30 มล', serum).issues).toContain(
+      'bareName',
+    )
+    expect(checkHook('Pentel BLN105 ตอนจดจริง', thai).issues).toContain(
+      'bareName',
+    )
+    expect(checkHook('Pentel BLN105 เจ้าหัวเข็ม 0.5', thai).issues).not.toContain(
+      'bareName',
+    )
+    expect(
+      checkHook('Daily Glow Serum กะเซรั่มทีละหยดได้', serum).issues,
+    ).not.toContain('bareName')
+  })
+
+  it('finds a Thai payoff by a shared run of characters, not a shared word', () => {
+    const gadget: HookContext = {
+      languageCode: 'th',
+      productName: 'VoltGo 65W GaN USB-C 3 พอร์ต',
+      supportText: 'VoltGo 65W 110 กรัม',
+      payoffTerms: ['ชาร์จโน้ตบุ๊กกับมือถือพร้อมกันได้โดยไม่ต้องรอสลับเครื่อง'],
+    }
+    const hook = 'ชาร์จโน้ตบุ๊กกับมือถือพร้อมกัน ไม่ต้องพกหัวชาร์จแยก'
+    expect(checkHook(hook, gadget).issues).toEqual([])
+    expect(checkHook('วันนี้อากาศดีมากเลยนะ', gadget).issues).toContain('notNamed')
+  })
+
+  it('lets one grade step beat all the bonuses together, and never picks a bare name', () => {
+    const pick = pickBestHook(
+      [
+        { text: 'Daily Glow Serum 30 มล', grade: 'B+', source: 'format' },
+        { text: 'กะเซรั่มทีละหยดได้ด้วยหัวบีบตัวนี้', grade: 'A-', source: 'format' },
+        {
+          text: 'Daily Glow Serum ขวดที่นับหยดได้ แต่ไม่ต้องเทกะเอง',
+          grade: 'B+',
+          source: 'original',
+        },
+      ],
+      serum,
+    )
+    expect(pick.best?.text).toBe('กะเซรั่มทีละหยดได้ด้วยหัวบีบตัวนี้')
+  })
+})
+
 describe('competitor brands from research titles', () => {
   it('collects capitalised names that are not the product or in the facts', () => {
     const brands = competitorBrandsFrom({

@@ -191,6 +191,7 @@ export async function startVideoJob(params: StartParams): Promise<VideoDoc> {
         productUrl: params.productUrl,
         durationSec: params.durationSec,
         images: params.images,
+        voiceLanguage: params.voice.language,
       },
       brief: null,
       research: null,

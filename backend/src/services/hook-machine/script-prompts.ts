@@ -32,6 +32,8 @@ HOW A HOOK READS
 - The product name or its most concrete payoff is in the first words. Open on the benefit, the surprise or the contrast, not on a description of the packaging, the colour or the label.
 - Forbidden: a filler opener or closer such as asking the viewer to look at the details, "let's take a look", "watch this", or the Thai phrases that mean come look at the details.
 - No quotation marks, no dash characters, no emoji.
+- Never a bare name: a hook that is only the product name, the model code or the size is a label, not a hook. It must carry a benefit, a contrast, a surprise or a question.
+- Return fewer hooks rather than a weak one. Every hook you return must be one you would stop scrolling for.
 - Prefer one specific detail over a general claim: a number, a feature, a comparison, a surprise. Make a stranger scrolling want to hear the next sentence.
 
 HOW TO WORK
@@ -56,6 +58,7 @@ Write all spoken text in ${args.languageName}.
 ${budget}
 THE POLICY IS NO UNSUPPORTED CLAIMS, NOT NO PERSUASION. A script must sell. Use this order: the hook; the viewer's problem or wish in one beat (from the audience and the pain points); the product's concrete benefits, one per beat, taken from the seller's typed notes, the photo and verified web facts; a short demonstration in words (what the viewer would see or do); proof only when a source supports it; then one call to action in the style of the profile.
 Even when facts are few, say the benefits you do have in a confident way and make each beat give the viewer a reason to stay. Never spend beats describing the label, the packaging or the colours, and never talk about the research, the data, the sources or what information exists or is missing. If a beat would need an unsupported claim, shorten the script instead of padding it.
+- The call to action must be plain and clear to any shopper, for example tap the basket or the link to get it. The profile's text can contain transcription mistakes and slang: never copy a phrase or a call to action from it when you are not sure what it means.
 - Use only facts from the supported facts. Never invent prices, results, reviews or statistics. A price may be spoken only if the seller typed it.
 - Never name any other brand, seller or competing product, even if a web result mentions it. A web fact that is not confirmed to be this exact product is background only and must not be spoken.
 - Keep every voiceover short and easy to say aloud, one idea per line. No quotation marks, no dash characters (hyphen, en dash, em dash) and no emoji in spoken lines, caption or hashtags. Do not put a full stop in the middle of a line.

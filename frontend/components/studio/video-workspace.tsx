@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, ArrowUp, Box, Clapperboard, Download, Film, ImagePlus, Link2, LoaderCircle, Paperclip, Plus, Radio, WandSparkles, X } from "lucide-react";
@@ -41,21 +40,11 @@ async function upload(file: File) {
 }
 
 /**
- * The video studio opens on Yok's one-flow screen, driven by our AI director underneath (video/video-studio.tsx).
- * "ขั้นสูง" keeps the original composer: reference clips and links, SKILL.md styles, Blender, examples.
- * The live studio keeps the composer for overlay graphics.
+ * The video studio is one flow with a single button at the end (see video/video-studio.tsx): the script and voice
+ * come from the learned speaking style. The live studio keeps the composer below, which builds transparent overlay graphics.
  */
 export function VideoWorkspace({ live, userId }: { live: boolean; userId: string }) {
-  const { t } = useLanguage();
-  const [mode, setMode] = useState<"studio" | "advanced">("studio");
-  if (live) return <StudioWorkspace live userId={userId} />;
-  return <>
-    <div className="studio-mode" role="tablist" aria-label={t("โหมดสร้างวิดีโอ")}>
-      <button type="button" role="tab" aria-selected={mode === "studio"} onClick={() => setMode("studio")}><Clapperboard size={16} />{t("สร้างวิดีโอ")}</button>
-      <button type="button" role="tab" aria-selected={mode === "advanced"} onClick={() => setMode("advanced")}><WandSparkles size={16} />{t("ขั้นสูง")}</button>
-    </div>
-    {mode === "studio" ? <VideoStudio userId={userId} /> : <StudioWorkspace live={false} userId={userId} />}
-  </>;
+  return live ? <StudioWorkspace live userId={userId} /> : <VideoStudio />;
 }
 
 function StudioWorkspace({ live, userId }: { live: boolean; userId: string }) {

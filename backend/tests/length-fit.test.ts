@@ -6,6 +6,8 @@ import path from 'node:path'
 import {
   ACCEPT_MAX,
   ACCEPT_MIN,
+  budgetPrompt,
+  contentFactor,
   judgeFit,
   lengthBudget,
   ratePerSecond,
@@ -33,8 +35,8 @@ import { fitSpeech } from '@/services/video-job/fit-length.js'
 
 describe('length budget', () => {
   it('uses the measured rates for Thai and English', () => {
-    expect(ratePerSecond('th')).toBe(10.5)
-    expect(ratePerSecond('en')).toBe(3.4)
+    expect(ratePerSecond('th')).toBe(10.1)
+    expect(ratePerSecond('en')).toBe(3.8)
     // An estimate exists for every other language the app offers.
     for (const code of ['ja', 'zh', 'es', 'id', 'vi']) {
       expect(ratePerSecond(code)).toBeGreaterThan(0)
@@ -77,6 +79,38 @@ describe('length budget', () => {
     expect(thai.unit).toBe('chars')
     expect(thai.totalUnits).toBeGreaterThan(250)
     expect(thai.totalUnits).toBeLessThan(330)
+    // English at 3.8 words a second: about 110 words for 30 seconds.
+    expect(budgets[1]?.totalUnits).toBeGreaterThan(100)
+    expect(budgets[1]?.totalUnits).toBeLessThan(125)
+  })
+
+  it('sizes a script for the language that will be spoken', () => {
+    // The same pitch is about 3.5 Thai characters per English word, so a Thai
+    // script that will be spoken in English is written much longer than one
+    // that will be spoken in Thai.
+    expect(contentFactor('th', 'en')).toBeCloseTo(3.5, 5)
+    expect(contentFactor('en', 'th')).toBeCloseTo(1 / 3.5, 5)
+    expect(contentFactor('th', 'th')).toBe(1)
+    const thSpokenTh = lengthBudget({ targetSec: 30, language: 'th' })
+    const thSpokenEn = lengthBudget({
+      targetSec: 30,
+      language: 'th',
+      spokenLanguage: 'en',
+    })
+    expect(thSpokenEn.unit).toBe('chars')
+    expect(thSpokenEn.totalUnits).toBeGreaterThan(thSpokenTh.totalUnits * 1.2)
+    // And the English words that come out of it fit the English budget.
+    const en = lengthBudget({ targetSec: 30, language: 'en' })
+    expect(thSpokenEn.totalUnits / 3.5).toBeCloseTo(en.totalUnits, -1)
+  })
+
+  it('asks the writer to use the budget, not just stay under it', () => {
+    const text = budgetPrompt(
+      lengthBudget({ targetSec: 30, language: 'en' }),
+      'English',
+    )
+    expect(text).toMatch(/should use at least/)
+    expect(text).toMatch(/Aim for/)
   })
 
   it('judges text against the budget', () => {

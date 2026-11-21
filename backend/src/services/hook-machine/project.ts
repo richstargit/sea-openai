@@ -123,6 +123,8 @@ async function writeScript(
   const budget = lengthBudget({
     targetSec: project.input.durationSec,
     language: project.language,
+    // A script that will be spoken in another language is sized for that language.
+    spokenLanguage: project.input.voiceLanguage,
   })
   const script = await structured({
     name: 'script',
@@ -197,6 +199,12 @@ async function fitScriptToBudget(
       if (beat) kept.push({ ...beat, voiceover: text })
       cursor = Math.min(cursor + 1, script.beats.length)
     }
+  }
+  // The first beat is the chosen hook and stays exactly that, whatever the tighten pass did.
+  const hookBeat = script.beats[0]
+  const first = kept[0]
+  if (hookBeat && first && first.voiceover !== hookBeat.voiceover) {
+    kept[0] = { ...first, voiceover: hookBeat.voiceover }
   }
   return { ...script, beats: kept }
 }
