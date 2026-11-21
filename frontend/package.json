@@ -10,6 +10,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:editor": "node --test tests/editor-model.test.mjs",
+    "test:photos": "node --test tests/photo-white.test.mjs",
     "test:editor:browser": "playwright test"
   },
   "dependencies": {

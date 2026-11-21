@@ -14,7 +14,7 @@
   /* A critically damped spring (bounce 0). The cubic is the fallback for browsers without linear() easing. */
   --spring: cubic-bezier(.22, 1, .36, 1);
   display: grid;
-  gap: var(--g4);
+  gap: var(--g5);
   line-height: var(--lead-body);
 }
 :lang(th) .vs { --track-display: -.005em; }
@@ -23,7 +23,7 @@
 }
 
 /* Title: one line, smaller than the live studio's, so the flow starts above the fold */
-.studio-intro.vs-intro { padding: clamp(8px, 2vh, 24px) 0 var(--g2); }
+.studio-intro.vs-intro { padding: clamp(8px, 2vh, 24px) 0 0; }
 .studio-intro.vs-intro h1 { font-size: clamp(1.9rem, 4.6vw, 2.9rem); letter-spacing: -.04em; line-height: 1.2; }
 :lang(th) .studio-intro.vs-intro h1 { letter-spacing: -.02em; line-height: 1.4; }
 
@@ -33,10 +33,10 @@
 
 /* 1. Photos and the idea, on the studio composer surface */
 .vs-composer fieldset { border: 0; margin: 0; padding: 0; }
-.vs-photos { display: flex; flex-wrap: wrap; gap: var(--g3); list-style: none; margin: 0; padding: var(--g3) var(--g3) 0; }
+.vs-photos { display: flex; flex-wrap: wrap; gap: var(--g3); list-style: none; margin: 0; padding: var(--g4); }
 .vs-photos li { position: relative; width: 96px; height: 96px; }
-.vs-photos img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: var(--r3); border: 1px solid var(--line); }
-.vs-photo-remove { position: absolute; top: -14px; right: -14px; display: grid; place-items: center; width: 44px; height: 44px; color: white; }
+.vs-photos img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: var(--r3); border: 1px solid var(--line); background: var(--well); }
+.vs-photo-remove { position: absolute; top: 0; right: 0; display: grid; place-items: center; width: 44px; height: 44px; color: white; }
 .vs-photo-remove::before { content: ""; position: absolute; width: 24px; height: 24px; border-radius: 50%; background: rgb(36 36 33 / .86); }
 .vs-photo-remove svg { position: relative; }
 .vs-photo-add { display: grid; place-items: center; width: 100%; height: 100%; color: var(--quiet); border: 1px dashed #aca592; border-radius: var(--r3); background: var(--tint); }

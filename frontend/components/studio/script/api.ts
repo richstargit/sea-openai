@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { paintOnWhite } from "./paint";
 import type { Capabilities, Profile, ProfileSummary, Project, ProjectSummary, VoiceOptions } from "./types";
 
 // Same origin, like the rest of the studio: Next forwards /agent/* to the backend
@@ -93,7 +94,7 @@ export function useLive<T extends { status: string }>(load: () => Promise<T>, is
   return { data, error, refresh, setData };
 }
 
-/** Shrinks a photo in the browser so the request stays small. */
+/** Shrinks a photo in the browser so the request stays small. Transparent areas become white, never black. */
 export async function shrinkImage(file: File, maxSide = 900): Promise<string> {
   const bitmap = await createImageBitmap(file);
   const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
@@ -102,7 +103,7 @@ export async function shrinkImage(file: File, maxSide = 900): Promise<string> {
   canvas.height = Math.round(bitmap.height * scale);
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("ย่อรูปไม่ได้");
-  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  paintOnWhite(ctx, bitmap, canvas.width, canvas.height);
   bitmap.close();
   for (const quality of [0.8, 0.65, 0.5]) {
     const url = canvas.toDataURL("image/jpeg", quality);
