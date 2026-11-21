@@ -22,7 +22,7 @@ const thai = Noto_Sans_Thai({
 export const metadata: Metadata = {
   title: "SnapPromo — Product photos to video ads",
   description:
-    "Take 3–5 product photos and let AI create vertical video ads with scripts, voiceovers, subtitles and music.",
+    "Take 3–5 product photos and let AI create video ads in landscape, portrait, square or custom dimensions with scripts, voiceovers, subtitles and music.",
 };
 
 export const viewport: Viewport = {

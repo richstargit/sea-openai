@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/sheet";
 
 export const navLinks = [
+  { href: "/#shop-features", label: "ฟีเจอร์สำหรับร้าน" },
   { href: "/#snap", label: "ถ่ายรูป ได้คลิป" },
   { href: "/#products", label: "ตัวอย่างสินค้า" },
   { href: "/#live", label: "ลูกมือไลฟ์" },
@@ -54,7 +55,7 @@ export function SiteNav() {
           <Wordmark />
         </Link>
 
-        <ul className="hidden items-center gap-1 lg:flex">
+        <ul className="hidden items-center gap-1 xl:flex">
           {navLinks.map((l) => (
             <li key={l.href}>
               <Link
@@ -75,7 +76,7 @@ export function SiteNav() {
 
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon-sm" className="lg:hidden" aria-label={t("เปิดเมนู")}>
+              <Button variant="ghost" size="icon-sm" className="xl:hidden" aria-label={t("เปิดเมนู")}>
                 <Menu />
               </Button>
             </SheetTrigger>

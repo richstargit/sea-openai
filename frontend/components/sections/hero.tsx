@@ -13,7 +13,7 @@ import { products } from "@/lib/demo-data";
 import { spring, fade } from "@/lib/spring";
 
 const outputs = [
-  "คลิปแนวตั้ง 9:16",
+  "คลิปแนวนอน แนวตั้ง จัตุรัส และขนาดที่กำหนดเอง",
   "เสียงบรรยายภาษาท้องถิ่น",
   "ซับไตเติล",
   "เพลงที่ใช้ได้ถูกลิขสิทธิ์",
@@ -38,6 +38,7 @@ export function Hero() {
         <p className="t-lead mx-auto mt-6 max-w-[34rem] text-muted-foreground">
           {t(" ถ่าย 3–5 มุมจากมือถือ แล้วระบบทำต่อให้ทั้งบท เสียง")}{t(" ")}
           <span className="whitespace-nowrap">{t("ซับไตเติล")}</span> {t(" และเพลง ได้คลิปพร้อมโพสต์ภายในไม่กี่นาที ")}</p>
+        <p className="mx-auto mt-4 max-w-[36rem] text-base text-muted-foreground">{t("สำหรับ YouTube, Instagram, Facebook และช่องทางของร้าน")}</p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
           <Button asChild size="lg">
             <Link href="/studio">{t("เริ่มทำคลิป")}</Link>

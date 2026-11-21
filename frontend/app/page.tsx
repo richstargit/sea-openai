@@ -1,6 +1,8 @@
 import { SiteNav } from "@/components/site-nav";
 import { SiteFooter } from "@/components/site-footer";
 import { Hero } from "@/components/sections/hero";
+import { VideoFormats } from "@/components/sections/video-formats";
+import { ShopWorkflow } from "@/components/sections/shop-workflow";
 import { Statement } from "@/components/sections/statement";
 import { Pipeline } from "@/components/sections/pipeline";
 import { Products } from "@/components/sections/products";
@@ -15,7 +17,9 @@ export default function Home() {
       <SiteNav />
       <main id="main" className="flex-1">
         <Hero />
+        <VideoFormats />
         <Statement />
+        <ShopWorkflow />
         <Pipeline />
         <Products />
         <Hooks />

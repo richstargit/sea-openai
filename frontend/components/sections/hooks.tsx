@@ -148,7 +148,7 @@ export function Hooks() {
         </div>
 
         <p className="t-small mt-10 text-muted-foreground">
-          {t(" ส่งออกได้ทั้งสามเวอร์ชันในครั้งเดียว ใช้กับ TikTok Shop, Shopee, LINE และ Facebook ")}</p>
+          {t(" เลือกสัดส่วนให้เหมาะกับ YouTube, Instagram, Facebook, TikTok Shop, Shopee หรือ LINE แล้วทดลองทั้งสามเวอร์ชัน ")}</p>
       </div>
     </section>
   );

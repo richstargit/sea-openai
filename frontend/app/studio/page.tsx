@@ -5,7 +5,7 @@ import { Studio } from "@/components/studio/studio";
 
 export const metadata: Metadata = {
   title: "Create your first clip — SnapPromo",
-  description: "Take product photos, add your price and get three vertical clip variations.",
+  description: "Take product photos, add your price and preview three clip variations in landscape, portrait, square or custom dimensions.",
 };
 
 export default function StudioPage() {
