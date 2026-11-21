@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import request from 'supertest'
-
+import { createShowBody } from '@/controllers/live-script.controller.js'
 import {
   allowedNumbers,
   bannedPunctuation,
@@ -24,7 +24,6 @@ import {
   finalizeShow,
   sharedEnding,
 } from '@/services/live-script/finalize.js'
-import { createShowBody } from '@/controllers/live-script.controller.js'
 import { liveShowSchema } from '@/services/live-script/schemas.js'
 
 // Two throwaway accounts, told apart by the first character of the session cookie.
@@ -404,9 +403,9 @@ describe('live script api', () => {
     // Nothing to work from.
     expect((await send({})).status).toBe(400)
     // Only a link is not enough: a photo or a brief is required.
-    expect(
-      (await send({ productUrl: 'https://example.com/p' })).status,
-    ).toBe(400)
+    expect((await send({ productUrl: 'https://example.com/p' })).status).toBe(
+      400,
+    )
     expect(
       (await send({ brief: 'x', productUrl: 'http://localhost/x' })).status,
     ).toBe(400)

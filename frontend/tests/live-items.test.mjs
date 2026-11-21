@@ -77,8 +77,8 @@ test('the transcript view shows the newest lines oldest first, partial text incl
   items = onCommitted(items, 'bad', 22);
   items = onFailed(items, 'bad');
   const lines = toLines(items, 4);
-  assert.deepEqual(lines.map((l) => l.text), ['line 6', 'line 7', 'still talking']);
-  assert.deepEqual(lines.map((l) => l.final), [true, true, false]);
+  assert.deepEqual(lines.map((l) => l.text), ['line 5', 'line 6', 'line 7', 'still talking']);
+  assert.deepEqual(lines.map((l) => l.final), [true, true, true, false]);
   assert.equal(latestOpen(items).id, 'p');
 });
 
