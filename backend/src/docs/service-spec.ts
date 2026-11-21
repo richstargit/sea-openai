@@ -2,6 +2,7 @@ import { serviceConfig } from '@/config/service.config.js'
 import { ANNOTATIONS } from '@/docs/annotations.js'
 import { buildDocument } from '@/docs/introspect.js'
 import healthRoutes from '@/routes/health.route.js'
+import hookMachineRoutes from '@/routes/hook-machine.route.js'
 import indexRoutes from '@/routes/index.js'
 
 export function serviceSpec() {
@@ -11,6 +12,7 @@ export function serviceSpec() {
     mounts: [
       { prefix: '', router: indexRoutes },
       { prefix: '/health', router: healthRoutes },
+      { prefix: '/api/hook-machine', router: hookMachineRoutes },
     ],
     title: service.name,
     version: service.version,

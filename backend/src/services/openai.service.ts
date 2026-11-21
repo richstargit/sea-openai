@@ -48,3 +48,11 @@ export async function generateText(
 
   return response.output_text
 }
+
+export function sharedOpenAIClient(): OpenAI {
+  return openAIClient()
+}
+
+export function resolveModel(model?: string): string {
+  return model?.trim() || process.env.OPENAI_MODEL?.trim() || DEFAULT_MODEL
+}

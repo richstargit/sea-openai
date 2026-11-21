@@ -22,6 +22,7 @@ export const navLinks = [
   { href: "/#live", label: "ลูกมือไลฟ์" },
   { href: "/#measure", label: "วัดผล" },
   { href: "/editor", label: "ตัดต่อคลิป" },
+  { href: "/hooks", label: "สคริปต์สไตล์ฮุก" },
 ];
 
 export function Wordmark({ className }: { className?: string }) {
