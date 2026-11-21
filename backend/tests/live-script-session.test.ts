@@ -402,6 +402,95 @@ describe('suggestions', () => {
     expect(suggestion?.cue).toBe('price')
   })
 
+  it('writes fresh lines only while the time budget allows, and answers from the playbook otherwise', async () => {
+    const c = ctx()
+    const detection = m.detect.classifyHeuristic({
+      recent: '',
+      latest: 'ราคาเท่าไหร่',
+      productName: c.productName,
+      sellingPoints: c.playbook.sellingPoints,
+      facts: c.facts,
+      offer: c.offer,
+      allowed: c.allowed,
+    })
+    const generate = jest.fn(async () => ({ next: ['ราคา 299 บาท ครับ'] }))
+    const base = {
+      ctx: c,
+      detection,
+      latest: 'ราคาเท่าไหร่',
+      recent: '',
+      used: [],
+      lastLines: [],
+      hesitation: false,
+    }
+    const late = await m.suggest.buildSuggestion(
+      { ...base, timeoutMs: 100 },
+      { generate: generate as never },
+    )
+    expect(generate).not.toHaveBeenCalled()
+    expect(late?.next.length).toBeGreaterThan(0)
+    const fast = await m.suggest.buildSuggestion(
+      { ...base, timeoutMs: 1500 },
+      { generate: generate as never },
+    )
+    expect(generate).toHaveBeenCalledTimes(1)
+    expect(fast?.next).toEqual(['ราคา 299 บาท ครับ'])
+  })
+
+  it('shows long playbook sentences a clause at a time, never cut mid word', () => {
+    const long =
+      'นึกถึงตอนรีบจดตามคนพูด ปลายปากกาไปถึงคำถัดไปแล้ว แต่สันมือยังทับอยู่แถวคำก่อนหน้า ถ้าหมึกตรงนั้นยังไม่แห้ง มือก็ปาดโดน ยิ่งกำลังฟังประโยคถัดไปอยู่'
+    const parts = m.suggest.chunks(long)
+    expect(parts.length).toBeGreaterThan(1)
+    for (const part of parts) {
+      expect(Array.from(part).length).toBeLessThanOrEqual(90)
+      expect(long).toContain(part)
+    }
+    expect(m.suggest.chunks('ราคา 189 บาท')).toEqual(['ราคา 189 บาท'])
+  })
+
+  it('answers a viewer question with the closest objection', () => {
+    const c = ctx()
+    const lines = m.suggest.candidatesFor(
+      'objection',
+      c,
+      { topicIndex: null },
+      'หมึกซึมไหมครับ',
+      'th',
+    )
+    expect(lines[0]).toContain('หมึกแห้งไว')
+  })
+
+  it('opens with a gentle correction after a risky sentence, once', async () => {
+    const c = ctx()
+    const detection = {
+      stage: 'features' as const,
+      topicIndex: null,
+      aboutProduct: true,
+      risky: 0.9,
+      unsupported: 0,
+      via: 'heuristic' as const,
+    }
+    const input = {
+      ctx: c,
+      detection,
+      latest: 'รักษาโรคได้',
+      recent: '',
+      used: [] as string[],
+      lastLines: [],
+      hesitation: false,
+      timeoutMs: 0,
+    }
+    const first = await m.suggest.buildSuggestion(input, noModel.suggest)
+    expect(first?.next[0]).toContain('ขอเช็กข้อมูลตรงนี้')
+    expect(first?.next.length).toBeGreaterThan(1)
+    const again = await m.suggest.buildSuggestion(
+      { ...input, used: first?.next ?? [] },
+      noModel.suggest,
+    )
+    expect(again?.next[0]).not.toContain('ขอเช็กข้อมูลตรงนี้')
+  })
+
   it('shows a safe line when only a warning can be given', async () => {
     const c = {
       ...ctx(),

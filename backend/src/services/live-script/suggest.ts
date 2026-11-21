@@ -60,19 +60,50 @@ const nextSchema = z.object({ next: z.array(z.string()) })
 
 /* ---------------------------------------------------------------- candidates */
 
-const clip = (text: string) => text.trim().slice(0, MAX_LINE_CHARS)
-
-function words(text: string): string[] {
-  return text
-    .toLowerCase()
-    .split(/[\s,.;:!?/()]+/)
-    .filter((w) => w.length >= 3)
+/** Cuts at the last space that fits, so a line never ends in the middle of a word. */
+function clipAt(text: string, max: number): string {
+  const t = text.trim()
+  if (Array.from(t).length <= max) return t
+  const cut = Array.from(t).slice(0, max).join('')
+  const space = cut.lastIndexOf(' ')
+  return (space >= max / 2 ? cut.slice(0, space) : cut).trim()
 }
 
-/** How many words two texts share. Good enough to pick the closest playbook line. */
+const clip = (text: string) => clipAt(text, MAX_LINE_CHARS)
+
+/** A seller reads a line at a glance, so long playbook sentences are shown a clause at a time. */
+const CHUNK_CHARS = 90
+
+export function chunks(text: string, max = CHUNK_CHARS): string[] {
+  const out: string[] = []
+  let current = ''
+  for (const piece of text.trim().split(/\s+/)) {
+    const next = current ? `${current} ${piece}` : piece
+    if (Array.from(next).length <= max) {
+      current = next
+      continue
+    }
+    if (current) out.push(current)
+    current = Array.from(piece).length > max ? clipAt(piece, max) : piece
+  }
+  if (current) out.push(current)
+  return out
+}
+
+const trigrams = (text: string): Set<string> => {
+  const chars = Array.from(text.toLowerCase().replace(/\s+/g, ''))
+  const out = new Set<string>()
+  for (let i = 0; i + 3 <= chars.length; i++)
+    out.add(chars.slice(i, i + 3).join(''))
+  return out
+}
+
+/** How many character triples two texts share. Works for Thai, which has no spaces. */
 function overlap(a: string, b: string): number {
-  const set = new Set(words(a))
-  return words(b).filter((w) => set.has(w)).length
+  const set = trigrams(a)
+  let n = 0
+  for (const t of trigrams(b)) if (set.has(t)) n++
+  return n
 }
 
 function pitchLines(
@@ -165,7 +196,7 @@ export function candidatesFor(
         ...playbook.newcomerLines.map((h) => h.text),
       ]
   }
-  return list.map(clip).filter(Boolean)
+  return list.flatMap((line) => chunks(line)).filter(Boolean)
 }
 
 /* ---------------------------------------------------------------- the checks */
@@ -288,6 +319,10 @@ export type SuggestInput = {
 
 export type SuggestDeps = { generate?: typeof askFast }
 
+/** Less time than this is not worth a model call. */
+const MIN_REWRITE_MS = 600
+class SkipRewrite extends Error {}
+
 const LANGUAGE_NAME: Record<Lang, string> = { th: 'Thai', en: 'English' }
 
 /**
@@ -310,7 +345,15 @@ export async function buildSuggestion(
 
   let lines: string[] = []
   const generate = deps.generate ?? askFast
+  // Fresh lines need a model call that outlasts the time budget on the default
+  // model, so it runs only with a fast model set (or an injected writer), and
+  // only while there is time left. Otherwise the playbook lines answer at once.
+  const rewrite =
+    (Boolean(deps.generate) ||
+      Boolean(process.env.LIVE_SCRIPT_FAST_MODEL?.trim())) &&
+    input.timeoutMs >= MIN_REWRITE_MS
   try {
+    if (!rewrite) throw new SkipRewrite()
     const out = await generate({
       name: 'live_next',
       schema: nextSchema,
@@ -348,6 +391,10 @@ Each line at most ${MAX_LINE_CHARS} characters.`,
 
   if (!lines.length) lines = freshLines(candidates, avoid, 2)
   const warning = warningFor(detection, language)
+  // After something that sounded wrong, the first line takes it back gently.
+  if (warning && !avoid.includes(SAFE_LINE[language])) {
+    lines = [SAFE_LINE[language], ...lines].slice(0, MAX_LINES)
+  }
   if (!lines.length && warning) lines = [SAFE_LINE[language]]
   if (!lines.length) return null
 

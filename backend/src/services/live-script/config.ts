@@ -22,10 +22,15 @@ export function liveScriptConfig() {
     ),
     /** Only the last minute of speech is used to decide what the seller is talking about. */
     windowMs: 60_000,
-    /** The most one suggestion may take before the playbook answers instead. */
-    suggestTimeoutMs: positiveInt(
-      process.env.LIVE_SCRIPT_SUGGEST_TIMEOUT_MS,
-      5000,
+    /**
+     * The most a suggestion may take from the moment the sentence arrives.
+     * Writing fresh lines with a model takes longer than this on the models
+     * measured (1.7 to 3.5 s), so the playbook answers unless a faster model
+     * is set in LIVE_SCRIPT_FAST_MODEL.
+     */
+    suggestBudgetMs: positiveInt(
+      process.env.LIVE_SCRIPT_SUGGEST_BUDGET_MS,
+      1800,
     ),
   }
 }

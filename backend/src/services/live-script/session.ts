@@ -203,7 +203,8 @@ export async function submitUtterance(
   deps: UtteranceDeps = {},
 ): Promise<Suggestion | null> {
   const now = deps.now ?? Date.now
-  session.lastActivity = now()
+  const arrivedAt = now()
+  session.lastActivity = arrivedAt
 
   if (!utterance.final) {
     if (session.sentenceStartTs == null)
@@ -265,7 +266,11 @@ export async function submitUtterance(
         lastLines: session.last?.next ?? [],
         hesitation,
         signal: controller.signal,
-        timeoutMs: liveScriptConfig().suggestTimeoutMs,
+        // What is left of the budget once the sentence has been classified.
+        timeoutMs: Math.max(
+          0,
+          liveScriptConfig().suggestBudgetMs - (now() - arrivedAt),
+        ),
       },
       deps.suggest,
     )
