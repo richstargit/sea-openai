@@ -13,6 +13,7 @@ import {
   waveStats,
 } from '@/services/hook-machine/voice/scoring.js'
 import { parseWav } from '@/services/hook-machine/voice/wav.js'
+import { logger } from '@/services/logger.service.js'
 import { sharedOpenAIClient } from '@/services/openai.service.js'
 
 export type VoiceScores = {
@@ -90,65 +91,85 @@ async function transcribe(
   return null
 }
 
-/** Asks an audio model to rate delivery. Returns null when it cannot, so the score drops this part. */
-async function judge(
+/** One call to the audio model. Throws on API errors, returns null when the answer is not usable. */
+async function askJudge(
   wav: Buffer,
   styleBrief: string,
   language: LanguageInfo,
 ): Promise<{ style: number; reason: string } | null> {
-  try {
-    const client = sharedOpenAIClient().withOptions({
-      maxRetries: 1,
-      timeout: 120_000,
-    })
-    const response = await withRetry(() =>
-      client.chat.completions.create({
-        model: hookMachineConfig.voiceJudgeModel,
-        modalities: ['text'],
-        temperature: 0,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: `You are rating one voiceover take for a short product video. The requested delivery was:
+  const client = sharedOpenAIClient().withOptions({
+    maxRetries: 0,
+    timeout: 120_000,
+  })
+  const response = await withRetry(() =>
+    client.chat.completions.create({
+      model: hookMachineConfig.voiceJudgeModel,
+      modalities: ['text'],
+      temperature: 0,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: `You are rating one voiceover take for a short product video. The requested delivery was:
 ${styleBrief}
 
 Listen to the clip and rate it. Answer with JSON only, no other text:
 {"fit": 1 to 5 for how well the delivery matches the requested style, "natural": 1 to 5 for how natural and human it sounds (5 is indistinguishable from a skilled human), "reason": one short sentence in Thai on what you heard, no quotation marks and no dashes}
 The spoken language should be ${language.name}.`,
-              },
-              {
-                type: 'input_audio',
-                input_audio: { data: wav.toString('base64'), format: 'wav' },
-              },
-            ],
-          },
-        ],
-      }),
-    )
-    const raw = response.choices[0]?.message?.content ?? ''
-    const match = raw.match(/\{[\s\S]*\}/)
-    if (!match) return null
-    const parsed = JSON.parse(match[0]) as {
-      fit?: number
-      natural?: number
-      reason?: string
-    }
-    if (typeof parsed.fit !== 'number' || typeof parsed.natural !== 'number')
-      return null
-    const fit = Math.min(5, Math.max(1, parsed.fit))
-    const natural = Math.min(5, Math.max(1, parsed.natural))
-    return {
-      style: styleScoreFromJudge(fit, natural),
-      reason: String(parsed.reason ?? '')
-        .replace(/["“”]/g, '')
-        .trim(),
-    }
-  } catch {
-    return null
+            },
+            {
+              type: 'input_audio',
+              input_audio: { data: wav.toString('base64'), format: 'wav' },
+            },
+          ],
+        },
+      ],
+    }),
+  )
+  const raw = response.choices[0]?.message?.content ?? ''
+  const match = raw.match(/\{[\s\S]*\}/)
+  if (!match) return null
+  const parsed = JSON.parse(match[0]) as {
+    fit?: number
+    natural?: number
+    reason?: string
   }
+  if (typeof parsed.fit !== 'number' || typeof parsed.natural !== 'number')
+    return null
+  const fit = Math.min(5, Math.max(1, parsed.fit))
+  const natural = Math.min(5, Math.max(1, parsed.natural))
+  return {
+    style: styleScoreFromJudge(fit, natural),
+    reason: String(parsed.reason ?? '')
+      .replace(/["“”]/g, '')
+      .trim(),
+  }
+}
+
+/**
+ * Asks an audio model to rate delivery. Tries twice, then returns null so the
+ * score drops this part instead of failing the take.
+ */
+async function judge(
+  wav: Buffer,
+  styleBrief: string,
+  language: LanguageInfo,
+): Promise<{ style: number; reason: string } | null> {
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const verdict = await askJudge(wav, styleBrief, language)
+      if (verdict) return verdict
+      logger.warn('VOICE_JUDGE_UNUSABLE', { attempt })
+    } catch (error) {
+      logger.warn('VOICE_JUDGE_FAILED', {
+        attempt,
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+  return null
 }
 
 export async function scoreTake(input: ScoreInput): Promise<{

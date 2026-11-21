@@ -109,3 +109,29 @@ Never use the em-dash character in any hook you write.`
 export function stripEmDash(text: string): string {
   return text.replace(/\s*[—―]\s*/g, ', ')
 }
+
+/**
+ * Text written by a model for people to read in the UI. Curly or angle quotes
+ * and en or em dashes keep sneaking in, and the product bans them on screen.
+ */
+export function cleanDisplayText(text: string): string {
+  return text
+    .replace(/[\u201c\u201d\u00ab\u00bb"]/g, '')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/(\d)\s*[\u2013\u2014\u2015]\s*(\d)/g, '$1 ถึง $2')
+    .replace(/\s*[\u2013\u2014\u2015]\s*/g, ', ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+/** Applies cleanDisplayText to every string inside a plain JSON value. */
+export function cleanDisplayDeep<T>(value: T): T {
+  if (typeof value === 'string') return cleanDisplayText(value) as T
+  if (Array.isArray(value)) return value.map(cleanDisplayDeep) as T
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, cleanDisplayDeep(v)]),
+    ) as T
+  }
+  return value
+}

@@ -3,12 +3,16 @@ import { AGENT_CHAT_PATH, AGENT_THREADS_PATH } from '@/constants/agent.js'
 import { credentials, registration } from '@/controllers/auth.controller.js'
 import {
   addSourcesBody,
+  analyzeBody,
   createProfileBody,
   createProjectBody,
   hookBody,
   ratingBody,
+  renameBody,
   voiceBody,
+  voiceOptionsQuery,
 } from '@/controllers/hook-machine.controller.js'
+import { createVideoBody } from '@/controllers/video-job.controller.js'
 import type { Annotations } from '@/docs/introspect.js'
 import { agentChatSchema, agentMessageSchema } from '@/schemas/agent.schema.js'
 import { filename } from '@/services/agent-tools/files.js'
@@ -20,7 +24,7 @@ const agentStream = {
   },
 }
 
-const HM = '/api/hook-machine'
+const HM = '/agent/hook-machine'
 const TAG = ['Hook Machine']
 
 export const ANNOTATIONS: Annotations = {
@@ -64,26 +68,45 @@ export const ANNOTATIONS: Annotations = {
 
   [`GET ${HM}/capabilities`]: {
     tags: TAG,
+    secured: true,
     summary: 'Which tools are ready',
     description:
       'Reports whether Agent-Reach, yt-dlp, ffmpeg and the OpenAI key are available, and whether demo mode is on.',
   },
   [`GET ${HM}/profiles`]: {
     tags: TAG,
+    secured: true,
     summary: 'List style profiles',
   },
   [`POST ${HM}/profiles`]: {
     tags: TAG,
+    secured: true,
     summary: 'Create an empty style profile',
     bodySchema: createProfileBody,
   },
   [`GET ${HM}/profiles/:id`]: {
     tags: TAG,
+    secured: true,
     summary: 'Get a profile with its sources, insights and rubric',
     description: 'Poll this while status is "running" to follow progress.',
   },
+  [`PATCH ${HM}/profiles/:id`]: {
+    tags: TAG,
+    secured: true,
+    summary: 'Rename a style profile',
+    bodySchema: renameBody,
+  },
+  [`DELETE ${HM}/profiles/:id`]: {
+    tags: TAG,
+    secured: true,
+    summary: 'Delete a style profile with its scripts and audio',
+    description:
+      'Removes the profile, every script written with it and their voice takes. Refused with 409 while the profile or one of its scripts is still working.',
+    errors: [409],
+  },
   [`POST ${HM}/profiles/:id/sources`]: {
     tags: TAG,
+    secured: true,
     summary: 'Add reference video links',
     description:
       'Accepts YouTube, TikTok and Instagram links. Other links are returned in "rejected".',
@@ -92,21 +115,29 @@ export const ANNOTATIONS: Annotations = {
   },
   [`DELETE ${HM}/profiles/:id/sources/:sourceId`]: {
     tags: TAG,
+    secured: true,
     summary: 'Remove a reference video',
+    description:
+      'Refused with 409 while the profile is analysing. Removing a clip the style was built from sets the profile back to draft, so it is analysed again before the next script.',
+    errors: [409],
   },
   [`POST ${HM}/profiles/:id/analyze`]: {
     tags: TAG,
+    secured: true,
     summary: 'Analyze the reference videos and build the profile',
     description:
-      'Starts a background job (202). Collects each video with Agent-Reach or yt-dlp, reads the first 10 seconds with a vision model, extracts hooks, then builds the format library and grading rubric.',
+      'Starts a background job (202). Collects each video with Agent-Reach or yt-dlp, reads the first 10 seconds with a vision model, extracts hooks, then builds the format library and grading rubric. Only clips that are not done yet are read, unless the body sets redo to true, which reads every clip again.',
+    bodySchema: analyzeBody,
     errors: [400, 409, 429, 503],
   },
   [`GET ${HM}/profiles/:id/projects`]: {
     tags: TAG,
+    secured: true,
     summary: 'List scripts made with this profile',
   },
   [`POST ${HM}/profiles/:id/projects`]: {
     tags: TAG,
+    secured: true,
     summary: 'Turn a product into a full script',
     description:
       'Starts a background job (202): reads the photos, researches the product with Agent-Reach, writes graded hooks, then a timed script.',
@@ -115,29 +146,35 @@ export const ANNOTATIONS: Annotations = {
   },
   [`GET ${HM}/projects/:id`]: {
     tags: TAG,
+    secured: true,
     summary: 'Get a script project',
     description: 'Poll this while status is "running".',
   },
   [`POST ${HM}/projects/:id/hook`]: {
     tags: TAG,
+    secured: true,
     summary: 'Pick a hook and rewrite the script around it',
     bodySchema: hookBody,
     errors: [409, 429],
   },
   [`POST ${HM}/projects/:id/grade`]: {
     tags: TAG,
+    secured: true,
     summary: 'Grade your own hook and get three rewrites',
     bodySchema: hookBody,
     errors: [400, 429],
   },
   [`GET ${HM}/voice/options`]: {
     tags: TAG,
+    secured: true,
     summary: 'Voice models, voices, languages and delivery styles',
     description:
-      'Everything the voice picker needs, with the defaults (English, gpt-4o-mini-tts, marin) and the notice that OpenAI retires the speech endpoint on 2027-01-06.',
+      'Everything the voice picker needs, with the defaults (English, gpt-4o-mini-tts, marin) and the notice that OpenAI retires the speech endpoint on 2027-01-06. Pass projectId to also get suggested delivery styles that sound close to how that script style speaks.',
+    querySchema: voiceOptionsQuery,
   },
   [`POST ${HM}/projects/:id/voice`]: {
     tags: TAG,
+    secured: true,
     summary: 'Read the finished script aloud in several styles',
     description:
       'Starts a background job (202). Translates the script when the language differs, makes one take per style, transcribes each take and scores it. Poll the project and read voice.takes.',
@@ -146,14 +183,52 @@ export const ANNOTATIONS: Annotations = {
   },
   [`GET ${HM}/projects/:id/voice/takes/:takeId/audio`]: {
     tags: TAG,
+    secured: true,
     summary: 'Audio file of one take',
     description:
       'A wav marked as AI generated speech (X-AI-Generated-Voice header, ai-voice in the file name). Add ?download=1 to force a download.',
   },
   [`POST ${HM}/projects/:id/voice/takes/:takeId/rating`]: {
     tags: TAG,
+    secured: true,
     summary: 'Save your own star rating for a take',
     bodySchema: ratingBody,
+  },
+  [`POST ${HM}/videos`]: {
+    tags: TAG,
+    secured: true,
+    summary: 'Make a finished video with the voice attached, in one request',
+    description:
+      'Starts one background job (202): reads the photo and brief, researches the product, writes the script around the best hook, speaks it in one voice take, and renders a portrait MP4 with captions. Poll GET videos/:id. One running video per account (409), and the server runs at most two at once (503).',
+    bodySchema: createVideoBody,
+    errors: [400, 404, 409, 429, 503],
+  },
+  [`GET ${HM}/videos`]: {
+    tags: TAG,
+    secured: true,
+    summary: 'Your latest videos, newest first',
+    description: 'At most 30. Each item has the same shape as a single video.',
+  },
+  [`GET ${HM}/videos/:id`]: {
+    tags: TAG,
+    secured: true,
+    summary: 'One video job',
+    description:
+      'Poll while status is "running". step goes brief, research, hooks, script, voice, compose (stepIndex 1 to 6 of 6). When ready, file.url points at the MP4.',
+  },
+  [`GET ${HM}/videos/:id/file`]: {
+    tags: TAG,
+    secured: true,
+    summary: 'The finished MP4',
+    description:
+      'Supports Range requests. Marked as AI generated voice (X-AI-Generated-Voice header, ai-voice in the file name). Add ?download=1 to force a download. 404 until the video is ready.',
+    responses: { 200: { description: 'MP4 bytes.' } },
+  },
+  [`DELETE ${HM}/videos/:id`]: {
+    tags: TAG,
+    secured: true,
+    summary: 'Delete a video and its files',
+    errors: [409],
   },
   'POST /agent/files': {
     tags: ['Agent'],

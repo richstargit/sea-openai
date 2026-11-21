@@ -43,6 +43,7 @@ import {
 } from '@/middlewares/rate-limit.middleware.js'
 import healthRoutes from '@/routes/health.route.js'
 import hookMachineRoutes from '@/routes/hook-machine.route.js'
+import videoJobRoutes from '@/routes/video-job.route.js'
 import { FILE_LIMIT } from '@/services/agent-tools/files.js'
 
 const router = Router()
@@ -57,7 +58,6 @@ router.get('/', (_request, response) => {
 })
 
 router.use('/health', healthRoutes)
-router.use('/api/hook-machine', hookMachineRoutes)
 router.use('/auth', checkBrowserOrigin)
 const authLimiter = createRateLimiter(20)
 router.post('/auth/register', authLimiter, signup)
@@ -65,6 +65,8 @@ router.post('/auth/login', authLimiter, signin)
 router.get('/auth/me', requireUser, me)
 router.post('/auth/logout', requireUser, logout)
 router.use('/agent', checkBrowserOrigin, requireUser)
+router.use('/agent/hook-machine', hookMachineRoutes)
+router.use('/agent/hook-machine', videoJobRoutes)
 router.use('/agent/editor', editorSession)
 router.get('/agent/editor/projects', listEditorProjects)
 router.get('/agent/editor/projects/:id', readEditorProject)

@@ -1,15 +1,17 @@
 import path from 'node:path'
 
-import type { RequestHandler } from 'express'
+import type { RequestHandler, Response } from 'express'
 import { z } from 'zod'
 
 import { hookMachineConfig } from '@/config/hook-machine.config.js'
+import { loggedInUser } from '@/controllers/auth.controller.js'
 import { AppError } from '@/services/error.service.js'
 import { aiConfigured, aiIsMocked } from '@/services/hook-machine/ai.js'
 import { runProfileAnalysis } from '@/services/hook-machine/analyze.js'
 import { agentReachAvailable } from '@/services/hook-machine/collectors/agent-reach.js'
 import { ffmpegAvailable } from '@/services/hook-machine/collectors/media.js'
 import { ytdlpAvailable } from '@/services/hook-machine/collectors/ytdlp.js'
+import { deleteProfileWithProjects } from '@/services/hook-machine/profile-ops.js'
 import {
   reviewHook,
   rewriteScript,
@@ -47,6 +49,7 @@ import {
   startVoice,
   takeAudioPath,
 } from '@/services/hook-machine/voice/job.js'
+import { suggestStyles } from '@/services/hook-machine/voice/suggest.js'
 
 const KEY = 'so-hook-machine'
 const language = z.enum(['th', 'en'])
@@ -57,15 +60,20 @@ const bad = (key: string, message: string, messageTH: string) =>
 const notFound = (what: string) =>
   new AppError('NOT_FOUND', { key: `${KEY}-${what}-not-found` })
 
-async function profileOr404(id: string): Promise<Profile> {
+/** The signed-in account. Every document belongs to exactly one account. */
+const uid = (res: Response): string => loggedInUser(res).id
+
+// Someone else's document answers 404, never 403, so ids cannot be probed.
+// Documents saved before accounts existed have no owner and match nobody.
+async function profileOr404(id: string, ownerId: string): Promise<Profile> {
   const profile = await readDoc<Profile>('profiles', id)
-  if (!profile) throw notFound('profile')
+  if (!profile || profile.ownerId !== ownerId) throw notFound('profile')
   return profile
 }
 
-async function projectOr404(id: string): Promise<Project> {
+async function projectOr404(id: string, ownerId: string): Promise<Project> {
   const project = await readDoc<Project>('projects', id)
-  if (!project) throw notFound('project')
+  if (!project || project.ownerId !== ownerId) throw notFound('project')
   return project
 }
 
@@ -99,7 +107,9 @@ export const capabilities: RequestHandler = async (_req, res) => {
 }
 
 export const listProfiles: RequestHandler = async (_req, res) => {
-  const profiles = await listDocs<Profile>('profiles')
+  const profiles = (await listDocs<Profile>('profiles')).filter(
+    (p) => p.ownerId === uid(res),
+  )
   profiles.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   res.json({ success: true, profiles: profiles.map(profileSummary) })
 }
@@ -113,6 +123,7 @@ export const createProfile: RequestHandler = async (req, res) => {
   const body = createProfileBody.parse(req.body)
   const profile: Profile = {
     id: crypto.randomUUID(),
+    ownerId: uid(res),
     name: body.name,
     language: body.language,
     createdAt: new Date().toISOString(),
@@ -131,8 +142,35 @@ export const createProfile: RequestHandler = async (req, res) => {
 export const getProfile: RequestHandler = async (req, res) => {
   res.json({
     success: true,
-    profile: await profileOr404(String(req.params.id)),
+    profile: await profileOr404(String(req.params.id), uid(res)),
   })
+}
+
+export const renameBody = z.object({
+  name: z.string().trim().min(1).max(80),
+})
+
+export const renameProfile: RequestHandler = async (req, res) => {
+  const { name } = renameBody.parse(req.body)
+  const id = String(req.params.id)
+  await profileOr404(id, uid(res))
+  const profile = await updateDoc<Profile>('profiles', id, (doc) => {
+    doc.name = name
+  })
+  res.json({ success: true, profile })
+}
+
+export const deleteProfile: RequestHandler = async (req, res) => {
+  const profile = await profileOr404(String(req.params.id), uid(res))
+  const result = await deleteProfileWithProjects(profile)
+  if (!result.ok) {
+    throw new AppError('CONFLICT', {
+      key: `${KEY}-profile-busy`,
+      message: 'Wait for the running job to finish before deleting.',
+      messageTH: 'รอให้งานที่กำลังทำอยู่เสร็จก่อนจึงลบได้',
+    })
+  }
+  res.json({ success: true, removedProjects: result.projects })
 }
 
 export const addSourcesBody = z.object({
@@ -142,7 +180,10 @@ export const addSourcesBody = z.object({
 export const addSources: RequestHandler = async (req, res) => {
   const { urls } = addSourcesBody.parse(req.body)
   const id = String(req.params.id)
-  await profileOr404(id)
+  const existing = await profileOr404(id, uid(res))
+  if (existing.status === 'running') {
+    throw new AppError('CONFLICT', { key: `${KEY}-already-running` })
+  }
 
   const parsed = urls.map((raw) => ({ raw, ok: parseSourceUrl(raw) }))
   const rejected = parsed.filter((p) => !p.ok).map((p) => p.raw)
@@ -187,20 +228,35 @@ export const addSources: RequestHandler = async (req, res) => {
 }
 
 export const removeSource: RequestHandler = async (req, res) => {
-  const profile = await updateDoc<Profile>(
-    'profiles',
-    String(req.params.id),
-    (doc) => {
-      doc.sources = doc.sources.filter((s) => s.id !== req.params.sourceId)
-    },
-  ).catch(() => {
+  const id = String(req.params.id)
+  const existing = await profileOr404(id, uid(res))
+  if (existing.status === 'running') {
+    throw new AppError('CONFLICT', { key: `${KEY}-already-running` })
+  }
+  const profile = await updateDoc<Profile>('profiles', id, (doc) => {
+    const removed = doc.sources.find((s) => s.id === req.params.sourceId)
+    doc.sources = doc.sources.filter((s) => s.id !== req.params.sourceId)
+    if (doc.sources.length === 0) {
+      // Nothing left to learn from, so the old style no longer describes anything.
+      doc.insights = null
+      doc.rubric = []
+      doc.status = 'draft'
+      doc.error = null
+    } else if (removed?.status === 'done' && doc.insights) {
+      // The style was built with this clip, so it needs a fresh analysis.
+      doc.status = 'draft'
+    }
+  }).catch(() => {
     throw notFound('profile')
   })
   res.json({ success: true, profile })
 }
 
+export const analyzeBody = z.object({ redo: z.boolean().default(false) })
+
 export const analyzeProfile: RequestHandler = async (req, res) => {
-  const profile = await profileOr404(String(req.params.id))
+  const { redo } = analyzeBody.parse(req.body ?? {})
+  const profile = await profileOr404(String(req.params.id), uid(res))
   if (profile.status === 'running') {
     throw new AppError('CONFLICT', { key: `${KEY}-already-running` })
   }
@@ -220,12 +276,24 @@ export const analyzeProfile: RequestHandler = async (req, res) => {
         'ยังไม่ได้ตั้ง OPENAI_API_KEY (หรือใช้ HOOK_MACHINE_MOCK_AI=true เพื่อดูเดโม)',
     })
   }
+  if (redo) {
+    // Read every clip again, not only the ones that are still waiting.
+    await updateDoc<Profile>('profiles', profile.id, (doc) => {
+      for (const source of doc.sources) {
+        source.status = 'pending'
+        source.step = null
+        source.error = null
+        source.warnings = []
+        source.analysis = null
+      }
+    })
+  }
   void runProfileAnalysis(profile.id)
   res.status(202).json({ success: true })
 }
 
 // Photos arrive already shrunk by the browser. Cap them so one request stays small.
-const imageUrl = z
+export const imageUrl = z
   .string()
   .max(600_000)
   .regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/)
@@ -241,7 +309,7 @@ export const createProjectBody = z.object({
 
 export const createProject: RequestHandler = async (req, res) => {
   const body = createProjectBody.parse(req.body)
-  const profile = await profileOr404(String(req.params.id))
+  const profile = await profileOr404(String(req.params.id), uid(res))
   if (profile.status !== 'ready' || !profile.insights) {
     throw bad(
       'profile-not-ready',
@@ -270,6 +338,7 @@ export const createProject: RequestHandler = async (req, res) => {
 
   const project: Project = {
     id: crypto.randomUUID(),
+    ownerId: profile.ownerId,
     profileId: profile.id,
     title: body.title || 'สคริปต์ใหม่',
     createdAt: new Date().toISOString(),
@@ -298,9 +367,9 @@ export const createProject: RequestHandler = async (req, res) => {
 
 export const listProjects: RequestHandler = async (req, res) => {
   const id = String(req.params.id)
-  await profileOr404(id)
+  await profileOr404(id, uid(res))
   const projects = (await listDocs<Project>('projects'))
-    .filter((p) => p.profileId === id)
+    .filter((p) => p.profileId === id && p.ownerId === uid(res))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .map((p) => ({
       id: p.id,
@@ -316,7 +385,7 @@ export const listProjects: RequestHandler = async (req, res) => {
 export const getProject: RequestHandler = async (req, res) => {
   res.json({
     success: true,
-    project: await projectOr404(String(req.params.id)),
+    project: await projectOr404(String(req.params.id), uid(res)),
   })
 }
 
@@ -324,7 +393,7 @@ export const hookBody = z.object({ hook: z.string().trim().min(2).max(600) })
 
 export const chooseHook: RequestHandler = async (req, res) => {
   const { hook } = hookBody.parse(req.body)
-  const project = await projectOr404(String(req.params.id))
+  const project = await projectOr404(String(req.params.id), uid(res))
   if (project.status === 'running')
     throw new AppError('CONFLICT', { key: `${KEY}-busy` })
   void rewriteScript(project.id, hook)
@@ -333,7 +402,7 @@ export const chooseHook: RequestHandler = async (req, res) => {
 
 export const gradeHook: RequestHandler = async (req, res) => {
   const { hook } = hookBody.parse(req.body)
-  const project = await projectOr404(String(req.params.id))
+  const project = await projectOr404(String(req.params.id), uid(res))
   if (!project.brief)
     throw bad(
       'not-ready',
@@ -354,9 +423,19 @@ export const voiceBody = z.object({
 
 export const ratingBody = z.object({ stars: z.number().int().min(1).max(5) })
 
-export const voiceOptions: RequestHandler = (_req, res) => {
+export const voiceOptionsQuery = z.object({ projectId: z.uuid().optional() })
+
+export const voiceOptions: RequestHandler = async (req, res) => {
+  const { projectId } = voiceOptionsQuery.parse(req.query)
+  let suggested: { styles: string[] } | null = null
+  if (projectId) {
+    const project = await projectOr404(projectId, uid(res))
+    const profile = await readDoc<Profile>('profiles', project.profileId)
+    suggested = suggestStyles(profile?.insights?.voice)
+  }
   res.json({
     success: true,
+    suggested,
     defaults: {
       language: DEFAULT_LANGUAGE,
       model: DEFAULT_MODEL,
@@ -398,7 +477,7 @@ export const voiceOptions: RequestHandler = (_req, res) => {
 
 export const createVoice: RequestHandler = async (req, res) => {
   const body = voiceBody.parse(req.body)
-  const project = await projectOr404(String(req.params.id))
+  const project = await projectOr404(String(req.params.id), uid(res))
 
   if (!languageInfo(body.language)) {
     throw bad(
@@ -458,7 +537,7 @@ const slug = (text: string) =>
     .slice(0, 40)
 
 export const takeAudio: RequestHandler = async (req, res) => {
-  const project = await projectOr404(String(req.params.id))
+  const project = await projectOr404(String(req.params.id), uid(res))
   const take = project.voice?.takes.find((t) => t.id === req.params.takeId)
   const file = take ? takeAudioPath(project.id, take.id) : null
   if (!take || !file || take.status !== 'done') throw notFound('voice-take')
@@ -488,7 +567,7 @@ export const takeAudio: RequestHandler = async (req, res) => {
 export const rateTake: RequestHandler = async (req, res) => {
   const { stars } = ratingBody.parse(req.body)
   const projectId = String(req.params.id)
-  await projectOr404(projectId)
+  await projectOr404(projectId, uid(res))
   const takeId = String(req.params.takeId)
   const project = await updateDoc<Project>('projects', projectId, (doc) => {
     const take = doc.voice?.takes.find((t) => t.id === takeId)

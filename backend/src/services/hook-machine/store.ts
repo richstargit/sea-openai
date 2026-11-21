@@ -1,9 +1,16 @@
-import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
+import {
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from 'node:fs/promises'
 import path from 'node:path'
 
 import { hookMachineConfig } from '@/config/hook-machine.config.js'
 
-type Kind = 'profiles' | 'projects'
+type Kind = 'profiles' | 'projects' | 'videos'
 
 const UUID = /^[0-9a-f-]{36}$/
 
@@ -69,6 +76,19 @@ export async function createDoc<T extends { id: string }>(
 ): Promise<T> {
   await writeAtomic(fileFor(kind, doc.id), doc)
   return doc
+}
+
+/** Removes one document. Waits for queued updates to that file first. */
+export async function deleteDoc(kind: Kind, id: string): Promise<void> {
+  const file = fileFor(kind, id)
+  const run = (queues.get(file) ?? Promise.resolve()).then(() =>
+    rm(file, { force: true }),
+  )
+  queues.set(
+    file,
+    run.catch(() => undefined),
+  )
+  await run
 }
 
 async function writeAtomic(file: string, doc: unknown): Promise<void> {

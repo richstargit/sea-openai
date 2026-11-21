@@ -1,5 +1,6 @@
 import { listDocs, updateDoc } from '@/services/hook-machine/store.js'
 import type { Profile, Project } from '@/services/hook-machine/types.js'
+import { recoverVideoJobs } from '@/services/video-job/job.js'
 
 /** Jobs run in this process, so anything still "running" at boot was cut off. */
 export async function recoverInterruptedJobs(): Promise<void> {
@@ -36,4 +37,5 @@ export async function recoverInterruptedJobs(): Promise<void> {
       }
     })
   }
+  await recoverVideoJobs()
 }

@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, ArrowUp, Box, Clapperboard, Download, Film, ImagePlus, Link2, LoaderCircle, Paperclip, Plus, Radio, WandSparkles, X } from "lucide-react";
 import { useLanguage } from "@/components/language-provider";
+import { VideoStudio } from "./video/video-studio";
 import { playOverlay, studioPost, studioRequest } from "./studio-api";
 
 type Clip = { id: string; url: string; name: string };
@@ -37,7 +37,15 @@ async function upload(file: File) {
   return result.file.id;
 }
 
+/**
+ * The video studio is one flow with a single button at the end (see video/video-studio.tsx).
+ * The live studio keeps the composer below, which builds transparent overlay graphics.
+ */
 export function VideoWorkspace({ live }: { live: boolean }) {
+  return live ? <StudioWorkspace live /> : <VideoStudio />;
+}
+
+function StudioWorkspace({ live }: { live: boolean }) {
   const { t } = useLanguage();
   const picker = useRef<HTMLInputElement>(null);
   const skillPicker = useRef<HTMLInputElement>(null);
@@ -142,7 +150,7 @@ export function VideoWorkspace({ live }: { live: boolean }) {
       })}><Radio size={16} />{t("เล่นคลิปบน overlay")}</button>}</div>
     </section>}
     <section className="studio-examples">
-      <div className="studio-section-head"><h2>{t("ลองเริ่มจากตัวอย่าง")}</h2>{!live && <Link href="/studio/demo">{t("เดโมทีละขั้น")}<ArrowUpRight size={15} /></Link>}</div>
+      <div className="studio-section-head"><h2>{t("ลองเริ่มจากตัวอย่าง")}</h2></div>
       <div className="example-grid">{(live ? liveExamples : examples).map((item) =>
         <button type="button" key={item.image} className={`example-tile example-${item.image}`} disabled={!!busy} onClick={() => void act("example", async () => {
           setPhoto(await sampleFile(item.image, !live && item.image === "cosmetic" ? "/studio/daily-glow.jpg" : `/editor/${item.image}.svg`)); setBrief(t(item.brief)); requestAnimationFrame(() => prompt.current?.focus());

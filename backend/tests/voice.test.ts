@@ -10,6 +10,7 @@ import {
   languageInfo,
   stylePreset,
 } from '@/services/hook-machine/voice/catalog.js'
+import { cleanSpoken } from '@/services/hook-machine/voice/job.js'
 import {
   retryDelayMs,
   withRetry,
@@ -34,6 +35,34 @@ import {
   parseWav,
   synthTone,
 } from '@/services/hook-machine/voice/wav.js'
+
+// Two throwaway accounts, told apart by the first character of the session cookie.
+jest.mock('@/services/auth.service.js', () => {
+  const { AppError } = jest.requireActual('@/services/error.service.js')
+  const users: Record<string, { id: string; email: string }> = {
+    a: { id: 'user-a', email: 'a@example.test' },
+    b: { id: 'user-b', email: 'b@example.test' },
+  }
+  return {
+    ...jest.requireActual('@/services/auth.service.js'),
+    sessionUser: jest.fn(async (token: string) => {
+      const user = users[token.charAt(0)]
+      if (!user)
+        throw new AppError('UNAUTHORIZED', { key: 'so-auth-login-required' })
+      return user
+    }),
+  }
+})
+
+const as = (app: import('express').Express, who: 'a' | 'b' = 'a') => {
+  const agent = request(app)
+  const cookie = `so_session=${who.repeat(43)}`
+  return {
+    get: (url: string) => agent.get(url).set('Cookie', cookie),
+    post: (url: string) => agent.post(url).set('Cookie', cookie),
+    delete: (url: string) => agent.delete(url).set('Cookie', cookie),
+  }
+}
 
 const en = languageInfo('en')
 const th = languageInfo('th')
@@ -197,6 +226,17 @@ describe('catalog', () => {
   })
 })
 
+describe('spoken text cleanup', () => {
+  it('drops quotes and dashes and straightens apostrophes', () => {
+    expect(cleanSpoken('A quick-dry pen, priced at forty-three baht')).toBe(
+      'A quick dry pen, priced at forty three baht',
+    )
+    expect(cleanSpoken('He said \u201chi\u201d \u2014 it\u2019s fine')).toBe(
+      "He said hi it's fine",
+    )
+  })
+})
+
 describe('retry', () => {
   const rateLimited = Object.assign(new Error('slow down'), {
     status: 429,
@@ -269,7 +309,7 @@ describe('voice api', () => {
   })
 
   it('lists options with the best model and voice as defaults', async () => {
-    const response = await request(app).get('/api/hook-machine/voice/options')
+    const response = await as(app).get('/agent/hook-machine/voice/options')
     expect(response.status).toBe(200)
     expect(response.body.defaults).toEqual({
       language: 'en',
@@ -289,17 +329,17 @@ describe('voice api', () => {
   })
 
   it('rejects a voice request for an unknown project', async () => {
-    const response = await request(app)
+    const response = await as(app)
       .post(
-        '/api/hook-machine/projects/11111111-1111-4111-8111-111111111111/voice',
+        '/agent/hook-machine/projects/11111111-1111-4111-8111-111111111111/voice',
       )
       .send({})
     expect(response.status).toBe(404)
   })
 
   it('refuses audio for ids that are not real takes', async () => {
-    const response = await request(app).get(
-      '/api/hook-machine/projects/11111111-1111-4111-8111-111111111111/voice/takes/..%2F..%2Fetc%2Fpasswd/audio',
+    const response = await as(app).get(
+      '/agent/hook-machine/projects/11111111-1111-4111-8111-111111111111/voice/takes/..%2F..%2Fetc%2Fpasswd/audio',
     )
     expect(response.status).toBe(404)
   })
@@ -309,6 +349,7 @@ describe('voice api', () => {
     const id = crypto.randomUUID()
     await createDoc('projects', {
       id,
+      ownerId: 'user-a',
       profileId: crypto.randomUUID(),
       title: 'Demo',
       createdAt: new Date().toISOString(),
@@ -352,13 +393,13 @@ describe('voice api', () => {
       review: null,
     } as never)
 
-    const bad = await request(app)
-      .post(`/api/hook-machine/projects/${id}/voice`)
+    const bad = await as(app)
+      .post(`/agent/hook-machine/projects/${id}/voice`)
       .send({ model: 'tts-1', voice: 'marin' })
     expect(bad.status).toBe(400)
 
-    const started = await request(app)
-      .post(`/api/hook-machine/projects/${id}/voice`)
+    const started = await as(app)
+      .post(`/agent/hook-machine/projects/${id}/voice`)
       .send({ styles: ['creator', 'whisper'] })
     expect(started.status).toBe(202)
     expect(started.body.voice.takes).toHaveLength(2)
@@ -376,7 +417,7 @@ describe('voice api', () => {
       | undefined
     for (let i = 0; i < 40; i++) {
       await new Promise((r) => setTimeout(r, 150))
-      voice = (await request(app).get(`/api/hook-machine/projects/${id}`)).body
+      voice = (await as(app).get(`/agent/hook-machine/projects/${id}`)).body
         .project.voice
       if (voice?.status !== 'running') break
     }
@@ -387,8 +428,8 @@ describe('voice api', () => {
     expect(voice?.takes.filter((t) => t.recommended)).toHaveLength(1)
 
     const takeId = voice?.takes[0]?.id ?? ''
-    const audio = await request(app).get(
-      `/api/hook-machine/projects/${id}/voice/takes/${takeId}/audio?download=1`,
+    const audio = await as(app).get(
+      `/agent/hook-machine/projects/${id}/voice/takes/${takeId}/audio?download=1`,
     )
     expect(audio.status).toBe(200)
     expect(audio.headers['content-type']).toContain('audio/wav')
@@ -396,15 +437,36 @@ describe('voice api', () => {
     expect(audio.headers['content-disposition']).toContain('ai-voice.wav')
     expect(audio.headers['cross-origin-resource-policy']).toBe('cross-origin')
 
-    const rated = await request(app)
-      .post(`/api/hook-machine/projects/${id}/voice/takes/${takeId}/rating`)
+    // A second account can neither hear nor rate this take.
+    const stranger = as(app, 'b')
+    expect(
+      (
+        await stranger.get(
+          `/agent/hook-machine/projects/${id}/voice/takes/${takeId}/audio`,
+        )
+      ).status,
+    ).toBe(404)
+    expect(
+      (
+        await stranger
+          .post(
+            `/agent/hook-machine/projects/${id}/voice/takes/${takeId}/rating`,
+          )
+          .send({ stars: 1 })
+      ).status,
+    ).toBe(404)
+
+    const rated = await as(app)
+      .post(`/agent/hook-machine/projects/${id}/voice/takes/${takeId}/rating`)
       .send({ stars: 4 })
     expect(rated.status).toBe(200)
     expect(rated.body.project.voice.takes[0].userRating).toBe(4)
     expect(
       (
-        await request(app)
-          .post(`/api/hook-machine/projects/${id}/voice/takes/${takeId}/rating`)
+        await as(app)
+          .post(
+            `/agent/hook-machine/projects/${id}/voice/takes/${takeId}/rating`,
+          )
           .send({ stars: 9 })
       ).status,
     ).toBe(422)

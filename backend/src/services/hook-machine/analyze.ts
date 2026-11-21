@@ -2,6 +2,7 @@ import { hookMachineConfig } from '@/config/hook-machine.config.js'
 import { aiIsMocked, structured } from '@/services/hook-machine/ai.js'
 import { collectSource } from '@/services/hook-machine/collectors/collect.js'
 import {
+  cleanDisplayDeep,
   type Principle,
   rubricPrompt,
   stripEmDash,
@@ -144,10 +145,12 @@ ${UNIVERSAL_PRINCIPLES.map((p) => `- ${p.name}`).join('\n')}`,
   }))
 
   await updateDoc<Profile>('profiles', profileId, (doc) => {
+    const clean = cleanDisplayDeep(insights)
     doc.insights = {
-      ...insights,
-      hookFormats: insights.hookFormats.map((format) => ({
-        ...format,
+      ...clean,
+      hookFormats: insights.hookFormats.map((format, i) => ({
+        ...(clean.hookFormats[i] ?? format),
+        // The original hook stays word for word, apart from dashes.
         original: stripEmDash(format.original),
         sourceId: done[format.sourceIndex - 1]?.id ?? null,
       })),

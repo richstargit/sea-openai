@@ -41,6 +41,7 @@ export type Source = {
 
 export type Profile = {
   id: string
+  ownerId: string
   name: string
   language: Language
   createdAt: string
@@ -96,6 +97,7 @@ export type VoiceState = {
 
 export type Project = {
   id: string
+  ownerId: string
   profileId: string
   title: string
   createdAt: string

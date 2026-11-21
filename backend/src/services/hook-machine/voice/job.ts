@@ -66,7 +66,17 @@ const patchTake = (
     if (take) change(take)
   })
 
-async function spokenLines(
+/** Quotes and dashes read badly aloud and break the transcript comparison. */
+export function cleanSpoken(line: string): string {
+  return line
+    .replace(/["\u201c\u201d]/g, '')
+    .replace(/[\u2010-\u2015-]+/g, ' ')
+    .replace(/\u2019/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+export async function spokenLines(
   project: Project,
   language: string,
 ): Promise<{ lines: string[]; fresh: boolean }> {
@@ -90,10 +100,7 @@ Sound like natural speech from a person, not a translation. No quotation marks, 
       productName: project.brief?.productName ?? null,
     }),
   })
-  return {
-    lines: lines.map((l) => l.replace(/["“”]/g, '').trim()).filter(Boolean),
-    fresh: true,
-  }
+  return { lines: lines.map(cleanSpoken).filter(Boolean), fresh: true }
 }
 
 async function runTake(
