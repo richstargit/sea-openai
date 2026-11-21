@@ -1,0 +1,117 @@
+{
+  "annotation_protocol": "Manual visual annotation on a 220 × 220 normalized grid per image, committed to this file before requests. Top-left origin with (x, y, width, height) in [0,1]. Tight bounds of visible object; include disconnected parts of the same item across occlusion, exclude shadow and nearby objects. Grid tile 8 (two renderings of the same phone) was excluded before inference because the single-instance ground truth would be ambiguous. null means named target absent. Conditional on specified target, covering different subject sizes and visibility, not randomized catalog sampling.",
+  "cases": [
+    {
+      "shop": "kitchen",
+      "frame": "counter-blender-holdout-small-left",
+      "target": "counter-blender",
+      "box": {
+        "x": 0.03636,
+        "y": 0.08182,
+        "width": 0.15455,
+        "height": 0.20455
+      }
+    },
+    {
+      "shop": "kitchen",
+      "frame": "cooktop-holdout-occluded-right",
+      "target": "cooktop",
+      "box": {
+        "x": 0.40455,
+        "y": 0.38636,
+        "width": 0.55909,
+        "height": 0.25455
+      }
+    },
+    {
+      "shop": "fashion",
+      "frame": "two-products",
+      "target": "gingham",
+      "box": {
+        "x": 0.38636,
+        "y": 0.45455,
+        "width": 0.48636,
+        "height": 0.47273
+      }
+    },
+    {
+      "shop": "fashion",
+      "frame": "two-products",
+      "target": "buffalo",
+      "box": {
+        "x": 0.05,
+        "y": 0.12727,
+        "width": 0.15455,
+        "height": 0.15455
+      }
+    },
+    {
+      "shop": "fashion",
+      "frame": "live-jersey-show",
+      "target": "incas-stripe",
+      "box": {
+        "x": 0.33636,
+        "y": 0.45455,
+        "width": 0.33182,
+        "height": 0.5
+      }
+    },
+    {
+      "shop": "fashion",
+      "frame": "live-jersey-handover",
+      "target": "incas-stripe",
+      "box": {
+        "x": 0.35,
+        "y": 0.50909,
+        "width": 0.15,
+        "height": 0.25455
+      }
+    },
+    {
+      "shop": "fashion",
+      "frame": "dot-dress-view4-occluded-right",
+      "target": "dot-dress",
+      "box": {
+        "x": 0.54091,
+        "y": 0.39091,
+        "width": 0.41818,
+        "height": 0.44091
+      }
+    },
+    {
+      "shop": "electronics",
+      "frame": "battery-pack-holdout-dim-blur",
+      "target": "battery-pack",
+      "box": {
+        "x": 0.03636,
+        "y": 0.38182,
+        "width": 0.39545,
+        "height": 0.47273
+      }
+    },
+    {
+      "shop": "electronics",
+      "frame": "iphone4-stage",
+      "target": "iphone-13-pro",
+      "box": null
+    },
+    {
+      "shop": "kitchen",
+      "frame": "empty-with-speech",
+      "target": "counter-blender",
+      "box": null
+    },
+    {
+      "shop": "fashion",
+      "frame": "outside-plaid-dress",
+      "target": "gingham",
+      "box": null
+    },
+    {
+      "shop": "kitchen",
+      "frame": "shallow-pan-holdout",
+      "target": "wok",
+      "box": null
+    }
+  ]
+}

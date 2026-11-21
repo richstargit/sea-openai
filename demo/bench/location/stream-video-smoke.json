@@ -1,0 +1,83 @@
+{
+  "url": "http://127.0.0.1:3030/detect",
+  "video": "two-products-sample.mp4",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "model": {
+    "match": "gpt-6-luna",
+    "locator": "gpt-6.2-astra"
+  },
+  "cases": [
+    {
+      "time_seconds": 1,
+      "expected_id": "kit-countertop-blender",
+      "http_status": 200,
+      "event_order": [
+        "match",
+        "location"
+      ],
+      "id": "kit-countertop-blender",
+      "name": "เครื่องปั่นแบบตั้งโต๊ะ",
+      "confidence": 0.99,
+      "match_ms": 2375,
+      "total_ms": 5672,
+      "localization_status": "found",
+      "bbox": {
+        "x": 0.148,
+        "y": 0.213,
+        "width": 0.197,
+        "height": 0.621
+      },
+      "bbox_half": "left",
+      "ui": {
+        "match": {
+          "at_ms": 2437,
+          "name": "เครื่องปั่นแบบตั้งโต๊ะ",
+          "bbox_hidden": true,
+          "ui_latency": "ผลสินค้า 2375 ms"
+        },
+        "bbox": {
+          "at_ms": 5724,
+          "ui_latency": "ผลสินค้า 2375 ms · รวม 5672 ms"
+        }
+      }
+    },
+    {
+      "time_seconds": 3,
+      "expected_id": "kit-electric-cooktop",
+      "http_status": 200,
+      "event_order": [
+        "match",
+        "location"
+      ],
+      "id": "kit-electric-cooktop",
+      "name": "เตาไฟฟ้าหน้าเรียบ",
+      "confidence": 0.96,
+      "match_ms": 356,
+      "total_ms": 3669,
+      "localization_status": "found",
+      "bbox": {
+        "x": 0.488,
+        "y": 0.331,
+        "width": 0.424,
+        "height": 0.468
+      },
+      "bbox_half": "right",
+      "ui": {
+        "match": {
+          "at_ms": 375,
+          "name": "เตาไฟฟ้าหน้าเรียบ",
+          "bbox_hidden": true,
+          "ui_latency": "ผลสินค้า 356 ms"
+        },
+        "bbox": {
+          "at_ms": 3687,
+          "ui_latency": "ผลสินค้า 356 ms · รวม 3669 ms"
+        }
+      }
+    }
+  ],
+  "browser_errors": []
+}

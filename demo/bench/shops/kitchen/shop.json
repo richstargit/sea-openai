@@ -1,0 +1,168 @@
+{
+  "name": "ร้านเครื่องครัวบ้านอิ่ม",
+  "products": [
+    {
+      "id": "counter-blender",
+      "name": "เครื่องปั่นแบบตั้งโต๊ะ",
+      "price": 990,
+      "description": "โถทรงสูงใสมีหูจับ ฝาดำ ฐานตั้งสีเงินมีปุ่มหมุนขอบสีน้ำเงิน",
+      "images": [
+        "refs/counter-blender-1.jpg",
+        "refs/counter-blender-2.jpg"
+      ]
+    },
+    {
+      "id": "cooktop",
+      "name": "เตาไฟฟ้าหน้าเรียบ",
+      "price": 1490,
+      "description": "แผ่นสี่เหลี่ยมสีดำแบน มีวงเตาบนผิวหน้าและปุ่มหมุนเรียงที่ขอบด้านหนึ่ง",
+      "images": [
+        "refs/cooktop-1.jpg",
+        "refs/cooktop-2.jpg"
+      ]
+    },
+    {
+      "id": "mug-rack",
+      "name": "ราวแขวนแก้วตั้งโต๊ะ",
+      "price": 179,
+      "description": "โครงลวดสีเข้มตั้งตรง ตะขอโค้งยื่นซ้ายขวาหลายระดับ ฐานเป็นลวดดัด",
+      "images": [
+        "refs/mug-rack-1.jpg"
+      ]
+    },
+    {
+      "id": "hand-blender",
+      "name": "เครื่องปั่นมือถือ",
+      "price": 550,
+      "description": "ด้ามจับสีแดงต่อก้านโลหะเรียวยาว มีหัวปั่นทรงระฆังที่ปลาย",
+      "images": [
+        "refs/hand-blender-1.jpg"
+      ]
+    },
+    {
+      "id": "wok",
+      "name": "กระทะก้นลึกด้ามไม้",
+      "price": 490,
+      "description": "กระทะทรงชามลึก ตัวกระทะสีเงิน ด้ามยาวสีไม้และหูสั้นอีกด้านหนึ่ง",
+      "images": [
+        "refs/wok-1.jpg"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "id": "counter-blender-holdout",
+      "label": "counter-blender",
+      "image": "frames/counter-blender-4.jpg",
+      "text": "สังเกตหูจับฝั่งนี้นะคะ เวลายกเทจะจับได้ถนัด",
+      "scene": "มุมเฉียงอีกด้านของตัวเครื่อง",
+      "held_up": false
+    },
+    {
+      "id": "cooktop-holdout",
+      "label": "cooktop",
+      "image": "frames/cooktop-4.jpg",
+      "text": "ปุ่มปรับจะเรียงอยู่ตรงขอบด้านหน้านะคะ",
+      "scene": "เห็นปุ่มและหน้าเตาจากมุมด้านข้าง",
+      "held_up": false
+    },
+    {
+      "id": "mug-rack-holdout",
+      "label": "mug-rack",
+      "image": "frames/mug-rack-2.jpg",
+      "text": "เดี๋ยวลองแขวนให้ดูว่าวางของได้กี่ชิ้นค่ะ",
+      "scene": "ราวอันเดิมแขวนแก้วสีแดงหลายใบ มีวัตถุรบกวน",
+      "held_up": false
+    },
+    {
+      "id": "shallow-pan-holdout",
+      "label": "none",
+      "image": "frames/shallow-pan-1.jpg",
+      "text": "ใบนี้เอาไว้ทอดไข่ค่ะ ลองดูขอบด้านข้างนะคะ",
+      "scene": "ของนอกคลังที่คล้ายกระทะก้นลึก มีขอบเตี้ยและด้ามโลหะ",
+      "held_up": false
+    },
+    {
+      "id": "wire-whisk-holdout",
+      "label": "none",
+      "image": "frames/wire-whisk-1.jpg",
+      "text": "ชิ้นนี้ใช้ตอนเตรียมส่วนผสมค่ะ",
+      "scene": "อุปกรณ์ครัวนอกคลัง",
+      "held_up": false
+    }
+  ],
+  "sources": [
+    {
+      "file": "frames/wire-whisk-1.jpg",
+      "url": "https://cdn.dummyjson.com/product-images/kitchen-accessories/black-whisk/1.webp",
+      "product": "Black Whisk",
+      "productUrl": "https://dummyjson.com/products/50"
+    },
+    {
+      "file": "refs/counter-blender-1.jpg",
+      "url": "https://cdn.dummyjson.com/product-images/kitchen-accessories/boxed-blender/1.webp",
+      "product": "Boxed Blender",
+      "productUrl": "https://dummyjson.com/products/51"
+    },
+    {
+      "file": "refs/counter-blender-2.jpg",
+      "url": "https://cdn.dummyjson.com/product-images/kitchen-accessories/boxed-blender/2.webp",
+      "product": "Boxed Blender",
+      "productUrl": "https://dummyjson.com/products/51"
+    },
+    {
+      "file": "frames/counter-blender-4.jpg",
+      "url": "https://cdn.dummyjson.com/product-images/kitchen-accessories/boxed-blender/4.webp",
+      "product": "Boxed Blender",
+      "productUrl": "https://dummyjson.com/products/51"
+    },
+    {
+      "file": "refs/wok-1.jpg",
+      "url": "https://cdn.dummyjson.com/product-images/kitchen-accessories/carbon-steel-wok/1.webp",
+      "product": "Carbon Steel Wok",
+      "productUrl": "https://dummyjson.com/products/52"
+    },
+    {
+      "file": "refs/cooktop-1.jpg",
+      "url": "https://cdn.dummyjson.com/product-images/kitchen-accessories/electric-stove/1.webp",
+      "product": "Electric Stove",
+      "productUrl": "https://dummyjson.com/products/56"
+    },
+    {
+      "file": "refs/cooktop-2.jpg",
+      "url": "https://cdn.dummyjson.com/product-images/kitchen-accessories/electric-stove/2.webp",
+      "product": "Electric Stove",
+      "productUrl": "https://dummyjson.com/products/56"
+    },
+    {
+      "file": "frames/cooktop-4.jpg",
+      "url": "https://cdn.dummyjson.com/product-images/kitchen-accessories/electric-stove/4.webp",
+      "product": "Electric Stove",
+      "productUrl": "https://dummyjson.com/products/56"
+    },
+    {
+      "file": "refs/hand-blender-1.jpg",
+      "url": "https://cdn.dummyjson.com/product-images/kitchen-accessories/hand-blender/1.webp",
+      "product": "Hand Blender",
+      "productUrl": "https://dummyjson.com/products/61"
+    },
+    {
+      "file": "refs/mug-rack-1.jpg",
+      "url": "https://cdn.dummyjson.com/product-images/kitchen-accessories/mug-tree-stand/1.webp",
+      "product": "Mug Tree Stand",
+      "productUrl": "https://dummyjson.com/products/67"
+    },
+    {
+      "file": "frames/mug-rack-2.jpg",
+      "url": "https://cdn.dummyjson.com/product-images/kitchen-accessories/mug-tree-stand/2.webp",
+      "product": "Mug Tree Stand",
+      "productUrl": "https://dummyjson.com/products/67"
+    },
+    {
+      "file": "frames/shallow-pan-1.jpg",
+      "url": "https://cdn.dummyjson.com/product-images/kitchen-accessories/pan/1.webp",
+      "product": "Pan",
+      "productUrl": "https://dummyjson.com/products/68"
+    }
+  ]
+}
