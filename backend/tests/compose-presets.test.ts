@@ -9,7 +9,10 @@ import {
   chooseFraming,
   containRect,
   coverVisibleShare,
+  framedRect,
+  limitZoom,
   MAX_CONTAIN_ZOOM,
+  MIN_SUBJECT_BAND,
   MIN_VISIBLE_SHARE,
   sourceRect,
 } from '@/services/compose/camera.js'
@@ -345,6 +348,70 @@ describe('photo framing per shape', () => {
         expect(whole.dy + whole.dh).toBeLessThanOrEqual(view.height + 1e-6)
       }
     }
+  })
+
+  it('keeps the middle of the photo on screen where the frame already crops', () => {
+    const zooms = [1, 1.3, 1.7, 3]
+    const spots = [0, 0.15, 0.3, 0.5, 0.7, 0.85, 1]
+    const band = (1 - MIN_SUBJECT_BAND) / 2
+    let checked = 0
+    for (const aspect of ['4:5', '1:1', '16:9'] as const) {
+      const view = {
+        width: PRESETS[aspect].width,
+        height: PRESETS[aspect].height,
+      }
+      const anchor = { x: 0.5, y: PRESETS[aspect].subjectY }
+      for (const photo of Object.values(photos)) {
+        if (chooseFraming(PRESETS[aspect].fit, photo, view) !== 'cover')
+          continue
+        for (const zoom of zooms) {
+          // The zoom never goes up, and never goes below one.
+          const capped = limitZoom({ x: 0.5, y: 0.5, zoom }, photo, view)
+          expect(capped.zoom).toBeGreaterThanOrEqual(1)
+          expect(capped.zoom).toBeLessThanOrEqual(Math.max(1, zoom))
+          for (const x of spots) {
+            for (const y of spots) {
+              const r = framedRect({ x, y, zoom }, photo, view, anchor)
+              // One scale on both axes, and a crop that stays inside the photo.
+              expect(r.sw / r.sh).toBeCloseTo(view.width / view.height, 6)
+              expect(r.sx).toBeGreaterThanOrEqual(-1e-6)
+              expect(r.sy).toBeGreaterThanOrEqual(-1e-6)
+              expect(r.sx + r.sw).toBeLessThanOrEqual(photo.width + 1e-6)
+              expect(r.sy + r.sh).toBeLessThanOrEqual(photo.height + 1e-6)
+              // The middle 60 percent of the photo is on screen on both axes.
+              expect(r.sx).toBeLessThanOrEqual(band * photo.width + 1e-6)
+              expect(r.sx + r.sw).toBeGreaterThanOrEqual(
+                (1 - band) * photo.width - 1e-6,
+              )
+              expect(r.sy).toBeLessThanOrEqual(band * photo.height + 1e-6)
+              expect(r.sy + r.sh).toBeGreaterThanOrEqual(
+                (1 - band) * photo.height - 1e-6,
+              )
+              checked++
+            }
+          }
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(200)
+    // A tall photo in a 4:5 frame may zoom only a little (it already shows 70 percent of its height).
+    const feed = { width: 1080, height: 1350 }
+    expect(
+      limitZoom(
+        { x: 0.5, y: 0.5, zoom: 1.7 },
+        photos.portrait916 as never,
+        feed,
+      ).zoom,
+    ).toBeCloseTo(1.17, 2)
+    // 9:16 does not use any of this: its camera is the original one.
+    const phone = { width: 1080, height: 1920 }
+    const own = sourceRect(
+      { x: 0.5, y: 0.62, zoom: 1.35 },
+      photos.portrait916 as never,
+      phone,
+      { x: 0.5, y: 0.4 },
+    )
+    expect(own.sw).toBeLessThan((photos.portrait916 as { width: number }).width)
   })
 
   it('enlarges a tall photo far less in a wide frame than a cover crop would', () => {

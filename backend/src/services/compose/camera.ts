@@ -60,6 +60,61 @@ export function coverVisibleShare(
  */
 export const MIN_VISIBLE_SHARE = 0.6
 
+/**
+ * In a frame that already crops the photo, a zoom and a camera move on top
+ * of that can cut the product apart. The middle 60 percent of the photo
+ * (where a product photo keeps its subject) stays on screen on both axes
+ * for as long as the crop window allows it, and the zoom is capped so that
+ * it always does. 9:16 keeps its original camera and does not use this.
+ */
+export const MIN_SUBJECT_BAND = 0.6
+
+/** The share of the photo's width and height that a cover crop shows at zoom one. */
+function windowShare(
+  image: { width: number; height: number },
+  view: { width: number; height: number },
+): { x: number; y: number } {
+  const cover = Math.max(view.width / image.width, view.height / image.height)
+  return {
+    x: Math.min(1, view.width / cover / image.width),
+    y: Math.min(1, view.height / cover / image.height),
+  }
+}
+
+export function limitZoom(
+  focus: Focus,
+  image: { width: number; height: number },
+  view: { width: number; height: number },
+): Focus {
+  const share = windowShare(image, view)
+  const room = Math.min(share.x, share.y) / MIN_SUBJECT_BAND
+  return { ...focus, zoom: Math.min(focus.zoom, Math.max(1, room)) }
+}
+
+/** `sourceRect` for a shape that already crops: capped zoom, subject band kept on screen. */
+export function framedRect(
+  focus: Focus,
+  image: { width: number; height: number },
+  view: { width: number; height: number },
+  anchor: { x: number; y: number } = { x: 0.5, y: 0.5 },
+): { sx: number; sy: number; sw: number; sh: number } {
+  const r = sourceRect(limitZoom(focus, image, view), image, view, anchor)
+  const lo = (1 - MIN_SUBJECT_BAND) / 2
+  const hi = 1 - lo
+  const place = (start: number, size: number, total: number) => {
+    const keep =
+      size >= MIN_SUBJECT_BAND * total - 1e-6
+        ? Math.min(Math.max(start, hi * total - size), lo * total)
+        : total / 2 - size / 2
+    return Math.min(Math.max(keep, 0), total - size)
+  }
+  return {
+    ...r,
+    sx: place(r.sx, r.sw, image.width),
+    sy: place(r.sy, r.sh, image.height),
+  }
+}
+
 export type Framing = 'cover' | 'contain'
 
 /** `cover` always fills the frame. `auto` falls back to `contain` when cover would lose too much. */
