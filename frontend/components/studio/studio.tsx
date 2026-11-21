@@ -1,10 +1,12 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { createDemoProject } from "@/lib/editor/demo";
 import { useLanguage } from "@/components/language-provider";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { Camera, Check, Download, ImagePlus, Plus, RotateCcw, X } from "lucide-react";
+import { Camera, Check, Scissors, ImagePlus, Plus, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -41,6 +43,10 @@ const STAGE_MS = 1300;
 export function Studio() {
   const { t } = useLanguage();
   const reduce = useReducedMotion();
+  const router = useRouter();
+  const [activeVersion, setActiveVersion] = useState("A");
+  const [openingEditor, setOpeningEditor] = useState(false);
+  const [editorError, setEditorError] = useState("");
   const [step, setStep] = useState<Step>("photos");
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [kind, setKind] = useState<ProductKind>("food");
@@ -360,7 +366,7 @@ export function Studio() {
               <VideoFormatPicker value={size} onChange={setSize} onValidityChange={setValidSize} />
             </div>
 
-            <Tabs defaultValue="A" className="mt-8">
+            <Tabs value={activeVersion} onValueChange={setActiveVersion} className="mt-8">
               <TabsList className="w-full" aria-label={t("เวอร์ชันของคลิป")}>
                 {versions.map((v) => (
                   <TabsTrigger key={v.id} value={v.id}>
@@ -393,8 +399,16 @@ export function Studio() {
               {t(" เวลาข้างบนเป็นการจำลองหน้าจอ ตัวเลขจริงจะวัดเมื่อเชื่อมระบบสร้างวิดีโอแล้ว ")}</p>
 
             <div className="mt-8 flex flex-col gap-3">
-              <Button size="lg" disabled className="w-full">
-                <Download /> {t(" ดาวน์โหลดคลิป (เร็ว ๆ นี้) ")}</Button>
+              <Button size="lg" disabled={openingEditor || !validSize} className="w-full" onClick={async () => {
+                setOpeningEditor(true); setEditorError("");
+                try {
+                  const version = versions.find((item) => item.id === activeVersion) || versions[0];
+                  const result = await createDemoProject({ image: cover || `/editor/${kind}.svg`, title: t(version.line), caption: t(theme.selling), size, name: `${t(theme.name)} · ${version.id}` });
+                  router.push(`/editor?project=${result.project.id}`);
+                } catch { setEditorError(t("เปิดห้องตัดต่อไม่สำเร็จ กรุณาตรวจพื้นที่จัดเก็บของเบราว์เซอร์แล้วลองอีกครั้ง")); setOpeningEditor(false); }
+              }}>
+                <Scissors /> {t(openingEditor ? "กำลังเปิดห้องตัดต่อ" : "เปิดในห้องตัดต่อ")}</Button>
+              {editorError && <p role="alert" className="text-sm text-destructive">{editorError}</p>}
               <Button variant="secondary" size="lg" className="w-full" onClick={reset}>
                 <RotateCcw /> {t(" ทำสินค้าชิ้นใหม่ ")}</Button>
             </div>
