@@ -23,6 +23,9 @@ export function liveScriptConfig() {
     /** Only the last minute of speech is used to decide what the seller is talking about. */
     windowMs: 60_000,
     /** The most one suggestion may take before the playbook answers instead. */
-    suggestTimeoutMs: positiveInt(process.env.LIVE_SCRIPT_SUGGEST_TIMEOUT_MS, 5000),
+    suggestTimeoutMs: positiveInt(
+      process.env.LIVE_SCRIPT_SUGGEST_TIMEOUT_MS,
+      5000,
+    ),
   }
 }

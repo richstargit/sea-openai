@@ -1,7 +1,5 @@
 import { readdir, rename, rm, stat } from 'node:fs/promises'
 import path from 'node:path'
-import { type SaleFormat, saleFormatGuide } from '@/services/video/sale-formats.js'
-
 import { hookMachineConfig } from '@/config/hook-machine.config.js'
 import { type Aspect, DEFAULT_ASPECT } from '@/services/compose/presets.js'
 import { aiIsMocked } from '@/services/hook-machine/ai.js'
@@ -25,6 +23,10 @@ import { spokenLines } from '@/services/hook-machine/voice/job.js'
 import { speechProvider } from '@/services/hook-machine/voice/provider.js'
 import { suggestStyles } from '@/services/hook-machine/voice/suggest.js'
 import { logger } from '@/services/logger.service.js'
+import {
+  type SaleFormat,
+  saleFormatGuide,
+} from '@/services/video/sale-formats.js'
 import {
   composer,
   placeholderImage,
@@ -187,7 +189,9 @@ export async function startVideoJob(params: StartParams): Promise<VideoDoc> {
       mock,
       language: params.profile.language,
       input: {
-        notes: [params.brief, saleFormatGuide(params.saleFormat)].filter(Boolean).join('\n\n'),
+        notes: [params.brief, saleFormatGuide(params.saleFormat)]
+          .filter(Boolean)
+          .join('\n\n'),
         productUrl: params.productUrl,
         durationSec: params.durationSec,
         images: params.images,

@@ -430,6 +430,8 @@ function connect() {
       document.body.dataset.connected = 'true'
       return
     }
+    // lines for the seller's prompter page, never drawn on the program overlay
+    if (event.type === 'prompter') return
     if (event.type === 'spotlight') {
       spotlight(event)
       return

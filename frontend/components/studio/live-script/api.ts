@@ -58,7 +58,19 @@ export type Suggestion = {
 /** One piece of speech. `text` is everything said so far in this utterance, not just the newest words. */
 export type Utterance = { text: string; final: boolean; tsMs: number };
 
-export type TranscriptionCreds = { clientSecret: string; expiresAt: string | number; model: string; url: string };
+/**
+ * What the browser needs to open the live transcription: a short lived secret, where to connect, and the settings to
+ * send right after connecting (sent exactly as given, the browser does not make up its own).
+ */
+export type TranscriptionCreds = {
+  clientSecret: string;
+  expiresAt: string | number;
+  model: string;
+  url: string;
+  sessionUpdate?: Record<string, unknown>;
+  /** The browser cuts utterances itself (the model has no server side detection): how long a silence ends one. */
+  vad?: { silenceMs?: number };
+};
 export type SessionStart = { sessionId: string; transcription: TranscriptionCreds; prompterUrl?: string; showOnStream?: boolean };
 
 export type ReplyStatus = "answered" | "unknown" | "declined";
@@ -95,6 +107,10 @@ export const liveApi = {
     request<{ suggestion: Suggestion | null }>(`/sessions/${sessionId}/utterance`, json("POST", utterance)).then((r) => r.suggestion),
   stopSession: (sessionId: string) => request<unknown>(`/sessions/${sessionId}`, { method: "DELETE" }),
   setShowOnStream: (sessionId: string, showOnStream: boolean) => request<unknown>(`/sessions/${sessionId}`, json("PATCH", { showOnStream })),
+  /** A fresh secret, to replace the connection before its time limit or after it expired. */
+  refreshSecret: (sessionId: string) =>
+    request<{ transcription?: TranscriptionCreds } & Partial<TranscriptionCreds>>(`/sessions/${sessionId}/secret`, { method: "POST" })
+      .then((r) => (r.transcription ?? (r as TranscriptionCreds))),
 };
 
 // The latest show is remembered so a refresh picks it up again. Listening is never remembered: it needs a fresh click.

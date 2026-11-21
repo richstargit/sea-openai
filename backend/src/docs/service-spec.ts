@@ -5,6 +5,7 @@ import { buildDocument } from '@/docs/introspect.js'
 import healthRoutes from '@/routes/health.route.js'
 import hookMachineRoutes from '@/routes/hook-machine.route.js'
 import indexRoutes from '@/routes/index.js'
+import liveScriptRoutes from '@/routes/live-script.route.js'
 import videoJobRoutes from '@/routes/video-job.route.js'
 
 export function serviceSpec() {
@@ -16,6 +17,7 @@ export function serviceSpec() {
       { prefix: '/health', router: healthRoutes },
       { prefix: '/agent/hook-machine', router: hookMachineRoutes },
       { prefix: '/agent/hook-machine', router: videoJobRoutes },
+      { prefix: '/agent/live-script', router: liveScriptRoutes },
     ],
     title: service.name,
     version: service.version,

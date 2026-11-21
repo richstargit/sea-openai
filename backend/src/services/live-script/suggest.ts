@@ -5,8 +5,8 @@ import {
   cleanSpoken,
   mentionsBrand,
   type Offer,
-  similarity,
   SIMILARITY_LIMIT,
+  similarity,
   unsupportedNumbers,
   urgencyViolation,
 } from '@/services/live-script/checks.js'
@@ -22,9 +22,9 @@ import {
 } from '@/services/live-script/generate.js'
 import { SPOKEN_RULES } from '@/services/live-script/rubric.js'
 import type {
+  LiveShowDoc,
   Playbook,
   SegmentCue,
-  LiveShowDoc,
 } from '@/services/live-script/types.js'
 
 /** One thing to show the seller. */
@@ -108,7 +108,8 @@ export function candidatesFor(
       : null
   const quoted = (): string[] => {
     const out: string[] = []
-    if (offer.price.trim()) out.push(`${PRICE_WORD[language]} ${offer.price.trim()}`)
+    if (offer.price.trim())
+      out.push(`${PRICE_WORD[language]} ${offer.price.trim()}`)
     if (offer.promotion.trim()) out.push(offer.promotion.trim())
     if (offer.stock.trim()) out.push(offer.stock.trim())
     if (offer.endsAt.trim()) out.push(offer.endsAt.trim())
@@ -131,12 +132,17 @@ export function candidatesFor(
       break
     case 'price':
       list = [
-        ...(offer.price.trim() ? [`${PRICE_WORD[language]} ${offer.price.trim()}`] : []),
+        ...(offer.price.trim()
+          ? [`${PRICE_WORD[language]} ${offer.price.trim()}`]
+          : []),
         ...pitchLines(playbook, ['offer', 'cta'], null),
       ]
       break
     case 'offer':
-      list = [...quoted().slice(1), ...pitchLines(playbook, ['offer', 'cta'], null)]
+      list = [
+        ...quoted().slice(1),
+        ...pitchLines(playbook, ['offer', 'cta'], null),
+      ]
       break
     case 'objection': {
       const ranked = [...playbook.objections].sort(
@@ -190,7 +196,8 @@ export function freshLines(
   const out: string[] = []
   for (const line of lines) {
     const seen = [...avoid, ...out]
-    if (seen.some((other) => similarity(line, other) >= SIMILARITY_LIMIT)) continue
+    if (seen.some((other) => similarity(line, other) >= SIMILARITY_LIMIT))
+      continue
     out.push(line)
     if (out.length >= limit) break
   }
@@ -209,7 +216,8 @@ export function cueFor(
     case 'price':
       return offer.price.trim() ? 'price' : null
     case 'offer':
-      if (offer.promotion.trim()) return has('gift') && !has('promo') ? 'gift' : 'promo'
+      if (offer.promotion.trim())
+        return has('gift') && !has('promo') ? 'gift' : 'promo'
       return offer.stock.trim() || offer.endsAt.trim() ? 'flash' : null
     case 'features':
     case 'demo':
@@ -226,7 +234,8 @@ const WARNINGS: Record<Lang, { risk: string; unsupported: string }> = {
   },
   en: {
     risk: 'That sounded exaggerated. Say only what you can back up.',
-    unsupported: 'That does not match the product facts you gave. Check before you continue.',
+    unsupported:
+      'That does not match the product facts you gave. Check before you continue.',
   },
 }
 

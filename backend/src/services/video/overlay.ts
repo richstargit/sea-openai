@@ -62,6 +62,17 @@ export const overlayEvent = z.discriminatedUnion('type', [
     style,
   }),
   z.object({ type: z.literal('clip'), fileId: z.uuid() }),
+  // Lines for the seller to read while live (the live script prompter). The program
+  // overlay ignores it; the prompter page shows it. Kept small: a few short lines.
+  z.object({
+    type: z.literal('prompter'),
+    payload: z.object({
+      lines: z.array(z.string().trim().min(1).max(160)).min(1).max(3),
+      stage: z.string().max(24),
+      warning: z.string().max(160).optional(),
+    }),
+    ttl,
+  }),
   z.object({
     type: z.literal('graphic'),
     preset: z.string().regex(/^[a-z0-9-]{1,48}$/),

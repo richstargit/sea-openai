@@ -1,0 +1,29 @@
+/* The seller's own view: add it in OBS as a separate Browser Source or Custom Browser Dock.
+   It is not the program overlay, so viewers never see it. */
+* { box-sizing: border-box }
+html, body { height: 100% }
+body {
+  margin: 0;
+  background: #14130f;
+  color: #f7f4ec;
+  font-family: "Sukhumvit Set", "IBM Plex Sans Thai", "Noto Sans Thai", "Leelawadee UI", system-ui, sans-serif;
+}
+#prompter { min-height: 100%; display: flex; flex-direction: column; gap: 1.2rem; padding: clamp(1rem, 4vw, 2.5rem) }
+header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; font-size: clamp(.9rem, 2.2vw, 1.15rem); color: #b9b3a3 }
+#stage { font-weight: 650; color: #ffb066 }
+#link::before { content: ""; display: inline-block; width: .6em; height: .6em; margin-right: .5em; border-radius: 50%; background: #8a8472 }
+body[data-connected] #link::before { background: #5fc98a }
+#warning {
+  margin: 0; padding: .9rem 1.1rem; border-radius: 14px; background: #5b1c14; color: #ffd9d3;
+  font-size: clamp(1.05rem, 3vw, 1.5rem); font-weight: 600; line-height: 1.45;
+}
+#warning[data-level=unsupported] { background: #4f3b0d; color: #ffe9b0 }
+#lines { margin: 0; padding: 0; list-style: none; display: grid; gap: 1.1rem }
+#lines li { font-size: clamp(1.6rem, 6vw, 3.4rem); font-weight: 650; line-height: 1.4; letter-spacing: -.01em; text-wrap: balance }
+#lines li:nth-child(n+2) { color: #d8d2c0; font-weight: 600 }
+#idle { margin: auto 0; font-size: clamp(1.1rem, 3vw, 1.6rem); line-height: 1.6; color: #a79f8c; text-align: center }
+#prompter:not([data-state=idle]) #idle { display: none }
+#prompter[data-state=idle] #lines { display: none }
+#lines li, #warning { animation: arrive .22s ease-out }
+@keyframes arrive { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
+@media (prefers-reduced-motion: reduce) { #lines li, #warning { animation: none } }

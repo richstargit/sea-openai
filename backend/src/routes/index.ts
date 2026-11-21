@@ -45,6 +45,7 @@ import {
 } from '@/middlewares/rate-limit.middleware.js'
 import healthRoutes from '@/routes/health.route.js'
 import hookMachineRoutes from '@/routes/hook-machine.route.js'
+import liveScriptRoutes from '@/routes/live-script.route.js'
 import videoJobRoutes from '@/routes/video-job.route.js'
 import { FILE_LIMIT } from '@/services/agent-tools/files.js'
 import { editorExport, editorPreview } from '@/services/video/editor-export.js'
@@ -78,6 +79,7 @@ router.get('/agent/hyperframes/gsap.js', (_req, res) =>
 )
 router.use('/agent/hook-machine', hookMachineRoutes)
 router.use('/agent/hook-machine', videoJobRoutes)
+router.use('/agent/live-script', liveScriptRoutes)
 router.use('/agent/editor', editorSession)
 router.post('/agent/editor/projects/:id/edits', proposeEditorEdit)
 router.post('/agent/editor/preview', editorPreview)

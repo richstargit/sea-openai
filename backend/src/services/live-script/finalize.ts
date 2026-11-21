@@ -118,9 +118,7 @@ function hookPasses(
   if (!ctx.hookContext) return true
   const { hard } = checkHook(text, ctx.hookContext)
   if (hard) {
-    report.add(
-      'ตัดฮุกเปิดไลฟ์ที่มีคำเกริ่นเปล่า จุดกลางประโยค ยาวเกินไป หรือเอ่ยแบรนด์อื่น',
-    )
+    report.add('ตัดฮุกเปิดไลฟ์ที่มีคำเกริ่นเปล่า จุดกลางประโยค ยาวเกินไป หรือเอ่ยแบรนด์อื่น')
   }
   return !hard
 }

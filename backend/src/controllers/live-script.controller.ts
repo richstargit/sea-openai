@@ -11,23 +11,29 @@ import { aiConfigured, aiIsMocked } from '@/services/live-script/ai.js'
 import { styleContext } from '@/services/live-script/generate.js'
 import { LIVE_PRINCIPLES } from '@/services/live-script/rubric.js'
 import {
-  LIVE_LANGUAGES,
-  LIVE_MINUTES,
   MAX_COMMENT_CHARS,
+  MAX_UTTERANCE_CHARS,
   offerSchema,
   replyBody,
+  sessionBody,
+  utteranceBody,
 } from '@/services/live-script/schemas.js'
 import {
   deleteShow,
   listShowsFor,
+  PROMPTER_PATH,
+  refreshSecret,
   replyFor,
   ShowBusyError,
   showFor,
+  startListening,
   startShow,
+  stopListening,
   toShow,
+  utteranceFor,
 } from '@/services/live-script/service.js'
 
-export { replyBody }
+export { replyBody, sessionBody, utteranceBody }
 
 const KEY = 'so-live-script'
 
@@ -47,13 +53,6 @@ export const createShowBody = z.object({
     stock: '',
     endsAt: '',
   }),
-  minutes: z.union([
-    z.literal(LIVE_MINUTES[0]),
-    z.literal(LIVE_MINUTES[1]),
-    z.literal(LIVE_MINUTES[2]),
-    z.literal(LIVE_MINUTES[3]),
-  ]),
-  language: z.enum(LIVE_LANGUAGES).default('th'),
 })
 export type CreateShowBody = z.infer<typeof createShowBody>
 
@@ -62,10 +61,10 @@ export const options: RequestHandler = (_req, res) => {
     success: true,
     ai: aiConfigured(),
     mockAi: aiIsMocked(),
-    languages: LIVE_LANGUAGES,
-    minutes: LIVE_MINUTES,
     maxImages: 4,
     maxCommentChars: MAX_COMMENT_CHARS,
+    maxUtteranceChars: MAX_UTTERANCE_CHARS,
+    prompterPath: PROMPTER_PATH,
     principles: LIVE_PRINCIPLES,
   })
 }
@@ -113,7 +112,8 @@ export const createShow: RequestHandler = async (req, res) => {
   if (!aiConfigured()) {
     throw new AppError('SERVICE_UNAVAILABLE', {
       key: `${KEY}-no-ai`,
-      message: 'Set OPENAI_API_KEY (or HOOK_MACHINE_MOCK_AI=true for the demo).',
+      message:
+        'Set OPENAI_API_KEY (or HOOK_MACHINE_MOCK_AI=true for the demo).',
       messageTH: 'ตอนนี้ยังสร้างบทพูดไม่ได้ ระบบ AI ยังไม่พร้อม',
     })
   }
@@ -126,8 +126,6 @@ export const createShow: RequestHandler = async (req, res) => {
       images: body.images,
       productUrl,
       offer: body.offer,
-      minutes: body.minutes,
-      language: body.language,
     })
     res.status(202).json({ success: true, show: toShow(doc) })
   } catch (error) {
@@ -167,4 +165,53 @@ export const replyToComment: RequestHandler = async (req, res) => {
   const { comment } = replyBody.parse(req.body)
   const reply = await replyFor(uid(res), String(req.params.id), comment)
   res.json({ success: true, reply })
+}
+
+/* ------------------------------------------------------------------ sessions */
+
+const grantBody = (
+  grant: Awaited<ReturnType<typeof startListening>>['grant'],
+) => ({
+  clientSecret: grant.clientSecret,
+  expiresAt: grant.expiresAt,
+  model: grant.model,
+  url: grant.url,
+  sessionUpdate: grant.sessionUpdate,
+  vad: grant.vad,
+})
+
+export const startSessionHandler: RequestHandler = async (req, res) => {
+  const { showOnStream } = sessionBody.parse(req.body ?? {})
+  const { session, grant } = await startListening(
+    uid(res),
+    String(req.params.id),
+    showOnStream,
+  )
+  res.status(201).json({
+    success: true,
+    sessionId: session.id,
+    showOnStream,
+    prompterPath: PROMPTER_PATH,
+    transcription: grantBody(grant),
+  })
+}
+
+export const refreshSecretHandler: RequestHandler = async (req, res) => {
+  const grant = await refreshSecret(uid(res), String(req.params.sessionId))
+  res.json({ success: true, transcription: grantBody(grant) })
+}
+
+export const utteranceHandler: RequestHandler = async (req, res) => {
+  const body = utteranceBody.parse(req.body)
+  const suggestion = await utteranceFor(
+    uid(res),
+    String(req.params.sessionId),
+    body,
+  )
+  res.json({ success: true, suggestion })
+}
+
+export const endSessionHandler: RequestHandler = (req, res) => {
+  stopListening(uid(res), String(req.params.sessionId))
+  res.json({ success: true })
 }

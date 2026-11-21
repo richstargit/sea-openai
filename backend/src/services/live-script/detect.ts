@@ -121,7 +121,9 @@ export function classifyHeuristic(input: DetectInput): Detection {
     return words.some((w) => lower.includes(w))
   })
   const aboutProduct =
-    (name.length >= 3 && lower.includes(name)) || point >= 0 || stage !== 'unknown'
+    (name.length >= 3 && lower.includes(name)) ||
+    point >= 0 ||
+    stage !== 'unknown'
   if (stage === 'unknown' && aboutProduct) stage = 'features'
   const bad = unsupportedNumbers(text, input.allowed).length > 0
   return {
@@ -269,7 +271,9 @@ export function readDecision(
 
 /** The real call: the SDK resource when it has one, with no retries. */
 export const decideWithOpenAI: Decide = async (body, signal) => {
-  const client = sharedOpenAIClient().withOptions({ maxRetries: 0 }) as unknown as {
+  const client = sharedOpenAIClient().withOptions({
+    maxRetries: 0,
+  }) as unknown as {
     decisions?: {
       create: (
         body: Record<string, unknown>,

@@ -1,6 +1,7 @@
 import { AppError } from '@/services/error.service.js'
 import { aiConfigured, aiIsMocked } from '@/services/live-script/ai.js'
 import type { Offer } from '@/services/live-script/checks.js'
+import { liveScriptConfig } from '@/services/live-script/config.js'
 import { classifyError, ShowError } from '@/services/live-script/errors.js'
 import {
   Cancelled,
@@ -9,7 +10,15 @@ import {
   type StyleContext,
 } from '@/services/live-script/generate.js'
 import { liveReply } from '@/services/live-script/reply.js'
-import { liveScriptConfig } from '@/services/live-script/config.js'
+import {
+  endSession,
+  ownedSession,
+  type Session,
+  startSession,
+  submitUtterance,
+  type Utterance,
+  type UtteranceDeps,
+} from '@/services/live-script/session.js'
 import {
   activeShowCount,
   createShow,
@@ -23,6 +32,14 @@ import {
   readOwnedShow,
   updateShow,
 } from '@/services/live-script/store.js'
+import type { Suggestion } from '@/services/live-script/suggest.js'
+import {
+  cleanKeywords,
+  defaultMint,
+  type MintSecret,
+  type TranscriptionGrant,
+  TranscriptionUnavailable,
+} from '@/services/live-script/transcription.js'
 import {
   type LiveReply,
   type LiveShowDoc,
@@ -212,9 +229,92 @@ export async function replyFor(
   if (!aiConfigured()) {
     throw new AppError('SERVICE_UNAVAILABLE', {
       key: `${KEY}-no-ai`,
-      message: 'Set OPENAI_API_KEY (or HOOK_MACHINE_MOCK_AI=true for the demo).',
+      message:
+        'Set OPENAI_API_KEY (or HOOK_MACHINE_MOCK_AI=true for the demo).',
       messageTH: 'ตอนนี้ยังตอบคอมเมนต์ไม่ได้ ระบบ AI ยังไม่พร้อม',
     })
   }
   return liveReply(show, comment)
+}
+
+/* ------------------------------------------------------------------ sessions */
+
+export const PROMPTER_PATH = '/overlay/prompter.html'
+
+function listenUnavailable(): AppError {
+  return new AppError('SERVICE_UNAVAILABLE', {
+    key: `${KEY}-transcription-unavailable`,
+    message: 'Live speech to text could not be started.',
+    messageTH: 'ตอนนี้เริ่มฟังเสียงไม่ได้ ลองใหม่อีกครั้งในอีกสักครู่',
+  })
+}
+
+const keywordsFor = (session: Session) =>
+  cleanKeywords([session.ctx.productName, session.ctx.style?.name])
+
+/**
+ * Starts a listening session for a finished playbook and mints the short
+ * lived secret the browser uses to open its speech to text socket.
+ */
+export async function startListening(
+  ownerId: string,
+  showId: string,
+  showOnStream: boolean,
+  mint: MintSecret = defaultMint(),
+): Promise<{ session: Session; grant: TranscriptionGrant }> {
+  const show = await showFor(ownerId, showId)
+  if (show.status !== 'ready' || !show.playbook) {
+    throw new AppError('BAD_REQUEST', {
+      key: `${KEY}-not-ready`,
+      message: 'The playbook is not ready yet.',
+      messageTH: 'บทพูดยังไม่เสร็จ รอสักครู่',
+    })
+  }
+  const session = startSession({ ownerId, show, showOnStream })
+  if (!session) throw notFound('playbook')
+  try {
+    const grant = await mint({
+      userId: ownerId,
+      keywords: keywordsFor(session),
+    })
+    return { session, grant }
+  } catch (error) {
+    endSession(ownerId, session.id)
+    if (error instanceof TranscriptionUnavailable) throw listenUnavailable()
+    throw error
+  }
+}
+
+export function sessionOrThrow(ownerId: string, id: string): Session {
+  const session = ownedSession(ownerId, id)
+  if (!session) throw notFound('session')
+  return session
+}
+
+/** A new secret for a reconnect. A socket should be replaced before about 55 minutes. */
+export async function refreshSecret(
+  ownerId: string,
+  sessionId: string,
+  mint: MintSecret = defaultMint(),
+): Promise<TranscriptionGrant> {
+  const session = sessionOrThrow(ownerId, sessionId)
+  try {
+    return await mint({ userId: ownerId, keywords: keywordsFor(session) })
+  } catch (error) {
+    if (error instanceof TranscriptionUnavailable) throw listenUnavailable()
+    throw error
+  }
+}
+
+export function utteranceFor(
+  ownerId: string,
+  sessionId: string,
+  utterance: Utterance,
+  deps?: UtteranceDeps,
+): Promise<Suggestion | null> {
+  return submitUtterance(sessionOrThrow(ownerId, sessionId), utterance, deps)
+}
+
+export function stopListening(ownerId: string, sessionId: string): void {
+  if (!endSession(ownerId, sessionId)) throw notFound('session')
 }

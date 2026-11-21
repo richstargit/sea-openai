@@ -21,7 +21,10 @@ import {
   researchDigestSchema,
 } from '@/services/hook-machine/schemas.js'
 import { ratePerSecond } from '@/services/hook-machine/script-budget.js'
-import { digestInstructions, hookInstructions } from '@/services/hook-machine/script-prompts.js'
+import {
+  digestInstructions,
+  hookInstructions,
+} from '@/services/hook-machine/script-prompts.js'
 import type { Profile } from '@/services/hook-machine/types.js'
 import { aiIsMocked, ask } from '@/services/live-script/ai.js'
 import { engagementCount, rehookCount } from '@/services/live-script/checks.js'
@@ -31,9 +34,11 @@ import {
   segmentLengthWarning,
 } from '@/services/live-script/finalize.js'
 import { allowedFor, groundDigest } from '@/services/live-script/grounding.js'
-import { liveRubricPrompt, SPOKEN_RULES } from '@/services/live-script/rubric.js'
+import {
+  liveRubricPrompt,
+  SPOKEN_RULES,
+} from '@/services/live-script/rubric.js'
 import { liveShowSchema } from '@/services/live-script/schemas.js'
-import { logger } from '@/services/logger.service.js'
 import { updateShow } from '@/services/live-script/store.js'
 import {
   type Playbook,
@@ -46,6 +51,7 @@ import {
   dropFlagged,
   verifyClaims,
 } from '@/services/live-script/verify.js'
+import { logger } from '@/services/logger.service.js'
 
 const LANGUAGE_NAME = { th: 'Thai', en: 'English' } as const
 
@@ -272,7 +278,9 @@ objections: real questions viewers ask in the chat about this kind of product (p
   )
   const research = {
     ...grounded.digest,
-    sources: findings.filter((f) => f.url).map((f) => ({ title: f.title, url: f.url })),
+    sources: findings
+      .filter((f) => f.url)
+      .map((f) => ({ title: f.title, url: f.url })),
     warnings: [...gatherWarnings, ...grounded.warnings],
   }
   await updateShow(id, (d) => {
@@ -357,7 +365,8 @@ ${GROUNDING_RULES}`,
   const rate = ratePerSecond(doc.language)
   const low = Math.round(rate * 60)
   const high = Math.round(rate * 90)
-  const unit = doc.language === 'th' ? 'Thai characters (spaces not counted)' : 'words'
+  const unit =
+    doc.language === 'th' ? 'Thai characters (spaces not counted)' : 'words'
   const rawShow = await ask({
     name: 'live_show',
     schema: liveShowSchema,
@@ -398,7 +407,9 @@ ${SPOKEN_RULES}`,
   const warnings = [...opening.warnings, ...run.warnings]
   const openingList = () =>
     ordered.filter((h) =>
-      [...hooks.formatMatched, ...hooks.original].some((x) => x.text === h.text),
+      [...hooks.formatMatched, ...hooks.original].some(
+        (x) => x.text === h.text,
+      ),
     )
   await updateShow(id, (d) => {
     d.show = show
@@ -442,7 +453,12 @@ ${SPOKEN_RULES}`,
   }
   if (state.cancelled) throw new Cancelled()
 
-  const playbook = toPlaybook(hooks, show, openingList(), research.sellingPoints)
+  const playbook = toPlaybook(
+    hooks,
+    show,
+    openingList(),
+    research.sellingPoints,
+  )
   await updateShow(id, (d) => {
     d.hooks = hooks
     d.show = show
