@@ -8,6 +8,7 @@ import {
 import { useLanguage } from "@/components/language-provider";
 import { playOverlay, studioPost, studioRequest } from "@/components/studio/studio-api";
 import { useLiveDetection } from "@/lib/live-detect";
+import { type LiveSentence, useLiveSpeech } from "@/lib/live-speech";
 import { type Decision, type LiveProduct, type Segment, productImage } from "@/lib/live-plan";
 import { cuesFromSpeech, namesProduct } from "@/lib/live-cues";
 import type { StepProps } from "./live-studio";
@@ -29,16 +30,6 @@ type Mode = "obs" | "demo";
 type Status = "ok" | "warn" | "err" | "off";
 type Queued = { event: OverlayEvent; key: string; role: Role; text: string };
 
-// Web Speech API (Chrome ships it prefixed and TypeScript's DOM lib does not declare it)
-type SpeechEvent = { resultIndex: number; results: { length: number; [i: number]: { isFinal: boolean; 0: { transcript: string } } } };
-type Recognition = {
-  lang: string; continuous: boolean; interimResults: boolean; start(): void; abort(): void;
-  onresult: ((e: SpeechEvent) => void) | null; onend: (() => void) | null; onerror: ((e: { error: string }) => void) | null;
-};
-const speechCtor = () => {
-  const w = window as unknown as { SpeechRecognition?: new () => Recognition; webkitSpeechRecognition?: new () => Recognition };
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition;
-};
 
 const PREVIEW_SRC = "/overlay/index.html?preview=1#" + "a".repeat(43); // index.html: "/overlay/" gets a trailing-slash redirect from Next
 const MODE_KEY = "snappromo-live-mode";
@@ -101,7 +92,6 @@ function mulberry32(seed: number) {
   };
 }
 
-const REVIEWS = ["ใช้ดีมาก ซื้อซ้ำรอบที่ 2 แล้วค่ะ", "ส่งไว แพ็กมาดีมาก", "คุ้มราคาสุด ๆ", "ของตรงปก ชอบมากค่ะ"];
 const shortList = (items: string[]) => items.map((x) => x.trim()).filter(Boolean).map((x) => x.slice(0, 18)).slice(0, 3);
 
 const pad = (n: number) => String(Math.max(0, Math.floor(n))).padStart(2, "0");
@@ -132,9 +122,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   const [obsBusy, setObsBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [speech, setSpeech] = useState<"off" | "on" | "unsupported" | "error">("off");
   const [lines, setLines] = useState<string[]>([]);
-  const [interim, setInterim] = useState("");
   // director output
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [warning, setWarning] = useState<{ text: string; at: number } | null>(null);
@@ -152,7 +140,6 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   const detailsButton = useRef<HTMLButtonElement>(null);
   const detailsClose = useRef<HTMLButtonElement>(null);
   const liveRef = useRef(false);
-  const recRef = useRef<Recognition | null>(null);
   const finals = useRef<{ text: string; at: number }[]>([]);
   const queue = useRef<Queued[]>([]);
   const lastBig = useRef(0);
@@ -178,7 +165,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   const spoken = useRef<{ id: string; at: number } | null>(null);
   const lastMoment = useRef(0);
   const noneSince = useRef(0);
-  const latest = useRef<{ tick: () => void; speech: (e: SpeechEvent) => void; chat: () => number; decision: (d: Decision) => void; log: (role: Role, text: string, tone?: Tone) => void } | null>(null);
+  const latest = useRef<{ tick: () => void; sentence: (s: LiveSentence) => void; chat: () => number; decision: (d: Decision) => void; log: (role: Role, text: string, tone?: Tone) => void } | null>(null);
 
   // ---------- derived ----------
   const lineup = useMemo(() => plan.lineup.flatMap((item) => products.filter((p) => p.id === item.productId)), [plan.lineup, products]);
@@ -208,6 +195,13 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   const transcript = useCallback(() => finals.current.filter((f) => Date.now() - f.at < 10000).map((f) => f.text).join(" "), []);
   const handleDecision = useCallback((d: Decision) => latest.current?.decision(d), []);
   const detection = useLiveDetection({ video: videoRef, enabled: live, products: pool, transcript, current: current?.name ?? null, motions, onDecision: handleDecision });
+  const hearing = useLiveSpeech({
+    enabled: live, lang: plan.style.language === "en" ? "en" : "th",
+    products: pool.map((p) => ({ id: p.id, name: p.name, price: p.price })), current: current?.name ?? null,
+    onSentence: (sentence) => latest.current?.sentence(sentence),
+  });
+  const speech = ({ listening: "on", off: "off", unsupported: "unsupported", error: "error" } as const)[hearing.status];
+  const interim = hearing.interim;
   const box: Box | null = detection.box;
   const detectedName = products.find((p) => p.id === detection.product)?.name ?? detection.product ?? "";
 
@@ -230,7 +224,6 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   useEffect(() => {
     queueMicrotask(() => {
       try { const saved = localStorage.getItem(MODE_KEY); if (saved === "obs" || saved === "demo") setMode(saved); } catch { /* optional */ }
-      if (!speechCtor()) setSpeech("unsupported");
     });
   }, []);
   // camera: on as soon as the room opens. OBS mode prefers OBS Virtual Camera (the monitor shows what OBS has);
@@ -291,12 +284,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     return () => clearTimeout(timer);
   }, [live, mode]);
 
-  useEffect(() => () => {
-    liveRef.current = false;
-    const rec = recRef.current;
-    recRef.current = null;
-    rec?.abort();
-  }, []);
+  useEffect(() => () => { liveRef.current = false; }, []);
 
   // system details sheet: focus moves in on open; Escape closes it
   useEffect(() => {
@@ -411,47 +399,15 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   }
 
   // ---------- speech ----------
-  function startSpeech() {
-    const Ctor = speechCtor();
-    if (!Ctor) { setSpeech("unsupported"); log("ซับ", t("เบราว์เซอร์นี้ถอดเสียงไม่ได้ ใช้ Google Chrome"), "warn"); return; }
-    const rec = new Ctor();
-    let blocked = false;
-    rec.lang = plan.style.language === "en" ? "en-US" : "th-TH";
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.onresult = (e) => latest.current?.speech(e);
-    rec.onerror = (e) => {
-      if (!["not-allowed", "service-not-allowed", "audio-capture"].includes(e.error)) return;
-      blocked = true;
-      setSpeech("error");
-      latest.current?.log("ซับ", t("เปิดไมค์ไม่ได้") + ": " + e.error, "error");
-    };
-    rec.onend = () => {
-      if (blocked || !liveRef.current || recRef.current !== rec) return;
-      setTimeout(() => { if (liveRef.current && recRef.current === rec) try { rec.start(); } catch { /* already running */ } }, 250);
-    };
-    recRef.current = rec;
-    try { rec.start(); setSpeech("on"); } catch (error) { setSpeech("error"); log("ซับ", message(error), "error"); }
-  }
-  function stopSpeech() {
-    const rec = recRef.current;
-    recRef.current = null;
-    rec?.abort();
-    setSpeech((s) => (s === "unsupported" ? s : "off"));
-    setInterim("");
-  }
-  function onSpeech(e: SpeechEvent) {
-    let pending = "";
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      const result = e.results[i];
-      const text = result[0].transcript.trim();
-      if (!result.isFinal) { pending += result[0].transcript; continue; }
-      if (!text) continue;
-      finals.current = [...finals.current.filter((f) => Date.now() - f.at < 10000), { text, at: Date.now() }];
-      setLines((l) => [...l.slice(-7), text]);
-      onSentence(text);
-    }
-    setInterim(pending);
+  // useLiveSpeech: OpenAI transcription with the lineup as hints, then a correction pass that also names the product.
+  function onHeard(heard: LiveSentence) {
+    const text = (heard.corrected || heard.raw).trim();
+    if (!text) return;
+    finals.current = [...finals.current.filter((f) => Date.now() - f.at < 10000), { text, at: Date.now() }];
+    setLines((l) => [...l.slice(-7), text]);
+    if (heard.productId && pool.some((p) => p.id === heard.productId)) spoken.current = { id: heard.productId, at: Date.now() };
+    if (heard.source === "openai" && heard.corrected && heard.corrected !== heard.raw) log("ซับ", `${t("แก้คำที่ได้ยิน")}: ${heard.raw} → ${heard.corrected}`);
+    onSentence(text);
   }
   /** One finished sentence: cut to the motion that fits it, only showing a product that is really there or just named. */
   function onSentence(text: string) {
@@ -664,7 +620,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     return null;
   }
 
-  useEffect(() => { latest.current = { tick, speech: onSpeech, chat: chatStep, decision: onDecision, log }; });
+  useEffect(() => { latest.current = { tick, sentence: onHeard, chat: chatStep, decision: onDecision, log }; });
 
   // ---------- go live / end ----------
   function goLive() {
@@ -688,7 +644,6 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     if (cameraError) setCameraTry((n) => n + 1);
     if (mode === "demo") { setChat([]); setStock({}); setViewers(1240); sold.current = 0; lastCf.current = null; }
     // the sting and the theme go out now; chat and the show engine never wait for detection, AI or the mic
-    startSpeech();
     send({ type: "theme", payload: { accent: kit?.theme.accent ?? plan.style.accent, accent2: kit?.theme.accent2 ?? plan.style.accent2, font: plan.style.font || undefined } });
     log("ผู้กำกับ", t(mode === "demo" ? "เริ่มไลฟ์จำลอง ทุกคนประจำที่" : "ออนแอร์ ทุกคนประจำที่"), "action");
     const shop = plan.style.shop || "SnapPromo";
@@ -704,7 +659,6 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   function endLive() {
     liveRef.current = false;
     setLive(false); // also stops detection (enabled: live) and the demo chat
-    stopSpeech();
     queue.current = [];
     send({ type: "zoom_out" });
     log("ผู้กำกับ", t("จบไลฟ์") + " · " + timecode(elapsed), "action");
