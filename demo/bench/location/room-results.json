@@ -1,0 +1,581 @@
+{
+  "timestamp": "2026-11-21T07:12:12.311Z",
+  "catalog_size": 26,
+  "classification": "gpt-6-luna / choice / image only",
+  "protocol": "Classify against the demo catalog without names or captions in the frame input. Then ground the fixed target with each model, including on the empty-background control. Compare with annotations recorded before inference. The control has no injected item.",
+  "observations": [
+    {
+      "image": "public/examples/kitchen-room.jpg",
+      "expected_id": "kit-countertop-blender",
+      "location_target": "kit-countertop-blender",
+      "box": {
+        "x": 0.4674,
+        "y": 0.2705,
+        "width": 0.2363,
+        "height": 0.5869
+      },
+      "fingerprint": "4212ba3335260dd5535d7ad489e09b7cb630ab9d3acae318416ae49ef1b889c1",
+      "match": {
+        "product_id": "kit-countertop-blender",
+        "product_name": "เครื่องปั่นแบบตั้งโต๊ะ",
+        "confidence": 0.99,
+        "top3": [
+          {
+            "id": "kit-countertop-blender",
+            "name": "เครื่องปั่นแบบตั้งโต๊ะ",
+            "p": 0.99
+          },
+          {
+            "id": "2",
+            "name": "แก้วน้ำใส",
+            "p": 0.01
+          },
+          {
+            "id": "1",
+            "name": "แก้วน้ำดำ",
+            "p": 0
+          }
+        ],
+        "probabilities": [
+          {
+            "id": "kit-countertop-blender",
+            "name": "เครื่องปั่นแบบตั้งโต๊ะ",
+            "p": 0.99
+          },
+          {
+            "id": "2",
+            "name": "แก้วน้ำใส",
+            "p": 0.01
+          },
+          {
+            "id": "1",
+            "name": "แก้วน้ำดำ",
+            "p": 0
+          },
+          {
+            "id": "3",
+            "name": "ส้อมไม้",
+            "p": 0
+          },
+          {
+            "id": "kit-bamboo-spatula",
+            "name": "พายไม้ไผ่",
+            "p": 0
+          },
+          {
+            "id": "kit-wire-whisk",
+            "name": "ตะกร้อตีไข่ด้ามดำ",
+            "p": 0
+          },
+          {
+            "id": "kit-steel-wok",
+            "name": "กระทะก้นลึกด้ามไม้",
+            "p": 0
+          },
+          {
+            "id": "kit-wood-board",
+            "name": "เขียงไม้ทรงยาว",
+            "p": 0
+          },
+          {
+            "id": "kit-yellow-citrus-press",
+            "name": "ที่คั้นส้มสีเหลือง",
+            "p": 0
+          },
+          {
+            "id": "kit-egg-slicer",
+            "name": "ที่ตัดไข่สีเหลือง",
+            "p": 0
+          },
+          {
+            "id": "kit-electric-cooktop",
+            "name": "เตาไฟฟ้าหน้าเรียบ",
+            "p": 0
+          },
+          {
+            "id": "kit-wire-strainer",
+            "name": "กระชอนตาถี่ด้ามลวด",
+            "p": 0
+          },
+          {
+            "id": "kit-metal-fork",
+            "name": "ส้อมโลหะสีเงิน",
+            "p": 0
+          },
+          {
+            "id": "kit-box-grater",
+            "name": "ที่ขูดชีสทรงกล่อง",
+            "p": 0
+          },
+          {
+            "id": "kit-stick-blender",
+            "name": "เครื่องปั่นมือถือด้ามแดง",
+            "p": 0
+          },
+          {
+            "id": "kit-blue-ice-tray",
+            "name": "ถาดน้ำแข็งสีฟ้า",
+            "p": 0
+          },
+          {
+            "id": "kit-wood-grip-sieve",
+            "name": "กระชอนด้ามไม้",
+            "p": 0
+          },
+          {
+            "id": "kit-tiffin",
+            "name": "ปิ่นโตโลหะ",
+            "p": 0
+          },
+          {
+            "id": "kit-mug-rack",
+            "name": "ราวแขวนแก้วแบบตั้งโต๊ะ",
+            "p": 0
+          },
+          {
+            "id": "kit-frying-pan",
+            "name": "กระทะทอดสีดำ",
+            "p": 0
+          },
+          {
+            "id": "kit-red-tongs",
+            "name": "ที่คีบอาหารสีแดง",
+            "p": 0
+          },
+          {
+            "id": "kit-lidded-pot",
+            "name": "หม้อสองหูพร้อมฝาแก้ว",
+            "p": 0
+          },
+          {
+            "id": "kit-slotted-turner",
+            "name": "ตะหลิวโปร่งสีเทา",
+            "p": 0
+          },
+          {
+            "id": "kit-metal-spoon",
+            "name": "ช้อนโลหะสีเงิน",
+            "p": 0
+          },
+          {
+            "id": "kit-rolling-set",
+            "name": "ชุดไม้นวดแป้งและแผ่นรอง",
+            "p": 0
+          },
+          {
+            "id": "kit-yellow-peeler",
+            "name": "ที่ปอกผักสีเหลือง",
+            "p": 0
+          }
+        ],
+        "none_probability": 0,
+        "held_up": false,
+        "held_up_probability": 0,
+        "bbox": null,
+        "localization_status": "skipped",
+        "latency_ms": 603
+      },
+      "locations": [
+        {
+          "model": "gpt-6.2-sol",
+          "predicted": {
+            "x": 0.469,
+            "y": 0.269,
+            "width": 0.237,
+            "height": 0.59
+          },
+          "latency_ms": 2870,
+          "iou": 0.9785207741702298
+        },
+        {
+          "model": "gpt-6.2-astra",
+          "predicted": {
+            "x": 0.468,
+            "y": 0.268,
+            "width": 0.237,
+            "height": 0.59
+          },
+          "latency_ms": 3895,
+          "iou": 0.9868042391134847
+        }
+      ]
+    },
+    {
+      "image": "public/examples/room-photo.jpg",
+      "expected_id": "kit-electric-cooktop",
+      "location_target": "kit-electric-cooktop",
+      "box": {
+        "x": 0.036458333333333336,
+        "y": 0.5257410296411856,
+        "width": 0.30104166666666665,
+        "height": 0.1357254290171607
+      },
+      "fingerprint": "04a1097d3dfc016bc36084be4289323bc42774229873106cc28635170063f002",
+      "match": {
+        "product_id": "kit-electric-cooktop",
+        "product_name": "เตาไฟฟ้าหน้าเรียบ",
+        "confidence": 0.81,
+        "top3": [
+          {
+            "id": "kit-electric-cooktop",
+            "name": "เตาไฟฟ้าหน้าเรียบ",
+            "p": 0.82
+          },
+          {
+            "id": "1",
+            "name": "แก้วน้ำดำ",
+            "p": 0.01
+          },
+          {
+            "id": "kit-countertop-blender",
+            "name": "เครื่องปั่นแบบตั้งโต๊ะ",
+            "p": 0.01
+          }
+        ],
+        "probabilities": [
+          {
+            "id": "kit-electric-cooktop",
+            "name": "เตาไฟฟ้าหน้าเรียบ",
+            "p": 0.82
+          },
+          {
+            "id": "1",
+            "name": "แก้วน้ำดำ",
+            "p": 0.01
+          },
+          {
+            "id": "kit-countertop-blender",
+            "name": "เครื่องปั่นแบบตั้งโต๊ะ",
+            "p": 0.01
+          },
+          {
+            "id": "kit-steel-wok",
+            "name": "กระทะก้นลึกด้ามไม้",
+            "p": 0.01
+          },
+          {
+            "id": "kit-blue-ice-tray",
+            "name": "ถาดน้ำแข็งสีฟ้า",
+            "p": 0.01
+          },
+          {
+            "id": "kit-wood-grip-sieve",
+            "name": "กระชอนด้ามไม้",
+            "p": 0.01
+          },
+          {
+            "id": "kit-frying-pan",
+            "name": "กระทะทอดสีดำ",
+            "p": 0.01
+          },
+          {
+            "id": "kit-yellow-peeler",
+            "name": "ที่ปอกผักสีเหลือง",
+            "p": 0.01
+          },
+          {
+            "id": "2",
+            "name": "แก้วน้ำใส",
+            "p": 0
+          },
+          {
+            "id": "3",
+            "name": "ส้อมไม้",
+            "p": 0
+          },
+          {
+            "id": "kit-bamboo-spatula",
+            "name": "พายไม้ไผ่",
+            "p": 0
+          },
+          {
+            "id": "kit-wire-whisk",
+            "name": "ตะกร้อตีไข่ด้ามดำ",
+            "p": 0
+          },
+          {
+            "id": "kit-wood-board",
+            "name": "เขียงไม้ทรงยาว",
+            "p": 0
+          },
+          {
+            "id": "kit-yellow-citrus-press",
+            "name": "ที่คั้นส้มสีเหลือง",
+            "p": 0
+          },
+          {
+            "id": "kit-egg-slicer",
+            "name": "ที่ตัดไข่สีเหลือง",
+            "p": 0
+          },
+          {
+            "id": "kit-wire-strainer",
+            "name": "กระชอนตาถี่ด้ามลวด",
+            "p": 0
+          },
+          {
+            "id": "kit-metal-fork",
+            "name": "ส้อมโลหะสีเงิน",
+            "p": 0
+          },
+          {
+            "id": "kit-box-grater",
+            "name": "ที่ขูดชีสทรงกล่อง",
+            "p": 0
+          },
+          {
+            "id": "kit-stick-blender",
+            "name": "เครื่องปั่นมือถือด้ามแดง",
+            "p": 0
+          },
+          {
+            "id": "kit-tiffin",
+            "name": "ปิ่นโตโลหะ",
+            "p": 0
+          },
+          {
+            "id": "kit-mug-rack",
+            "name": "ราวแขวนแก้วแบบตั้งโต๊ะ",
+            "p": 0
+          },
+          {
+            "id": "kit-red-tongs",
+            "name": "ที่คีบอาหารสีแดง",
+            "p": 0
+          },
+          {
+            "id": "kit-lidded-pot",
+            "name": "หม้อสองหูพร้อมฝาแก้ว",
+            "p": 0
+          },
+          {
+            "id": "kit-slotted-turner",
+            "name": "ตะหลิวโปร่งสีเทา",
+            "p": 0
+          },
+          {
+            "id": "kit-metal-spoon",
+            "name": "ช้อนโลหะสีเงิน",
+            "p": 0
+          },
+          {
+            "id": "kit-rolling-set",
+            "name": "ชุดไม้นวดแป้งและแผ่นรอง",
+            "p": 0
+          }
+        ],
+        "none_probability": 0.11,
+        "held_up": false,
+        "held_up_probability": 0,
+        "bbox": null,
+        "localization_status": "skipped",
+        "latency_ms": 533
+      },
+      "locations": [
+        {
+          "model": "gpt-6.2-astra",
+          "predicted": {
+            "x": 0.037,
+            "y": 0.526,
+            "width": 0.3,
+            "height": 0.137
+          },
+          "latency_ms": 3194,
+          "iou": 0.9835636635482955
+        },
+        {
+          "model": "gpt-6.2-sol",
+          "predicted": {
+            "x": 0.037,
+            "y": 0.526,
+            "width": 0.3,
+            "height": 0.135
+          },
+          "latency_ms": 2436,
+          "iou": 0.9912134590144374
+        }
+      ]
+    },
+    {
+      "image": "bench/location/room-photo-background.jpg",
+      "expected_id": "none",
+      "location_target": "kit-electric-cooktop",
+      "box": null,
+      "fingerprint": "3e47ed7d527b116bbd5692bdd5693ca9cea3331938ae5e0e39d2543a0a597fdd",
+      "match": {
+        "product_id": "none",
+        "product_name": "ไม่พบสินค้าในระบบ",
+        "confidence": 0.92,
+        "top3": [
+          {
+            "id": "2",
+            "name": "แก้วน้ำใส",
+            "p": 0.01
+          },
+          {
+            "id": "3",
+            "name": "ส้อมไม้",
+            "p": 0.01
+          },
+          {
+            "id": "kit-steel-wok",
+            "name": "กระทะก้นลึกด้ามไม้",
+            "p": 0.01
+          }
+        ],
+        "probabilities": [
+          {
+            "id": "2",
+            "name": "แก้วน้ำใส",
+            "p": 0.01
+          },
+          {
+            "id": "3",
+            "name": "ส้อมไม้",
+            "p": 0.01
+          },
+          {
+            "id": "kit-steel-wok",
+            "name": "กระทะก้นลึกด้ามไม้",
+            "p": 0.01
+          },
+          {
+            "id": "kit-wood-board",
+            "name": "เขียงไม้ทรงยาว",
+            "p": 0.01
+          },
+          {
+            "id": "kit-metal-fork",
+            "name": "ส้อมโลหะสีเงิน",
+            "p": 0.01
+          },
+          {
+            "id": "kit-wood-grip-sieve",
+            "name": "กระชอนด้ามไม้",
+            "p": 0.01
+          },
+          {
+            "id": "kit-lidded-pot",
+            "name": "หม้อสองหูพร้อมฝาแก้ว",
+            "p": 0.01
+          },
+          {
+            "id": "kit-yellow-peeler",
+            "name": "ที่ปอกผักสีเหลือง",
+            "p": 0.01
+          },
+          {
+            "id": "1",
+            "name": "แก้วน้ำดำ",
+            "p": 0
+          },
+          {
+            "id": "kit-bamboo-spatula",
+            "name": "พายไม้ไผ่",
+            "p": 0
+          },
+          {
+            "id": "kit-wire-whisk",
+            "name": "ตะกร้อตีไข่ด้ามดำ",
+            "p": 0
+          },
+          {
+            "id": "kit-countertop-blender",
+            "name": "เครื่องปั่นแบบตั้งโต๊ะ",
+            "p": 0
+          },
+          {
+            "id": "kit-yellow-citrus-press",
+            "name": "ที่คั้นส้มสีเหลือง",
+            "p": 0
+          },
+          {
+            "id": "kit-egg-slicer",
+            "name": "ที่ตัดไข่สีเหลือง",
+            "p": 0
+          },
+          {
+            "id": "kit-electric-cooktop",
+            "name": "เตาไฟฟ้าหน้าเรียบ",
+            "p": 0
+          },
+          {
+            "id": "kit-wire-strainer",
+            "name": "กระชอนตาถี่ด้ามลวด",
+            "p": 0
+          },
+          {
+            "id": "kit-box-grater",
+            "name": "ที่ขูดชีสทรงกล่อง",
+            "p": 0
+          },
+          {
+            "id": "kit-stick-blender",
+            "name": "เครื่องปั่นมือถือด้ามแดง",
+            "p": 0
+          },
+          {
+            "id": "kit-blue-ice-tray",
+            "name": "ถาดน้ำแข็งสีฟ้า",
+            "p": 0
+          },
+          {
+            "id": "kit-tiffin",
+            "name": "ปิ่นโตโลหะ",
+            "p": 0
+          },
+          {
+            "id": "kit-mug-rack",
+            "name": "ราวแขวนแก้วแบบตั้งโต๊ะ",
+            "p": 0
+          },
+          {
+            "id": "kit-frying-pan",
+            "name": "กระทะทอดสีดำ",
+            "p": 0
+          },
+          {
+            "id": "kit-red-tongs",
+            "name": "ที่คีบอาหารสีแดง",
+            "p": 0
+          },
+          {
+            "id": "kit-slotted-turner",
+            "name": "ตะหลิวโปร่งสีเทา",
+            "p": 0
+          },
+          {
+            "id": "kit-metal-spoon",
+            "name": "ช้อนโลหะสีเงิน",
+            "p": 0
+          },
+          {
+            "id": "kit-rolling-set",
+            "name": "ชุดไม้นวดแป้งและแผ่นรอง",
+            "p": 0
+          }
+        ],
+        "none_probability": 0.92,
+        "held_up": false,
+        "held_up_probability": 0,
+        "bbox": null,
+        "localization_status": "skipped",
+        "latency_ms": 405
+      },
+      "locations": [
+        {
+          "model": "gpt-6.2-sol",
+          "predicted": null,
+          "latency_ms": 2308,
+          "iou": null
+        },
+        {
+          "model": "gpt-6.2-astra",
+          "predicted": null,
+          "latency_ms": 4503,
+          "iou": null
+        }
+      ]
+    }
+  ]
+}
