@@ -57,8 +57,7 @@
 .cr-warning span { color: #f2b3af; }
 
 /* layout: the frame leads, the host column sits beside it */
-.cr-layout { display: grid; grid-template-columns: auto minmax(360px, 560px); justify-content: center; align-items: start; gap: 28px; }
-.cr[data-mode="obs"] .cr-layout { grid-template-columns: minmax(0, 1fr) minmax(340px, 440px); justify-content: stretch; }
+.cr-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 440px); align-items: start; gap: 28px; }
 .cr-stage, .cr-host { display: grid; gap: 14px; min-width: 0; }
 .cr-host { align-content: start; }
 .cr-panel { min-width: 0; padding: 20px; border-radius: 16px; background: var(--cr-panel); box-shadow: inset 0 0 0 1px var(--cr-line); }
@@ -68,7 +67,6 @@
 .cr[data-live] .cr-screen { box-shadow: 0 0 0 2px var(--cr-red); }
 .cr-screen video, .cr-screen iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 .cr-screen video { object-fit: cover; }
-/* the overlay sits above the live-app chrome, so motion is never hidden behind the chat or the pinned card */
 .cr-screen > iframe { z-index: 6; pointer-events: none; background: transparent; }
 .cr-screen-msg { position: absolute; inset: 0; z-index: 7; display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0; padding: 24px; text-align: center; color: var(--cr-quiet); background: rgb(0 0 0 / .55); }
 .cr-box { position: absolute; z-index: 2; border: 2px solid #ffd23f; border-radius: 6px; transition: left .12s linear, top .12s linear, width .12s linear, height .12s linear; }
@@ -80,38 +78,8 @@
 .cr-chip-pgm { left: 10px; background: rgb(0 0 0 / .6); color: var(--cr-green); }
 .cr-chip-live { right: 10px; background: var(--cr-red); color: white; }
 
-/* demo: a phone-shaped live, as tall as the screen allows */
-.cr[data-mode="demo"] .cr-screen { aspect-ratio: 9 / 16; width: auto; height: clamp(380px, calc(100svh - 380px), 880px); max-width: 100%; margin: 0 auto; border-radius: 28px; box-shadow: 0 0 0 6px #222428, 0 0 0 7px #393b40; }
-.cr[data-mode="demo"][data-live] .cr-screen { box-shadow: 0 0 0 6px #222428, 0 0 0 8px var(--cr-red); }
-.cr[data-mode="demo"] .cr-screen video { transform: scaleX(-1); }
-.cr-ph-top { position: absolute; top: 14px; left: 14px; right: 14px; z-index: 3; display: flex; align-items: center; gap: 8px; color: white; font-size: .8rem; text-shadow: 0 1px 2px rgb(0 0 0 / .5); }
-.cr-ph-avatar { display: grid; place-items: center; width: 30px; height: 30px; flex: none; border-radius: 50%; background: var(--cr-red); font-weight: 750; box-shadow: 0 0 0 2px white; text-shadow: none; }
-.cr-ph-shop { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
-.cr-ph-live { padding: 2px 6px; border-radius: 4px; background: var(--cr-red); font-size: .7rem; font-weight: 800; letter-spacing: .04em; text-shadow: none; }
-.cr-ph-viewers { display: flex; align-items: center; gap: 4px; margin-left: auto; padding: 2px 8px; border-radius: 99px; background: rgb(0 0 0 / .4); font-variant-numeric: tabular-nums; }
-.cr-chat { position: absolute; left: 12px; bottom: 24%; z-index: 3; width: 68%; max-height: 30%; display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; margin: 0; padding: 0; list-style: none; overflow: hidden; mask-image: linear-gradient(to bottom, transparent, black 28%); }
-.cr-chat li { width: fit-content; max-width: 100%; padding: 3px 9px; border-radius: 12px; background: rgb(0 0 0 / .38); color: white; font-size: .78rem; line-height: 1.35; animation: cr-chat-in .25s ease-out; }
-.cr-chat li b { margin-right: 4px; color: #ffd98a; font-weight: 650; }
-.cr-chat li[data-kind="cf"] { background: rgb(229 50 45 / .82); }
-.cr-chat li[data-kind="cf"] b { color: white; }
-.cr-chat li[data-kind="heart"] svg { vertical-align: -2px; color: #ff5a7a; }
-.cr-chat .cr-chat-idle { color: rgb(255 255 255 / .8); }
-@keyframes cr-chat-in { from { opacity: 0; transform: translateY(8px); } }
-.cr-hearts { position: absolute; right: 0; bottom: 96px; z-index: 3; width: 70px; height: 45%; pointer-events: none; }
-.cr-hearts svg { position: absolute; bottom: 0; color: #ff4f6d; opacity: 0; animation: cr-heart 2.6s ease-out forwards; }
-.cr-hearts svg[data-hue="1"] { color: #ffb020; }
-.cr-hearts svg[data-hue="2"] { color: #ff7ab8; }
-@keyframes cr-heart {
-  0% { opacity: 0; transform: translateY(0) scale(.6); }
-  12% { opacity: 1; transform: translateY(-20px) scale(1.05); }
-  100% { opacity: 0; transform: translateY(-260px) translateX(-14px) scale(.9); }
-}
-.cr-pin { position: absolute; left: 12px; right: 12px; bottom: 14px; z-index: 3; display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 12px; background: rgb(255 255 255 / .94); color: #111; }
-.cr-pin img { width: 48px; height: 48px; flex: none; border-radius: 8px; object-fit: cover; }
-.cr-pin > div { display: grid; min-width: 0; flex: 1; }
-.cr-pin strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .84rem; }
-.cr-pin > div span { color: var(--cr-red); font-weight: 700; font-size: .8rem; }
-.cr-pin-cart { display: flex; align-items: center; gap: 4px; flex: none; padding: 7px 10px; border-radius: 99px; background: #fe7802; color: #1d1d1f; font-size: .76rem; font-weight: 750; }
+/* local preview: the camera is mirrored like a selfie view */
+.cr[data-mode="local"] .cr-screen video { transform: scaleX(-1); }
 
 /* the one button, and a quiet health summary beside it */
 .cr-go-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; }
@@ -215,7 +183,7 @@
 
 /* smaller screens: stack, frame first */
 @media (max-width: 1100px) {
-  .cr[data-mode="obs"] .cr-layout { grid-template-columns: minmax(0, 1fr); }
+  .cr-layout { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 960px) {
   .cr-layout { grid-template-columns: minmax(0, 1fr); justify-content: stretch; }
@@ -224,14 +192,12 @@
 @media (max-width: 720px) {
   .cr { padding: 12px; border-radius: 14px; }
   .cr-details-btn { margin-left: 0; }
-  .cr[data-mode="demo"] .cr-screen { height: auto; width: min(100%, 420px); }
   .cr-go { width: 100%; min-width: 0; }
   .cr-panel { padding: 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cr-chat li, .cr-sheet { animation: none !important; }
-  .cr-hearts { display: none; }
+  .cr-sheet { animation: none !important; }
   .cr-box, .cr-go, .cr-tile, .cr-progress::-webkit-progress-value { transition: none; }
   .cr-tile:active:not(:disabled) { transform: none; }
 }

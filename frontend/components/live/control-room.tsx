@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  BrainCircuit, Camera, Check, ChevronLeft, ChevronRight, CircleAlert, Copy, Crosshair, Eraser, Eye, Film, Heart, Link2, Mic,
-  MonitorPlay, PartyPopper, Radio, ShoppingCart, SlidersHorizontal, Smartphone, Square, Tag, TriangleAlert, Vote, X, ZoomIn,
+  BrainCircuit, Camera, Check, ChevronLeft, ChevronRight, CircleAlert, Copy, Crosshair, Eraser, Eye, Film, Link2, Mic,
+  MonitorPlay, PartyPopper, Radio, SlidersHorizontal, Smartphone, Square, Tag, TriangleAlert, Vote, X, ZoomIn,
 } from "lucide-react";
 import { useLanguage } from "@/components/language-provider";
 import { playOverlay, studioPost, studioRequest } from "@/components/studio/studio-api";
@@ -17,7 +17,8 @@ import "./control-room.css";
 // The live control room, built around one button: the live frame (camera + the same overlay OBS shows), the host's
 // prompter and quick actions beside it, and everything else (connections, transcript, AI crew, camera, OBS link) in
 // one "system details" sheet. Detection runs in this page (useLiveDetection) on the frame's own <video>. Two modes:
-// Demo (a simulated phone live on this screen, events go to the frame only) and OBS (events go to the Browser Source too).
+// Local preview (the real camera + overlay on this screen only) and OBS (every event also goes to the Browser Source).
+// Nothing here is simulated: motion comes only from a verified product, the host's speech, Decisions, or a host tap.
 
 type Box = { x: number; y: number; w: number; h: number };
 type Kind = "price_pop" | "price_drop" | "free_badge" | "low_stock" | "product_card" | "poll" | "fireworks" | "zoom" | "caption";
@@ -25,8 +26,7 @@ type OverlayEvent = Record<string, unknown>;
 type Role = "ผู้กำกับ" | "Motion" | "ซับ" | "โปรดิวเซอร์" | "คนตัดต่อ";
 type Tone = "info" | "action" | "warn" | "error";
 type FeedItem = { id: number; time: string; role: Role; text: string; tone: Tone; count: number };
-type ChatItem = { id: number; name: string; text: string; kind: "chat" | "cf" | "heart" };
-type Mode = "obs" | "demo";
+type Mode = "obs" | "local";
 type Status = "ok" | "warn" | "err" | "off";
 type Queued = { event: OverlayEvent; key: string; role: Role; text: string };
 
@@ -34,12 +34,11 @@ type Queued = { event: OverlayEvent; key: string; role: Role; text: string };
 const PREVIEW_SRC = "/overlay/index.html?preview=1#" + "a".repeat(43); // index.html: "/overlay/" gets a trailing-slash redirect from Next
 const MODE_KEY = "snappromo-live-mode";
 const BIG_GAP = 3500; // at most one big motion per 3.5 s
-const STOCK = 10;
 const GRACE = 2500; // a verified product stays verified this long after its box drops (tracking jitter)
 const TOPIC = 8000; // a product the host just named is the topic this long (text-only graphics)
 // Presets that show a product's name, price or photo; spotlight/callout/zoom also need its verified box.
 const BOX_PRESETS = new Set(["spotlight", "callout-ring", "magnet-snap", "zoom"]);
-const PRODUCT_PRESET = /^(product-card|magnet-snap|spotlight|callout-ring|price-|cf-keycaps|kinetic-claim|stock-bar)/;
+const PRODUCT_PRESET = /^(product-card|magnet-snap|spotlight|callout-ring|price-|cf-keycaps|kinetic-claim)/;
 type AiStatus = "idle" | "watching" | "confirming" | "verified" | "none";
 
 const LABEL: Record<Kind | "spotlight" | "clip", string> = {
@@ -55,8 +54,8 @@ const MOMENT_NOTES: Record<string, string> = {
 };
 const GENERAL_MOTIONS: [string, string][] = [
   ["price-pop", "เด้งราคา"], ["price-drop", "ขีดฆ่าราคาเดิม"], ["product-card", "การ์ดสินค้า"], ["stamp-free-ship", "ตราส่งฟรี"],
-  ["stock-bar", "แถบสต็อกเหลือน้อย"], ["cf-keycaps", "ชวนพิมพ์ CF"], ["kinetic-claim", "ตัวหนังสือเน้นจุดเด่น"],
-  ["callout-ring", "วงชี้สินค้า"], ["fireworks", "พลุฉลอง"], ["iris-swap", "เปลี่ยนสินค้า"],
+  ["cf-keycaps", "ชวนพิมพ์ CF"], ["kinetic-claim", "ตัวหนังสือเน้นจุดเด่น"],
+  ["callout-ring", "วงชี้สินค้า"], ["iris-swap", "เปลี่ยนสินค้า"],
 ];
 
 // ---------- fast keyword layer (no AI) ----------
@@ -79,19 +78,6 @@ function keywordHits(raw: string): KeywordHit[] {
   return hits;
 }
 
-// ---------- demo chat ----------
-const NAMES = ["แอน", "มิ้นท์", "พี่เจ", "ต้นข้าว", "น้องฟ้า", "ปอนด์", "เบียร์", "ใบเตย", "กอล์ฟ", "แพรว", "โอ๊ต", "นุ่น", "ป๊อป", "จูน", "บิว", "เฟิร์น", "ข้าวหอม", "พี่หนึ่ง"];
-const HELLO = ["สวัสดีค่า", "มาแล้วค่า", "เพิ่งเข้ามา ขายอะไรอยู่คะ", "ติดตามตลอดเลยค่ะ", "เสียงชัดมาก", "รอไลฟ์นี้อยู่เลย", "แม่ค้าน่ารัก"];
-const ASK = (name: string) => [`${name} ราคาเท่าไหร่คะ`, `${name} มีสีอื่นไหม`, "ส่งฟรีไหมคะ", `ขอดู${name}ใกล้ ๆ หน่อย`, `${name} ใช้ยังไงคะ`, `${name} เหลือกี่ชิ้นคะ`];
-function mulberry32(seed: number) {
-  return () => {
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 const shortList = (items: string[]) => items.map((x) => x.trim()).filter(Boolean).map((x) => x.slice(0, 18)).slice(0, 3);
 
 const pad = (n: number) => String(Math.max(0, Math.floor(n))).padStart(2, "0");
@@ -103,7 +89,7 @@ const message = (error: unknown) => (error instanceof Error ? error.message : St
 
 export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { overlayOrigin: string }) {
   const { t } = useLanguage();
-  const [mode, setMode] = useState<Mode>("demo");
+  const [mode, setMode] = useState<Mode>("local");
   const [live, setLive] = useState(false);
   const [clock, setClock] = useState(0); // whole seconds, drives every timer on screen
   const [startSec, setStartSec] = useState(0);
@@ -128,10 +114,6 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   const [warning, setWarning] = useState<{ text: string; at: number } | null>(null);
   const [suggestPoll, setSuggestPoll] = useState(false);
   const [spotId, setSpotId] = useState("");
-  // demo
-  const [chat, setChat] = useState<ChatItem[]>([]);
-  const [viewers, setViewers] = useState(1240);
-  const [stock, setStock] = useState<Record<string, number>>({});
   const [ai, setAi] = useState<{ status: AiStatus; id: string | null }>({ status: "idle", id: null });
   const [reason, setReason] = useState("");
 
@@ -150,16 +132,6 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   const lastDetectError = useRef<string | null>(null);
   const lastAiProduct = useRef<string | null>(null);
   const feedId = useRef(0);
-  const chatId = useRef(0);
-  const rng = useRef(mulberry32(20261121));
-  // show engine
-  const lastSignal = useRef(0);
-  const nextGap = useRef(6000);
-  const lastPreset = useRef("");
-  const beatIndex = useRef(0);
-  const lastPoll = useRef(0);
-  const lastCf = useRef<{ name: string; qty: number; product: string } | null>(null);
-  const sold = useRef(0);
   const discount = useRef<{ id: string; from: number; to: number } | null>(null);
   const verif = useRef<{ id: string; at: number } | null>(null);
   const spoken = useRef<{ id: string; at: number } | null>(null);
@@ -167,7 +139,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   // when each product last got its on-camera moment (follow-the-camera rule)
   const momentFor = useRef<Record<string, number>>({});
   const noneSince = useRef(0);
-  const latest = useRef<{ tick: () => void; sentence: (s: LiveSentence) => void; chat: () => number; decision: (d: Decision) => void; log: (role: Role, text: string, tone?: Tone) => void } | null>(null);
+  const latest = useRef<{ tick: () => void; sentence: (s: LiveSentence) => void; decision: (d: Decision) => void; log: (role: Role, text: string, tone?: Tone) => void } | null>(null);
 
   // ---------- derived ----------
   const lineup = useMemo(() => plan.lineup.flatMap((item) => products.filter((p) => p.id === item.productId)), [plan.lineup, products]);
@@ -189,7 +161,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   const kit = plan.kit;
   const tagStyle = kit?.theme.tagStyle ?? plan.style.tagStyle;
   const motions = useMemo(() => [
-    ...(kit ? Object.entries(kit.moments).map(([moment, id]) => ({ id, description: MOMENT_NOTES[moment] ?? moment })) : []),
+    ...(kit ? Object.entries(kit.moments).filter(([moment]) => moment !== "celebrate").map(([moment, id]) => ({ id, description: MOMENT_NOTES[moment] ?? moment })) : []),
     ...GENERAL_MOTIONS.map(([id, description]) => ({ id, description })),
   ].filter((m, i, all) => m.id && all.findIndex((x) => x.id === m.id) === i), [kit]);
 
@@ -225,11 +197,11 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   // ---------- setup ----------
   useEffect(() => {
     queueMicrotask(() => {
-      try { const saved = localStorage.getItem(MODE_KEY); if (saved === "obs" || saved === "demo") setMode(saved); } catch { /* optional */ }
+      try { const saved = localStorage.getItem(MODE_KEY); if (saved === "obs" || saved === "local") setMode(saved); } catch { /* optional */ }
     });
   }, []);
   // camera: on as soon as the room opens. OBS mode prefers OBS Virtual Camera (the monitor shows what OBS has);
-  // Demo keeps the default webcam for the selfie view.
+  // local preview keeps the default webcam for the selfie view.
   useEffect(() => {
     let stopped = false;
     let stream: MediaStream | null = null;
@@ -278,14 +250,6 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     return () => clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    if (!live || mode !== "demo") return;
-    let timer: ReturnType<typeof setTimeout>;
-    const step = () => { timer = setTimeout(step, latest.current?.chat() ?? 2000); };
-    timer = setTimeout(step, 600);
-    return () => clearTimeout(timer);
-  }, [live, mode]);
-
   useEffect(() => () => { liveRef.current = false; }, []);
 
   // system details sheet: focus moves in on open; Escape closes it
@@ -318,7 +282,6 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   function enqueue(item: Queued, cooldown = 0) {
     if (cooldown && Date.now() - (lastByKey.current.get(item.key) ?? -1e9) < cooldown) return;
     if (queue.current.some((q) => q.key === item.key)) return;
-    lastSignal.current = Date.now(); // the show engine backs off while real signals arrive
     queue.current.push(item);
     if (queue.current.length > 4) queue.current.shift();
     pump();
@@ -330,23 +293,22 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   function play(item: Queued) {
     lastBig.current = Date.now();
     lastByKey.current.set(item.key, Date.now());
-    lastPreset.current = item.key;
     send(item.event);
     log(item.role, item.text, "action");
   }
 
-  // the monitor crops the camera (object-fit: cover) and mirrors it in demo mode; map detector boxes onto it
+  // the monitor crops the camera (object-fit: cover) and mirrors it in local preview; map detector boxes onto it
   function toView(b: Box): Box {
-    const container = mode === "demo" ? 9 / 16 : 16 / 9;
+    const container = 16 / 9;
     const sx = videoAspect > container ? videoAspect / container : 1;
     const sy = videoAspect > container ? 1 : container / videoAspect;
     const x = b.x * sx + (1 - sx) / 2, w = b.w * sx;
-    return { x: mode === "demo" ? 1 - x - w : x, y: b.y * sy + (1 - sy) / 2, w, h: b.h * sy };
+    return { x: mode === "local" ? 1 - x - w : x, y: b.y * sy + (1 - sy) / 2, w, h: b.h * sy };
   }
   // a box only belongs to the product the detector verified; never aim a graphic at another product's box
   function placement(p?: LiveProduct | null): { x?: number; y?: number; box?: Box } {
     if (!box || !p || detection.product !== p.id) return {};
-    const b = mode === "demo" ? toView(box) : box; // OBS gets camera coordinates, the phone frame its own
+    const b = mode === "local" ? toView(box) : box; // OBS gets camera coordinates, the local frame its own
     return { x: b.x + b.w / 2, y: b.y + b.h / 2, box: b };
   }
   const imageUrl = (p: LiveProduct) => (p.images[0] ? new URL(productImage(p.images[0]), window.location.origin).href : undefined);
@@ -437,7 +399,11 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
         else { event = buildEvent("price_pop", p, { name: "ลดพิเศษ" + (p ? " · " + p.name : "") }); label = "price_pop"; }
       } else if (hit.kind === "price_pop") event = buildEvent("price_pop", p, { price: hit.nums[0] });
       else if (hit.kind === "free_badge") event = buildEvent("free_badge", p, { text: hit.text, sub: p?.name });
-      else if (hit.kind === "low_stock") event = buildEvent("low_stock", p, { left: hit.nums[0] ?? (/ชิ้นสุดท้าย|last one/i.test(text) ? 1 : 3) });
+      else if (hit.kind === "low_stock") {
+        const left = hit.nums[0] ?? (/ชิ้นสุดท้าย|last one/i.test(text) ? 1 : 0);
+        if (!left) continue; // never invent a stock count
+        event = buildEvent("low_stock", p, { left });
+      }
       else { if (!placement(p).box) continue; event = buildEvent("zoom", p); }
       enqueue({ event, key: label, role: roleFor(label), text: describe(label, p) + ` · "${text.slice(0, 32)}"` }, 4000);
     }
@@ -492,50 +458,10 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     }
     if (d.action === "none" || d.action === "product_card" || (d.actionConfidence ?? 1) < 0.5) return; // product_card is the moment above
     const kind = d.action as Kind;
-    if (kind === "zoom" ? !vp || !placement(vp).box : ["price_pop", "price_drop", "low_stock"].includes(kind) && !fp) return;
+    if (kind === "low_stock") return; // no real stock data to show
+    if (kind === "zoom" ? !vp || !placement(vp).box : ["price_pop", "price_drop"].includes(kind) && !fp) return;
     const p = kind === "zoom" ? vp : fp;
-    enqueue({ event: kind === "low_stock" ? buildEvent(kind, p, { left: stock[p?.id ?? ""] ?? 3 }) : buildEvent(kind, p), key: kind, role: roleFor(kind), text: describe(kind, p) }, 8000);
-  }
-
-  // ---------- demo chat ----------
-  function chatStep(): number {
-    const r = rng.current;
-    const pick = <T,>(list: T[]) => list[Math.floor(r() * list.length)];
-    const add = (name: string, text: string, kind: ChatItem["kind"]) => {
-      const id = ++chatId.current;
-      setChat((items) => [...items.slice(-24), { id, name, text, kind }]);
-    };
-    const name = pick(NAMES);
-    setViewers((v) => Math.max(80, v + Math.floor(r() * 16) - 4));
-    const roll = r();
-    if (roll < 0.06) {
-      const count = 4 + Math.floor(r() * 4);
-      for (let i = 0; i < count; i++) add(pick(NAMES), "", "heart");
-      send({ type: "sound", name: "heart" });
-      enqueue({ event: { type: "combo", payload: { count, text: "หัวใจรัว ๆ" }, ttl: 1800 }, key: "combo", role: "Motion", text: t("คอมโบหัวใจ") + ` ×${count}` }, 12000);
-      return 900;
-    }
-    if (roll < 0.3) add(name, pick(HELLO), "chat");
-    else if (roll < 0.52 && current) add(name, pick(ASK(current.name)), "chat");
-    else if (roll < 0.74 && pool.length) {
-      const target = r() < 0.7 && current ? current : pick(pool);
-      const before = stock[target.id] ?? STOCK;
-      if (before <= 0) add(name, `${target.name} หมดแล้วเหรอคะ`, "chat");
-      else {
-        const qty = Math.min(before, 1 + Math.floor(r() * 3));
-        const left = before - qty;
-        setStock((s) => ({ ...s, [target.id]: left }));
-        add(name, `CF ${target.id} ${qty} ชิ้น`, "cf");
-        lastCf.current = { name, qty, product: target.name };
-        const milestone = Math.floor((sold.current + qty) / 10) > Math.floor(sold.current / 10);
-        sold.current += qty;
-        if (milestone) enqueue({ event: { type: "fireworks", payload: { text: `ขายแล้ว ${sold.current} ชิ้น` }, ttl: 2600 }, key: "fireworks", role: "Motion", text: t("พลุฉลองยอดขาย") + ` · ${sold.current}` });
-        send({ type: "cf_toast", payload: { name, product: target.name, qty, left }, ttl: 2600 });
-        log("โปรดิวเซอร์", `CF · ${name} ${target.name} ×${qty} (${t("เหลือ")} ${left})`, "action");
-        if (left <= 3) enqueue({ event: { type: "low_stock", payload: { left, total: STOCK, name: target.name }, ttl: 2600 }, key: "low_stock:" + target.id, role: "Motion", text: t("ป้ายเหลือน้อย") + ` · ${target.name} (${left})` }, 6000);
-      }
-    } else add(name, "", "heart");
-    return 1000 + r() * 2000;
+    enqueue({ event: buildEvent(kind, p), key: kind, role: roleFor(kind), text: describe(kind, p) }, 8000);
   }
 
   // ---------- clock ----------
@@ -574,63 +500,18 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
         if (cue.at > at || firedCues.current.has(key)) return;
         firedCues.current.add(key);
         // a scripted product graphic waits for the product to be verified or named; the rest are about the show
-        const needs = ["product_card", "price_pop", "price_drop", "low_stock", "zoom"].includes(cue.event);
+        if (cue.event === "low_stock") return; // no real stock data to show
+        const needs = ["product_card", "price_pop", "price_drop", "zoom"].includes(cue.event);
         if (needs && (!fp || (cue.event === "zoom" && !placement(fp).box))) { log("ผู้กำกับ", t("ข้ามคิวสคริปต์ ยังไม่เห็นสินค้าในภาพ") + " · " + t(LABEL[cue.event]), "warn"); return; }
         const cp = needs ? fp : null;
         const event = cue.event === "caption" ? buildEvent("caption", null, { text: cue.note })
           : cue.event === "product_card" && cp ? productEvent(cp).event : buildEvent(cue.event, cp);
         enqueue({ event, key: "cue:" + key, role: roleFor(cue.event), text: t("คิวสคริปต์") + " · " + describe(cue.event, cp) + (cue.note ? ` · ${cue.note}` : "") });
       });
-      if (at >= segment.seconds && segIndex < segments.length - 1) goSegment(segIndex + 1);
-    }
-    // director's rule: something visible changes every 6–10 s, even with no AI, speech or detection
-    if (!queue.current.length && Date.now() - lastBig.current >= nextGap.current && Date.now() - lastSignal.current >= 4000) {
-      const beat = engineBeat();
-      if (beat) { play(beat); nextGap.current = 6000 + rng.current() * 4000; }
     }
   }
 
-  /** The next beat of the always-on show engine: a varied playlist, never the same preset twice in a row. */
-  function engineBeat(): Queued | null {
-    // product graphics only for a product that is verified on camera or was just named; otherwise generic beats
-    const vp = verifiedProduct();
-    const p = vp ?? spokenProduct();
-    const at = placement(vp);
-    const demo = mode === "demo"; // simulated stock, buyers and reviews exist only in the demo; never fake them on air
-    const r = rng.current;
-    const g = (preset: string, data: Record<string, unknown>, label: string, extra: OverlayEvent = {}): Queued => ({
-      event: { type: "graphic", preset, data, theme: kit?.theme.look, ttl: 2600, ...extra }, key: preset, role: "Motion",
-      text: t("โชว์อัตโนมัติ") + " · " + t(label),
-    });
-    const gp = (preset: string, data: Record<string, unknown>, label: string, extra: OverlayEvent = {}): Queued => { const q = g(preset, data, label, extra); q.text += p ? " · " + p.name : ""; return q; };
-    if (Date.now() - lastPoll.current > 45000 && lastPreset.current !== "poll") {
-      lastPoll.current = Date.now();
-      return { event: buildEvent("poll", p), key: "poll", role: "Motion", text: t("โชว์อัตโนมัติ") + " · " + t("เปิดโหวต") };
-    }
-    const onPlan = p?.id === current?.id;
-    const claims = shortList(onPlan && segment?.talkingPoints.length ? segment.talkingPoints : (p?.distinct || p?.description || "").split(/[\n,·•|]/));
-    const said = [current?.description, current?.distinct, ...(segment?.talkingPoints ?? [])].join(" ");
-    const deal = p && discount.current?.id === p.id ? discount.current : null;
-    const playlist: (() => Queued | null)[] = [
-      () => p && (at.box ? gp("magnet-snap", productData(p), "การ์ดสินค้า", { ...at, image: imageUrl(p) }) : gp(kit?.moments.productIn || "product-card", productData(p), "การ์ดสินค้า", { image: imageUrl(p) })),
-      () => g("heart-burst", { count: 80 + Math.floor(r() * 400) }, "หัวใจลอย"),
-      () => p && (deal ? gp("price-countdown", { name: p.name, from: deal.from, to: deal.to }, "นับถอยหลังราคา") : gp(kit?.moments.price || "price-pop", productData(p), "เด้งราคา")),
-      () => (p && claims.length ? gp("kinetic-claim", { claims }, "จุดเด่นสินค้า") : null),
-      () => (demo && lastCf.current ? g("buyer-toast", lastCf.current, "แจ้งคนสั่งซื้อ") : null),
-      () => (p ? gp("cf-keycaps", { code: p.id }, "ชวนพิมพ์ CF") : null),
-      () => (vp && at.box ? gp("callout-ring", { label: "ตัวนี้เลย!" }, "วงชี้สินค้า", at) : null),
-      () => (/ส่งฟรี|free ship/i.test(said) ? g("stamp-free-ship", {}, "ตราส่งฟรี") : null),
-      () => (demo && p ? gp("stock-bar", { name: p.name, left: stock[p.id] ?? STOCK, total: STOCK }, "แถบสต็อก") : null),
-      () => (p && kit && segment?.callToAction && onPlan ? gp(kit.moments.callToAction, { ...productData(p), text: segment.callToAction }, "เชิญชวนสั่งซื้อ") : null),
-    ];
-    for (let n = 0; n < playlist.length; n++) {
-      const beat = playlist[beatIndex.current++ % playlist.length]();
-      if (beat && beat.key !== lastPreset.current) return beat;
-    }
-    return null;
-  }
-
-  useEffect(() => { latest.current = { tick, sentence: onHeard, chat: chatStep, decision: onDecision, log }; });
+  useEffect(() => { latest.current = { tick, sentence: onHeard, decision: onDecision, log }; });
 
   // ---------- go live / end ----------
   function goLive() {
@@ -653,23 +534,19 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     noneSince.current = Date.now();
     setSuggestPoll(false);
     if (cameraError) setCameraTry((n) => n + 1);
-    if (mode === "demo") { setChat([]); setStock({}); setViewers(1240); sold.current = 0; lastCf.current = null; }
-    // the sting and the theme go out now; chat and the show engine never wait for detection, AI or the mic
+    // the sting and the theme go out now; nothing waits for detection, AI or the mic
     send({ type: "theme", payload: { accent: kit?.theme.accent ?? plan.style.accent, accent2: kit?.theme.accent2 ?? plan.style.accent2, font: plan.style.font || undefined } });
-    log("ผู้กำกับ", t(mode === "demo" ? "เริ่มไลฟ์จำลอง ทุกคนประจำที่" : "ออนแอร์ ทุกคนประจำที่"), "action");
+    log("ผู้กำกับ", t(mode === "local" ? "เริ่มไลฟ์ พรีวิวบนจอนี้" : "ออนแอร์ ทุกคนประจำที่"), "action");
     const shop = plan.style.shop || "SnapPromo";
     lastBig.current = 0;
-    lastSignal.current = 0;
-    lastPoll.current = Date.now();
-    nextGap.current = 4500; // first auto beat right after the sting, then every 6–10 s
     play({
-      event: { type: "graphic", preset: kit?.moments.intro || "blinds-sting", data: { text: kit?.sting.headline || shop, sub: kit?.sting.kicker, kicker: "LIVE", title: kit?.sting.headline || shop, name: shop }, theme: kit?.theme.look, ttl: 2400 },
+      event: { type: "graphic", preset: kit?.moments.intro || "blinds-sting", data: { text: kit?.sting.headline || shop, sub: kit?.sting.kicker, kicker: "LIVE", title: kit?.sting.headline || shop, name: shop }, theme: kit?.theme.look, ttl: 1600 },
       key: "intro", role: "Motion", text: t("เปิดไลฟ์") + " · " + (kit?.sting.headline || shop),
     });
   }
   function endLive() {
     liveRef.current = false;
-    setLive(false); // also stops detection (enabled: live) and the demo chat
+    setLive(false); // also stops detection and speech (enabled: live)
     queue.current = [];
     send({ type: "zoom_out" });
     log("ผู้กำกับ", t("จบไลฟ์") + " · " + timecode(elapsed), "action");
@@ -729,8 +606,8 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
         <span className="cr-timecode">{timecode(elapsed)}</span>
       </div>
       <div className="cr-modes" role="group" aria-label={t("โหมดไลฟ์")}>
-        <button type="button" aria-pressed={mode === "demo"} disabled={live} onClick={() => chooseMode("demo")}><Smartphone size={15} aria-hidden />{t("ไลฟ์จำลอง")}</button>
-        <button type="button" aria-pressed={mode === "obs"} disabled={live} onClick={() => chooseMode("obs")}><MonitorPlay size={15} aria-hidden />OBS</button>
+        <button type="button" aria-pressed={mode === "local"} disabled={live} onClick={() => chooseMode("local")}><Smartphone size={15} aria-hidden />{t("พรีวิวบนจอนี้")}</button>
+        <button type="button" aria-pressed={mode === "obs"} disabled={live} onClick={() => chooseMode("obs")}><MonitorPlay size={15} aria-hidden />{t("ส่งเข้า OBS")}</button>
       </div>
       <button ref={detailsButton} type="button" className="cr-btn cr-details-btn" aria-expanded={detailsOpen} aria-controls="cr-details" onClick={() => setDetailsOpen((o) => !o)}>
         <SlidersHorizontal size={15} aria-hidden />{t("รายละเอียดระบบ")}
@@ -747,31 +624,10 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
           {view && <div className="cr-box" data-verified={boxVerified || undefined} style={{ left: `${view.x * 100}%`, top: `${view.y * 100}%`, width: `${view.w * 100}%`, height: `${view.h * 100}%` }}>
             <span>{boxVerified ? `${detectedName || t("สินค้า")} ✓` : t("กำลังยืนยัน")}</span>
           </div>}
-          {mode === "obs" ? <>
+          {mode === "obs" && <>
             <span className="cr-chip cr-chip-pgm">PGM</span>
             {live && <span className="cr-chip cr-chip-live">LIVE {timecode(elapsed)}</span>}
-          </> : <>
-            <div className="cr-ph-top">
-              <span className="cr-ph-avatar" aria-hidden>{(plan.style.shop || "S").slice(0, 1)}</span>
-              <span className="cr-ph-shop">{plan.style.shop || "SnapPromo"}</span>
-              {live && <span className="cr-ph-live">LIVE</span>}
-              <span className="cr-ph-viewers"><Eye size={12} aria-hidden />{viewers.toLocaleString("th-TH")}</span>
-            </div>
-            <ol className="cr-chat" aria-label={t("แชทจำลอง")}>
-              {!live && <li className="cr-chat-idle">{t("แชทจะเริ่มเมื่อกดเริ่มไลฟ์")}</li>}
-              {chat.map((c) => <li key={c.id} data-kind={c.kind}><b>{c.name}</b>{c.kind === "heart" ? <> <Heart size={12} aria-label={t("ส่งหัวใจ")} /></> : " " + c.text}</li>)}
-            </ol>
-            <div className="cr-hearts" aria-hidden>
-              {chat.filter((c) => c.kind === "heart").slice(-10).map((c) => <Heart key={c.id} size={22} fill="currentColor" data-hue={c.id % 3} style={{ right: `${8 + ((c.id * 37) % 28)}px` }} />)}
-            </div>
-            {current && <div className="cr-pin">
-              {/* eslint-disable-next-line @next/next/no-img-element -- detection-service image through a rewrite */}
-              {current.images[0] && <img src={productImage(current.images[0])} alt="" />}
-              <div><strong>{current.name}</strong><span>{baht(current.price)} · {t("เหลือ")} {stock[current.id] ?? STOCK}</span></div>
-              <span className="cr-pin-cart"><ShoppingCart size={13} aria-hidden />{t("กดตะกร้า")}</span>
-            </div>}
           </>}
-          {/* the overlay sits above the live-app chrome so motion is never hidden behind the chat or the pinned card */}
           <iframe ref={previewRef} src={PREVIEW_SRC} title={t("ภาพ overlay แบบเดียวกับใน OBS")} tabIndex={-1} aria-hidden />
           {cameraError && <p className="cr-screen-msg"><Camera size={20} aria-hidden />{t(cameraError)}</p>}
         </div>
@@ -779,14 +635,14 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
         <div className="cr-go-row">
           {live
             ? <button type="button" className="cr-go cr-end" onClick={endLive}><Square size={16} fill="currentColor" aria-hidden />{t("จบไลฟ์")}</button>
-            : <button type="button" className="cr-go" onClick={goLive}><Radio size={20} aria-hidden />{t(mode === "demo" ? "เริ่มไลฟ์จำลอง" : "เริ่มไลฟ์")}</button>}
+            : <button type="button" className="cr-go" onClick={goLive}><Radio size={20} aria-hidden />{t("เริ่มไลฟ์")}</button>}
           <button type="button" className="cr-health" onClick={() => setDetailsOpen(true)} aria-label={t("สถานะระบบ") + ": " + rows.map((r) => `${r.short} ${statusWord[r.status]}`).join(", ") + ". " + t("เปิดรายละเอียดระบบ")}>
             {rows.map((r) => <span key={r.short} data-status={r.status}>
               {r.short}{r.status === "ok" ? <Check size={13} aria-hidden /> : r.status === "off" ? <span className="cr-health-dot" aria-hidden /> : <CircleAlert size={13} aria-hidden />}
             </span>)}
           </button>
         </div>
-        <p className="cr-stage-note">{mode === "obs" ? t("จอนี้แสดงภาพเดียวกับที่ OBS ออกอากาศ") : t("ไลฟ์จำลองบนจอนี้ ไม่ส่งไป OBS")}</p>
+        <p className="cr-stage-note">{mode === "obs" ? t("จอนี้แสดงภาพเดียวกับที่ OBS ออกอากาศ") : t("พรีวิวกล้องจริงบนจอนี้ ไม่ส่งไป OBS")}</p>
       </div>
 
       <div className="cr-host">
