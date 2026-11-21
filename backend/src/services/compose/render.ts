@@ -10,6 +10,7 @@ import {
   cameraAt,
   chooseFraming,
   containRect,
+  framedRect,
   sourceRect,
 } from '@/services/compose/camera.js'
 import { buildEncodeArgs } from '@/services/compose/ffmpeg.js'
@@ -244,7 +245,11 @@ export async function renderClip(plan: RenderPlan): Promise<number> {
     const focus = cameraAt(shot, progress)
     const anchor = { x: 0.5, y: plan.preset.subjectY }
     if (chooseFraming(plan.preset.fit, image, view) === 'cover') {
-      const r = sourceRect(focus, image, view, anchor)
+      // 9:16 keeps its original camera. The other shapes already crop, so the product stays on screen.
+      const r =
+        plan.preset.fit === 'cover'
+          ? sourceRect(focus, image, view, anchor)
+          : framedRect(focus, image, view, anchor)
       ctx.drawImage(image, r.sx, r.sy, r.sw, r.sh, 0, 0, width, height)
     } else {
       // The whole photo on a blurred copy of itself, so nothing is cropped away or stretched.

@@ -241,7 +241,7 @@ export const ANNOTATIONS: Annotations = {
     secured: true,
     summary: 'Make a finished video with the voice attached, in one request',
     description:
-      'Starts one background job (202): reads the photo and brief, researches the product, writes the script around the best hook, speaks it in one voice take, and renders a portrait MP4 with captions. Poll GET videos/:id. One running video per account (409), and the server runs at most two at once (503).',
+      'Starts one background job (202): reads the photo and brief, researches the product, writes the script around the best hook, speaks it in one voice take, and renders an MP4 with captions in the shape asked for (aspect 9:16 by default, 4:5, 1:1 or 16:9; 1080x1920, 1080x1350, 1080x1080 or 1920x1080 at 30 fps, a third of that size in demo mode). width and height in the video tell the real pixel size. Poll GET videos/:id. One running video per account (409), and the server runs at most two at once (503).',
     bodySchema: createVideoBody,
     errors: [400, 404, 409, 429, 503],
   },
