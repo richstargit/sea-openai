@@ -218,3 +218,19 @@
 .cr-ai[data-state="verified"] .cr-ai-bar::-moz-progress-bar { background: var(--cr-green); }
 .cr-ai-reason { margin: 0; padding-top: 10px; border-top: 1px solid var(--cr-line); color: var(--cr-quiet); font-size: .82rem; }
 @media (prefers-reduced-motion: reduce) { .cr-ai-bar::-webkit-progress-value { transition: none; } }
+
+/* Next lines from the live script: read at a glance, so big type; risk is red, a stall gets an amber frame */
+.cr-next { display: grid; gap: 12px; }
+.cr-next h2 { font-size: .95rem; }
+.cr-next-now { display: grid; gap: 10px; padding: 16px; border-radius: 14px; background: var(--cr-raised); box-shadow: inset 0 0 0 1px var(--cr-line); }
+.cr-next-now[data-hesitation] { box-shadow: inset 0 0 0 2px var(--cr-amber); }
+.cr-next-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: .82rem; }
+.cr-next-stage { padding: 2px 10px; border-radius: 999px; background: var(--cr-hover); font-weight: 600; }
+.cr-next-stall { color: var(--cr-amber); font-weight: 600; }
+.cr-next-warn { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 8px 10px; border-radius: 10px; background: #3a2a14; color: var(--cr-amber); font-weight: 600; }
+.cr-next-warn[data-level=risk] { background: #3d1a19; color: #ff8a85; }
+.cr-next-warn svg { flex: none; margin-top: 3px; }
+.cr-next-now ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.cr-next-now li { font-size: 1.3rem; font-weight: 600; line-height: 1.5; }
+.cr-next-old { margin: 0; color: var(--cr-quiet); opacity: .6; font-size: .9rem; }
+.cr-next-reply { border-radius: 14px; padding: 12px; background: #fcfcf8; color: #1c1c1a; }

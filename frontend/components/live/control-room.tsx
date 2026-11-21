@@ -1,5 +1,6 @@
 "use client";
 
+import { STAGE_LABEL } from "@/components/studio/live-script/labels";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BrainCircuit, Camera, Check, ChevronLeft, ChevronRight, CircleAlert, Copy, Crosshair, Eraser, Eye, Film, Link2, Mic,
@@ -12,6 +13,10 @@ import { type LiveSentence, useLiveSpeech } from "@/lib/live-speech";
 import { type CustomMotion, type Decision, type LiveProduct, type Segment, productImage, fillMotion, motionOn } from "@/lib/live-plan";
 import { cuesFromSpeech, namesProduct } from "@/lib/live-cues";
 import type { StepProps } from "./live-studio";
+import { ReplyBox } from "@/components/studio/live-script/reply-box";
+import { type Suggestion, liveApi } from "@/components/studio/live-script/api";
+import "@/components/studio/video/video.css";
+import "@/components/studio/live-script/live-script.css";
 import "./control-room.css";
 
 // The live control room, built around one button: the live frame (camera + the same overlay OBS shows), the host's
@@ -117,6 +122,8 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   const [spotId, setSpotId] = useState("");
   const [ai, setAi] = useState<{ status: AiStatus; id: string | null }>({ status: "idle", id: null });
   const [reason, setReason] = useState("");
+  const [nextLines, setNextLines] = useState<Suggestion[]>([]); // newest first
+  const [nextHint, setNextHint] = useState("");
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const previewRef = useRef<HTMLIFrameElement>(null);
@@ -141,6 +148,7 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   // when each product last got its on-camera moment (follow-the-camera rule)
   const momentFor = useRef<Record<string, number>>({});
   const noneSince = useRef(0);
+  const scriptSession = useRef<{ id: string; t0: number } | null>(null);
   const latest = useRef<{ tick: () => void; sentence: (s: LiveSentence) => void; decision: (d: Decision) => void; log: (role: Role, text: string, tone?: Tone) => void } | null>(null);
 
   // ---------- derived ----------
@@ -397,6 +405,10 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
     if (heard.productId && pool.some((p) => p.id === heard.productId)) spoken.current = { id: heard.productId, at: Date.now() };
     if (heard.source === "openai" && heard.corrected && heard.corrected !== heard.raw) log("ซับ", `${t("แก้คำที่ได้ยิน")}: ${heard.raw} → ${heard.corrected}`);
     onSentence(text);
+    const session = scriptSession.current;
+    if (session) void liveApi.sendUtterance(session.id, { text, final: true, tsMs: Date.now() - session.t0 })
+      .then((next) => { if (next && scriptSession.current === session) setNextLines((l) => [next, ...l].slice(0, 4)); })
+      .catch(() => { /* a missed suggestion is fine; the next sentence tries again */ });
   }
   /** One finished sentence: cut to the motion that fits it, only showing a product that is really there or just named. */
   function onSentence(text: string) {
@@ -540,6 +552,27 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
   }
 
   useEffect(() => { latest.current = { tick, sentence: onHeard, decision: onDecision, log }; });
+
+  // One live-script session per current product's show while live; our own transcribed sentences feed it (onHeard).
+  const showId = current ? plan.shows?.[current.id] : undefined;
+  useEffect(() => {
+    if (!live || !showId) return;
+    let cancelled = false;
+    let started: { id: string; t0: number } | null = null;
+    const t0 = Date.now();
+    void liveApi.startSession(showId, { showOnStream: false }).then((s) => {
+      if (cancelled) { void liveApi.stopSession(s.sessionId).catch(() => undefined); return; }
+      started = { id: s.sessionId, t0 };
+      scriptSession.current = started;
+      setNextHint("");
+    }).catch(() => { if (!cancelled) setNextHint("เปิดบทพูดไม่ได้ บทของสินค้านี้อาจยังไม่เสร็จ"); });
+    return () => {
+      cancelled = true;
+      if (started) { void liveApi.stopSession(started.id).catch(() => undefined); if (scriptSession.current === started) scriptSession.current = null; }
+      setNextLines([]);
+      setNextHint("");
+    };
+  }, [live, showId]);
 
   // ---------- go live / end ----------
   function goLive() {
@@ -700,6 +733,27 @@ export function ControlRoom({ plan, products, overlayOrigin }: StepProps & { ove
           <button type="button" className="cr-btn cr-btn-accent" onClick={() => { now("poll", current); setSuggestPoll(false); }}><Vote size={15} aria-hidden />{t("เปิดโหวต")}</button>
           <button type="button" className="cr-btn" onClick={() => setSuggestPoll(false)}>{t("ปิด")}</button>
         </div>}
+
+        <section className="cr-panel cr-next" aria-label={t("พูดต่อไป")}>
+          <h2>{t("พูดต่อไป")}</h2>
+          {!showId ? <p className="cr-quiet cr-small">{t("ทำบทพูดละเอียดได้ที่ขั้นตอน 3")}</p>
+            : nextHint ? <p className="cr-quiet cr-small" role="status">{t(nextHint)}</p>
+            : !live ? <p className="cr-quiet cr-small">{t("เริ่มไลฟ์แล้วบทที่ควรพูดต่อจะขึ้นที่นี่")}</p>
+            : !nextLines.length ? <p className="cr-quiet cr-small" role="status">{t("กำลังฟังอยู่ พูดต่อได้เลย")}</p>
+            : <>
+              <div className="cr-next-now" data-hesitation={nextLines[0].hesitation || undefined} aria-live="polite">
+                <div className="cr-next-meta">
+                  <span className="cr-next-stage">{t(STAGE_LABEL[nextLines[0].stage] ?? nextLines[0].stage)}</span>
+                  {nextLines[0].topic && <span className="cr-quiet">{nextLines[0].topic}</span>}
+                  {nextLines[0].hesitation && <span className="cr-next-stall">{t("ติดอยู่ ลองพูดบรรทัดนี้")}</span>}
+                </div>
+                {nextLines[0].warning && <p className="cr-next-warn" data-level={nextLines[0].warning.level}><TriangleAlert size={16} aria-hidden />{nextLines[0].warning.text}</p>}
+                <ul>{nextLines[0].next.slice(0, 3).map((line, i) => <li key={i}>{line}</li>)}</ul>
+              </div>
+              {nextLines.slice(1, 4).map((x) => <p key={x.id} className="cr-next-old">{x.next[0]}</p>)}
+            </>}
+          {showId && <div className="vs cr-next-reply"><ReplyBox showId={showId} /></div>}
+        </section>
 
         <section className="cr-panel cr-prompter" aria-label={t("สคริปต์ผู้กำกับ")}>
           {!segment ? <p className="cr-quiet">{t("ยังไม่มีสคริปต์ ให้ AI เขียนได้ที่ขั้นตอน 3 เตรียมคลิปและ motion")}</p> : <>

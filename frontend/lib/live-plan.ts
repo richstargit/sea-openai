@@ -60,6 +60,8 @@ export type LivePlan = {
   style: LiveStyle; lineup: LineupItem[]; clips: PreviewClip[]; kit: MotionKit | null; script: ShowScript | null;
   /** motions the shop turned off for its lives: library preset ids and "custom:<id>" for AI-designed ones */
   off?: string[];
+  /** live-script playbook per product (product id -> show id at /agent/live-script/shows), used for next-line suggestions */
+  shows?: Record<string, string>;
 };
 /** May the live use this motion? (library preset id, or "custom:<id>") */
 export const motionOn = (plan: Pick<LivePlan, "off">, id: string) => !plan.off?.includes(id);

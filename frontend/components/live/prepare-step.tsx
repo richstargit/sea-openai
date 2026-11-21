@@ -11,6 +11,7 @@ import { baht, hideBroken } from "./catalog-step";
 import { TAG_STYLES } from "./setup-step";
 import type { StepProps } from "./live-studio";
 import { MotionLibrary } from "./motion-library";
+import { ProductShows } from "./product-shows";
 import "../studio/video/video.css";
 import "./steps.css";
 
@@ -236,6 +237,7 @@ export function PrepareStep(props: StepProps) {
 
     <MotionDesigner plan={plan} setPlan={setPlan} products={products} noLineup={noLineup} />
     <MotionLibrary {...props} />
+    <ProductShows plan={plan} setPlan={setPlan} products={products} />
 
     {/* (c) Dead-air clips and AI live graphics */}
     <section className="vs-card" aria-labelledby="ls-clips-title">
