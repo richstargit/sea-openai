@@ -53,7 +53,7 @@ curl -s -b "$cookie_jar" http://localhost:8080/auth/me
 
 ### OpenAI text generation
 
-Set `OPENAI_API_KEY` in your environment or in `backend/.env.development` for local development. The default model is `gpt-5.6-luna`. Set `OPENAI_MODEL` to select the model used by the agent and text service, or pass `model` when calling `generateText()`.
+Set `OPENAI_API_KEY` in your environment or in `backend/.env.development` for local development. The default model is `gpt-6.2-sol`. Set `OPENAI_MODEL` to select the model used by the agent and text service, or pass `model` when calling `generateText()`.
 
 ```ts
 import { generateText } from '@/services/openai.service.js'
@@ -73,7 +73,7 @@ node --import tsx --input-type=module -e 'import "./src/env.ts"; import { genera
 
 Editor timelines and media persist under the authenticated user in the MongoDB collections `editor_projects` and `editor_media_chunks`.
 
-Sign in at `http://localhost:3000/studio`, enter a video brief and generate a clip. The agent selects a matching style from the built-in catalog and your personal styles for each brief. Studio generates a three-second silent WebM at 24 fps. Use /studio for portrait clips and /studio/live for transparent overlays and OBS controls. Drop a reference or type a brief in either studio. The renderer accepts one PNG product image. For 3D it renders a rotating box, cylinder or torus with the local Blender application.
+Sign in at `http://localhost:3000/studio`, enter a video brief and generate a clip. The agent selects a matching style from the built-in catalog and your personal styles for each brief. Video Studio creates a six-second, 720 × 1280 portrait film in three shots. The agent uses the product image and brief to plan framing, camera motion and copy placement. Live Studio creates three-second transparent overlays. Both outputs are silent WebM at 24 fps. Use /studio for portrait clips and /studio/live for transparent overlays and OBS controls. Drop a reference or type a brief in either studio. The renderer accepts one PNG product image. For 3D it renders a rotating box, cylinder or torus with the local Blender application.
 
 The backend limits agent actions to choosing a video style, designing a shot and rendering it. Out-of-scope requests receive a fixed reply. Motion directions from a skill or reference supply design input. The renderer accepts bounded text, palette, movement, shape and format fields. Chat, saved threads and resumed runs use the same policy. OpenAI does not receive shell, browser automation, filesystem or OBS control tools.
 

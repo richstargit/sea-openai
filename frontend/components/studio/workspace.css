@@ -45,6 +45,7 @@
 .example-tile { display: flex; align-items: center; gap: 16px; overflow: hidden; border-radius: 12px; text-align: left; background: #f0e6dc; padding-right: 14px; min-height: 96px; }
 .example-chili { background: #f2e2db; }
 .example-image { align-self: stretch; width: clamp(65px,10vw,114px); flex-shrink: 0; background: url('/editor/cosmetic.svg') center 48% / cover; }
+.studio-shell:not(.studio-live) .example-cosmetic .example-image { background-image: url('/studio/daily-glow.jpg'); }
 .example-chili .example-image { background-image: url('/editor/chili.svg'); }
 .example-tile small { display: flex; align-items: center; gap: 5px; font-size: .72rem; color: #62574f; }
 .example-tile strong { display: block; margin-top: 3px; font-size: 1.07rem; }

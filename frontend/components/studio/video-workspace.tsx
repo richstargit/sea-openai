@@ -17,9 +17,9 @@ const liveExamples = [
   { image: "chili", label: "ป้ายโปรโมชัน", brief: "สร้างกราฟิกไลฟ์โปร่งใสสำหรับน้ำพริก พร้อมข้อความ ซื้อ 2 แถม 1 และแสงกะพริบ" },
 ];
 
-async function sampleFile(image: string) {
+async function sampleFile(image: string, source: string) {
   const picture = new Image();
-  picture.src = `/editor/${image}.svg`;
+  picture.src = source;
   await picture.decode();
   const canvas = document.createElement("canvas");
   canvas.width = picture.naturalWidth;
@@ -145,7 +145,7 @@ export function VideoWorkspace({ live }: { live: boolean }) {
       <div className="studio-section-head"><h2>{t("ลองเริ่มจากตัวอย่าง")}</h2>{!live && <Link href="/studio/demo">{t("เดโมทีละขั้น")}<ArrowUpRight size={15} /></Link>}</div>
       <div className="example-grid">{(live ? liveExamples : examples).map((item) =>
         <button type="button" key={item.image} className={`example-tile example-${item.image}`} disabled={!!busy} onClick={() => void act("example", async () => {
-          setPhoto(await sampleFile(item.image)); setBrief(t(item.brief)); requestAnimationFrame(() => prompt.current?.focus());
+          setPhoto(await sampleFile(item.image, !live && item.image === "cosmetic" ? "/studio/daily-glow.jpg" : `/editor/${item.image}.svg`)); setBrief(t(item.brief)); requestAnimationFrame(() => prompt.current?.focus());
         })}><span className="example-image" aria-hidden /><span><small>{live ? <Radio size={14} /> : <Clapperboard size={14} />}{t("บรีฟตัวอย่าง")}</small><strong>{t(item.label)}</strong></span><ArrowUpRight size={18} /></button>)}</div>
     </section>
   </>;

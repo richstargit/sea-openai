@@ -1,7 +1,7 @@
 import OpenAI from 'openai'
 import type { ResponseCreateParamsNonStreaming } from 'openai/resources/responses/responses'
 
-const DEFAULT_MODEL = 'gpt-5.6-luna'
+const DEFAULT_MODEL = 'gpt-6.2-sol'
 
 type GenerateTextOptions = {
   model?: string

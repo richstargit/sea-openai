@@ -12,6 +12,7 @@ import {
 } from '@/services/agent-tools/public-web.js'
 import { AppError } from '@/services/error.service.js'
 import { videoCodecs } from '@/services/video/codecs.js'
+import { productImage } from '@/services/video/product-image.js'
 
 function referenceError() {
   return new AppError('BAD_REQUEST', {
@@ -152,6 +153,20 @@ export async function videoReference(
           AbortSignal.any([signal, AbortSignal.timeout(20000)]),
         )
       : { text: '', images: [] as string[] }
+    if (request.outputFormat === 'portrait' && request.files?.length) {
+      const product = await productImage(userId, request.files)
+      if (product) {
+        const scale = Math.min(1, 640 / Math.max(product.width, product.height))
+        const canvas = createCanvas(
+          Math.max(1, Math.round(product.width * scale)),
+          Math.max(1, Math.round(product.height * scale)),
+        )
+        canvas
+          .getContext('2d')
+          .drawImage(product, 0, 0, canvas.width, canvas.height)
+        reference.images.unshift(canvas.toDataURL('image/png'))
+      }
+    }
     if (request.referenceFile) {
       const file = await getFile(userId, request.referenceFile)
       reference.images.push(...(await frames(file.bytes, signal)))
