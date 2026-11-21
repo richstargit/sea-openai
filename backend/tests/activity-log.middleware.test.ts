@@ -68,14 +68,14 @@ it('logs a completed activity with the service and redacted bodies', async () =>
 
 it('includes the error key from a failed activity', async () => {
   const { response } = call('DELETE', 403)
-  response.json({ key: 'af-forbidden' })
+  response.json({ key: 'so-forbidden' })
   response.emit('finish')
   await Promise.resolve()
   expect(info).toHaveBeenCalledWith(
     'ACTIVITY_LOG',
     expect.objectContaining({
       statusCode: 403,
-      errorKey: 'af-forbidden',
+      errorKey: 'so-forbidden',
     }),
   )
 })

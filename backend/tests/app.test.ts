@@ -2,7 +2,7 @@ import request from 'supertest'
 
 import app, { parseTrustProxy } from '@/app.js'
 
-describe('AstraFlow service template', () => {
+describe('sea-openai backend', () => {
   it('returns service identity', async () => {
     const response = await request(app).get('/')
 
@@ -37,8 +37,8 @@ describe('AstraFlow service template', () => {
     expect(response.body).toEqual(
       expect.objectContaining({
         success: false,
-        code: 'af-e404',
-        key: expect.any(String),
+        code: 'so-e404',
+        key: 'so-route-GET-missing',
         requestId: expect.any(String),
       }),
     )

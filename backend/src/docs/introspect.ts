@@ -137,12 +137,12 @@ export const ERROR_SCHEMA = {
     success: { type: 'boolean', example: false },
     message: { type: 'string', example: 'Authentication is required.' },
     message_TH: { type: 'string', example: 'กรุณายืนยันตัวตนก่อนใช้งาน' },
-    code: { type: 'string', example: 'af-e401' },
+    code: { type: 'string', example: 'so-e401' },
     key: {
       type: 'string',
       description:
         'Stable machine-readable reason. Clients branch on this, never on the message.',
-      example: 'af-gateway-access-token',
+      example: 'so-gateway-access-token',
     },
     requestId: { type: 'string', format: 'uuid' },
     details: {},

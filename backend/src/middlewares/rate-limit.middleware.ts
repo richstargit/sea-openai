@@ -1,6 +1,7 @@
 import type { RequestHandler } from 'express'
 import rateLimit from 'express-rate-limit'
 
+import { createErrorKey } from '@/constants/error-code.js'
 import { AppError } from '@/services/error.service.js'
 
 const DEFAULT_WINDOW_MS = 15 * 60 * 1000
@@ -37,7 +38,7 @@ export function createRateLimiter(
     handler: (_request, _response, next) => {
       next(
         new AppError('TOO_MANY_REQUESTS', {
-          key: 'af-service-rate-limit',
+          key: createErrorKey('service', 'rate-limit'),
         }),
       )
     },
