@@ -6,15 +6,15 @@ import fs from 'node:fs';
 // the audio worklet globals, so the code under test is the code that ships.
 function loadWorklet(rate = 48000) {
   const code = fs.readFileSync(new URL('../public/studio/live-mic-worklet.js', import.meta.url), 'utf8');
-  const module = { exports: {} };
+  const scope = { exports: {} };
   class AudioWorkletProcessor {
     constructor() {
       this.port = { posted: [], onmessage: null, postMessage: (message) => this.port.posted.push(message) };
     }
   }
   let registered = null;
-  new Function('module', 'AudioWorkletProcessor', 'registerProcessor', 'sampleRate', code)(module, AudioWorkletProcessor, (name, cls) => { registered = { name, cls }; }, rate);
-  return { api: module.exports, registered };
+  new Function('module', 'AudioWorkletProcessor', 'registerProcessor', 'sampleRate', code)(scope, AudioWorkletProcessor, (name, cls) => { registered = { name, cls }; }, rate);
+  return { api: scope.exports, registered };
 }
 const { api, registered } = loadWorklet();
 const { floatToPcm16, createResampler, createChunker, createVad, rms, TARGET_RATE, CHUNK_SAMPLES } = api;

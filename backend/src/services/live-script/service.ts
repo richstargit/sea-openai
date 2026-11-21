@@ -249,8 +249,13 @@ function listenUnavailable(): AppError {
   })
 }
 
-const keywordsFor = (session: Session) =>
-  cleanKeywords([session.ctx.productName, session.ctx.style?.name])
+// Words the seller is likely to say: the product name and any brand written in Latin letters.
+// The style name is a label in this app, not something said on air.
+const keywordsFor = (session: Session) => {
+  const name = session.ctx.productName ?? ''
+  const latin = name.match(/[A-Za-z][A-Za-z0-9 .+-]{2,}[A-Za-z0-9]/g) ?? []
+  return cleanKeywords([...latin, name])
+}
 
 /**
  * Starts a listening session for a finished playbook and mints the short

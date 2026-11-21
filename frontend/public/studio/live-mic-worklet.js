@@ -187,9 +187,8 @@ if (typeof AudioWorkletProcessor !== 'undefined') {
       this.preRoll = [];
       this.preRollSamples = 0;
       this.streaming = false;
-      var self = this;
-      this.port.onmessage = function (event) {
-        if (event.data && event.data.type === 'finish') self.handle(self.vad.finish());
+      this.port.onmessage = (event) => {
+        if (event.data && event.data.type === 'finish') this.handle(this.vad.finish());
       };
     }
 
